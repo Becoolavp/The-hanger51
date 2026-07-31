@@ -80,7 +80,7 @@ namespace Hanger51.EditorTools
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
 
             Selection.activeGameObject = player;
-            Debug.Log("Applied the recommended first-person smoothing and grounding defaults.", player);
+            Debug.Log("Applied the revised first-person stability, strafing, and jump defaults.", player);
         }
 
         private static void CreateLighting()
@@ -163,16 +163,16 @@ namespace Hanger51.EditorTools
             serializedController.FindProperty("playerCamera").objectReferenceValue = playerCamera;
             serializedController.FindProperty("walkSpeed").floatValue = 5f;
             serializedController.FindProperty("sprintSpeed").floatValue = 8f;
-            serializedController.FindProperty("groundAcceleration").floatValue = 30f;
-            serializedController.FindProperty("groundDeceleration").floatValue = 40f;
-            serializedController.FindProperty("airAcceleration").floatValue = 10f;
-            serializedController.FindProperty("airDeceleration").floatValue = 4f;
+            serializedController.FindProperty("groundAcceleration").floatValue = 24f;
+            serializedController.FindProperty("groundDeceleration").floatValue = 30f;
+            serializedController.FindProperty("directionChangeAcceleration").floatValue = 28f;
+            serializedController.FindProperty("airAcceleration").floatValue = 8f;
+            serializedController.FindProperty("airDeceleration").floatValue = 3f;
             serializedController.FindProperty("jumpHeight").floatValue = 1.2f;
             serializedController.FindProperty("gravity").floatValue = -24f;
-            serializedController.FindProperty("groundStickVelocity").floatValue = -1.5f;
             serializedController.FindProperty("terminalVelocity").floatValue = 50f;
             serializedController.FindProperty("groundLayers").intValue = ~0;
-            serializedController.FindProperty("groundProbeDistance").floatValue = 0.12f;
+            serializedController.FindProperty("groundProbeDistance").floatValue = 0.06f;
             serializedController.FindProperty("groundProbeStartOffset").floatValue = 0.05f;
             serializedController.FindProperty("groundProbeRadiusInset").floatValue = 0.03f;
             serializedController.FindProperty("mouseSensitivity").floatValue = 0.12f;
