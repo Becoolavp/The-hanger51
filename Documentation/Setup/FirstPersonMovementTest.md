@@ -40,8 +40,7 @@ After restarting, confirm this setting:
 
 1. Wait until Unity finishes compiling with no red Console errors.
 2. Select **Hanger 51 > Setup > Create First-Person Test Area**.
-3. Unity creates and saves:
-   - `Assets/_Project/Scenes/FirstPersonMovementTest.unity`
+3. Unity creates and saves `Assets/_Project/Scenes/FirstPersonMovementTest.unity`.
 4. The generated `Player` object is selected automatically.
 
 ### 3. Update an existing test scene
@@ -53,7 +52,7 @@ After pulling controller improvements, update the existing player without rebuil
 3. Select **Hanger 51 > Setup > Apply First-Person Smoothing Defaults**.
 4. Save the scene with **File > Save** or `Ctrl+S`.
 
-This command corrects the test player's starting height, applies the recommended Character Controller values, and applies the current movement-smoothing and ground-probe values.
+This command corrects the test player's starting height and applies the current Character Controller, movement-response, jump, and ground-probe values.
 
 ### 4. Save Unity-generated metadata
 
@@ -74,20 +73,22 @@ Unity creates `.meta` files for the folders, scripts, and scene. Commit those fi
 
 1. Open `Assets/_Project/Scenes/FirstPersonMovementTest.unity`.
 2. Press **Play**.
-3. Start and stop repeatedly. Confirm speed eases in and out without feeling delayed.
-4. Change direction quickly and confirm there is no sharp visual snap.
-5. Move diagonally and confirm it is not faster than straight movement.
-6. Hold **Left Shift** and confirm sprinting is faster than walking.
-7. Jump several times while standing still.
-8. Jump while walking and while sprinting.
-9. Confirm the jump arc rises and falls smoothly with no repeated vertical shaking.
-10. Walk off the low step without jumping and confirm the player falls cleanly.
-11. Walk into every outer wall and confirm the player cannot pass through it.
-12. Walk onto the low step and confirm the Character Controller climbs it.
-13. Walk between the two narrow-passage walls and confirm collision feels consistent.
-14. Look fully up and down and confirm the camera stops before flipping upside down.
-15. Press **Escape**, then left-click the Game view to recapture the mouse.
-16. Stop Play mode and check the Console for errors or warnings.
+3. Stand still on the center of the flat floor and jump five times.
+4. Confirm every jump rises and falls in one continuous arc.
+5. Hold W for ten seconds at walking speed.
+6. Continue holding W and add Left Shift for ten seconds.
+7. Confirm the view does not become progressively more jittery.
+8. Release all movement keys and confirm the player comes to a smooth stop.
+9. Hold A for one second, then D for one second, and repeat for at least ten direction changes.
+10. Confirm each reversal is smooth and does not create a periodic camera shake.
+11. Move diagonally and confirm it is not faster than straight movement.
+12. Jump while walking and while sprinting.
+13. Walk off the low step without jumping and confirm the player falls cleanly.
+14. Walk into every outer wall and confirm the player cannot pass through it.
+15. Walk onto the low step and confirm the Character Controller climbs it.
+16. Walk between the two narrow-passage walls and confirm collision feels consistent.
+17. Look fully up and down and confirm the camera stops before flipping upside down.
+18. Stop Play mode and check the Console for errors or warnings.
 
 ## Expected Inspector settings
 
@@ -114,24 +115,24 @@ Select the `Player` object.
 - Walk Speed: `5`
 - Sprint Speed: `8`
 
-#### Movement Smoothing
+#### Movement Response
 
-- Ground Acceleration: `30`
-- Ground Deceleration: `40`
-- Air Acceleration: `10`
-- Air Deceleration: `4`
+- Ground Acceleration: `24`
+- Ground Deceleration: `30`
+- Direction Change Acceleration: `28`
+- Air Acceleration: `8`
+- Air Deceleration: `3`
 
 #### Jump and Gravity
 
 - Jump Height: `1.2`
 - Gravity: `-24`
-- Ground Stick Velocity: `-1.5`
 - Terminal Velocity: `50`
 
 #### Ground Probe
 
 - Ground Layers: `Everything`
-- Ground Probe Distance: `0.12`
+- Ground Probe Distance: `0.06`
 - Ground Probe Start Offset: `0.05`
 - Ground Probe Radius Inset: `0.03`
 
@@ -164,26 +165,22 @@ The active scene must contain a GameObject named exactly `Player` with:
 - `First Person Controller`
 - A child Camera
 
-### The mouse is trapped in the Game view
+### Movement still becomes progressively jittery
 
-Press **Escape** to release it.
+Open the Game view's **Stats** overlay and note the FPS while the jitter occurs. Also check whether the Player Transform Y value visibly changes while strafing on the flat floor. Those two observations separate frame-pacing problems from controller-height corrections.
 
-### The player falls through the floor
+### Direction changes feel too sharp
 
-Confirm that the generated `Floor` object still has its `Box Collider` and that the `Player` still has its `Character Controller`.
+Lower **Direction Change Acceleration** in small increments, such as `28` to `24`.
 
-### Movement feels too slow to respond
+### Direction changes feel too sluggish
 
-Increase **Ground Acceleration** in small increments, such as `30` to `35`. Higher values respond faster. Lower values feel softer.
-
-### Movement stops too slowly
-
-Increase **Ground Deceleration** in small increments, such as `40` to `45`.
+Raise **Direction Change Acceleration** in small increments, such as `28` to `32`.
 
 ### Jumping still appears jittery
 
-Test the jump while completely stationary on the center of the flat floor. If it is smooth there but rough near the low step, the remaining problem is step collision rather than the jump arc. Also confirm the Game view is focused and the Console is not rapidly printing messages every frame.
+Test completely stationary on the center of the flat floor. If the jump is smooth there but rough near the low step, the remaining problem is step collision rather than the jump arc. Confirm that **Ground Probe Distance** is `0.06`, not the older `0.12` value.
 
 ## Recommended next step
 
-Do not add interaction or aircraft systems until walking, stopping, sprinting, and jumping feel consistently smooth on the flat floor and around the low step.
+Do not add interaction or aircraft systems until walking, stopping, sprinting, repeated A/D direction changes, and jumping remain consistently smooth for at least thirty seconds.
