@@ -2,6 +2,7 @@ using Hanger51.Player;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.InputSystem;
 using UnityEngine.SceneManagement;
 
 namespace Hanger51.EditorTools
@@ -38,8 +39,8 @@ namespace Hanger51.EditorTools
             Debug.Log($"Created first-person movement test scene at '{ScenePath}'.");
         }
 
-        [MenuItem("Hanger 51/Setup/Apply First-Person Smoothing Defaults")]
-        public static void ApplyFirstPersonSmoothingDefaults()
+        [MenuItem("Hanger 51/Setup/Apply First-Person Controller Defaults")]
+        public static void ApplyFirstPersonControllerDefaults()
         {
             GameObject player = GameObject.Find(PlayerObjectName);
             if (player == null)
@@ -60,9 +61,9 @@ namespace Hanger51.EditorTools
                 return;
             }
 
-            Undo.RecordObject(player.transform, "Apply first-person smoothing defaults");
-            Undo.RecordObject(controller, "Apply first-person smoothing defaults");
-            Undo.RecordObject(firstPersonController, "Apply first-person smoothing defaults");
+            Undo.RecordObject(player.transform, "Apply first-person controller defaults");
+            Undo.RecordObject(controller, "Apply first-person controller defaults");
+            Undo.RecordObject(firstPersonController, "Apply first-person controller defaults");
 
             if (SceneManager.GetActiveScene().name == "FirstPersonMovementTest")
             {
@@ -80,7 +81,41 @@ namespace Hanger51.EditorTools
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
 
             Selection.activeGameObject = player;
-            Debug.Log("Applied the revised first-person stability, strafing, and jump defaults.", player);
+            Debug.Log("Applied the responsive first-person controller defaults.", player);
+        }
+
+        // Kept temporarily so an existing instruction or habit still works.
+        [MenuItem("Hanger 51/Setup/Apply First-Person Smoothing Defaults")]
+        public static void ApplyLegacySmoothingDefaultsMenu()
+        {
+            ApplyFirstPersonControllerDefaults();
+        }
+
+        [MenuItem("Hanger 51/Setup/Validate First-Person Project Settings")]
+        public static void ValidateFirstPersonProjectSettings()
+        {
+            InputSettings settings = InputSystem.settings;
+            if (settings == null)
+            {
+                Debug.LogError(
+                    "Unity could not find the Input System settings asset. Open "
+                    + "Edit > Project Settings > Input System Package and review the settings.");
+                return;
+            }
+
+            if (settings.updateMode != InputSettings.UpdateMode.ProcessEventsInDynamicUpdate)
+            {
+                Debug.LogError(
+                    "Incorrect Input System Update Mode. Open Edit > Project Settings > "
+                    + "Input System Package and set Update Mode to 'Process Events In Dynamic Update'. "
+                    + "The first-person controller reads input in Update(), so Fixed Update mode can "
+                    + "cause stuttering and missed jump presses.");
+                return;
+            }
+
+            Debug.Log(
+                $"First-person project settings passed. Unity version: {Application.unityVersion}. "
+                + "Input System Update Mode: Process Events In Dynamic Update.");
         }
 
         private static void CreateLighting()
@@ -163,18 +198,10 @@ namespace Hanger51.EditorTools
             serializedController.FindProperty("playerCamera").objectReferenceValue = playerCamera;
             serializedController.FindProperty("walkSpeed").floatValue = 5f;
             serializedController.FindProperty("sprintSpeed").floatValue = 8f;
-            serializedController.FindProperty("groundAcceleration").floatValue = 24f;
-            serializedController.FindProperty("groundDeceleration").floatValue = 30f;
-            serializedController.FindProperty("directionChangeAcceleration").floatValue = 28f;
-            serializedController.FindProperty("airAcceleration").floatValue = 8f;
-            serializedController.FindProperty("airDeceleration").floatValue = 3f;
             serializedController.FindProperty("jumpHeight").floatValue = 1.2f;
             serializedController.FindProperty("gravity").floatValue = -24f;
+            serializedController.FindProperty("groundedVelocity").floatValue = -2f;
             serializedController.FindProperty("terminalVelocity").floatValue = 50f;
-            serializedController.FindProperty("groundLayers").intValue = ~0;
-            serializedController.FindProperty("groundProbeDistance").floatValue = 0.06f;
-            serializedController.FindProperty("groundProbeStartOffset").floatValue = 0.05f;
-            serializedController.FindProperty("groundProbeRadiusInset").floatValue = 0.03f;
             serializedController.FindProperty("mouseSensitivity").floatValue = 0.12f;
             serializedController.FindProperty("verticalLookLimit").floatValue = 85f;
             serializedController.FindProperty("lockCursorOnStart").boolValue = true;
