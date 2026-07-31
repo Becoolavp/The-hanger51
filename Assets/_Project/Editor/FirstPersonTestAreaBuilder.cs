@@ -8,6 +8,7 @@ namespace Hanger51.EditorTools
 {
     public static class FirstPersonTestAreaBuilder
     {
+        private const string PlayerObjectName = "Player";
         private const string SceneFolderPath = "Assets/_Project/Scenes";
         private const string ScenePath = SceneFolderPath + "/FirstPersonMovementTest.unity";
 
@@ -33,8 +34,53 @@ namespace Hanger51.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
-            Selection.activeGameObject = GameObject.Find("Player");
+            Selection.activeGameObject = GameObject.Find(PlayerObjectName);
             Debug.Log($"Created first-person movement test scene at '{ScenePath}'.");
+        }
+
+        [MenuItem("Hanger 51/Setup/Apply First-Person Smoothing Defaults")]
+        public static void ApplyFirstPersonSmoothingDefaults()
+        {
+            GameObject player = GameObject.Find(PlayerObjectName);
+            if (player == null)
+            {
+                Debug.LogError($"Could not find a GameObject named '{PlayerObjectName}' in the active scene.");
+                return;
+            }
+
+            CharacterController controller = player.GetComponent<CharacterController>();
+            FirstPersonController firstPersonController = player.GetComponent<FirstPersonController>();
+            Camera playerCamera = player.GetComponentInChildren<Camera>();
+
+            if (controller == null || firstPersonController == null || playerCamera == null)
+            {
+                Debug.LogError(
+                    "The Player must have a CharacterController, a FirstPersonController, and a child Camera.",
+                    player);
+                return;
+            }
+
+            Undo.RecordObject(player.transform, "Apply first-person smoothing defaults");
+            Undo.RecordObject(controller, "Apply first-person smoothing defaults");
+            Undo.RecordObject(firstPersonController, "Apply first-person smoothing defaults");
+
+            if (SceneManager.GetActiveScene().name == "FirstPersonMovementTest")
+            {
+                Vector3 position = player.transform.position;
+                position.y = 0.02f;
+                player.transform.position = position;
+            }
+
+            ConfigureCharacterController(controller);
+            ConfigureFirstPersonController(firstPersonController, playerCamera);
+
+            EditorUtility.SetDirty(player.transform);
+            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(firstPersonController);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+
+            Selection.activeGameObject = player;
+            Debug.Log("Applied the recommended first-person smoothing and grounding defaults.", player);
         }
 
         private static void CreateLighting()
@@ -77,16 +123,11 @@ namespace Hanger51.EditorTools
 
         private static void CreatePlayer()
         {
-            GameObject player = new GameObject("Player");
-            player.transform.position = new Vector3(0f, 1.05f, -10f);
+            GameObject player = new GameObject(PlayerObjectName);
+            player.transform.position = new Vector3(0f, 0.02f, -10f);
 
             CharacterController controller = player.AddComponent<CharacterController>();
-            controller.height = 2f;
-            controller.radius = 0.35f;
-            controller.center = new Vector3(0f, 1f, 0f);
-            controller.stepOffset = 0.3f;
-            controller.slopeLimit = 45f;
-            controller.skinWidth = 0.08f;
+            ConfigureCharacterController(controller);
 
             GameObject cameraObject = new GameObject("Player Camera");
             cameraObject.transform.SetParent(player.transform, false);
@@ -99,9 +140,45 @@ namespace Hanger51.EditorTools
             cameraObject.AddComponent<AudioListener>();
 
             FirstPersonController firstPersonController = player.AddComponent<FirstPersonController>();
+            ConfigureFirstPersonController(firstPersonController, playerCamera);
+        }
 
+        private static void ConfigureCharacterController(CharacterController controller)
+        {
+            controller.height = 2f;
+            controller.radius = 0.35f;
+            controller.center = new Vector3(0f, 1f, 0f);
+            controller.stepOffset = 0.3f;
+            controller.slopeLimit = 45f;
+            controller.skinWidth = 0.04f;
+            controller.minMoveDistance = 0f;
+        }
+
+        private static void ConfigureFirstPersonController(
+            FirstPersonController firstPersonController,
+            Camera playerCamera)
+        {
             SerializedObject serializedController = new SerializedObject(firstPersonController);
+
             serializedController.FindProperty("playerCamera").objectReferenceValue = playerCamera;
+            serializedController.FindProperty("walkSpeed").floatValue = 5f;
+            serializedController.FindProperty("sprintSpeed").floatValue = 8f;
+            serializedController.FindProperty("groundAcceleration").floatValue = 30f;
+            serializedController.FindProperty("groundDeceleration").floatValue = 40f;
+            serializedController.FindProperty("airAcceleration").floatValue = 10f;
+            serializedController.FindProperty("airDeceleration").floatValue = 4f;
+            serializedController.FindProperty("jumpHeight").floatValue = 1.2f;
+            serializedController.FindProperty("gravity").floatValue = -24f;
+            serializedController.FindProperty("groundStickVelocity").floatValue = -1.5f;
+            serializedController.FindProperty("terminalVelocity").floatValue = 50f;
+            serializedController.FindProperty("groundLayers").intValue = ~0;
+            serializedController.FindProperty("groundProbeDistance").floatValue = 0.12f;
+            serializedController.FindProperty("groundProbeStartOffset").floatValue = 0.05f;
+            serializedController.FindProperty("groundProbeRadiusInset").floatValue = 0.03f;
+            serializedController.FindProperty("mouseSensitivity").floatValue = 0.12f;
+            serializedController.FindProperty("verticalLookLimit").floatValue = 85f;
+            serializedController.FindProperty("lockCursorOnStart").boolValue = true;
+
             serializedController.ApplyModifiedPropertiesWithoutUndo();
         }
 
