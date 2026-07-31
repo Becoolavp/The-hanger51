@@ -14,6 +14,8 @@ namespace Hanger51.Player
         [SerializeField, Min(0f)] private float sprintSpeed = 8f;
         [SerializeField, Min(0f)] private float jumpHeight = 1.2f;
         [SerializeField] private float gravity = -20f;
+        [SerializeField] private float groundedGravity = -2f;
+        [SerializeField, Min(1f)] private float terminalVelocity = 50f;
 
         [Header("Mouse Look")]
         [SerializeField, Min(0.01f)] private float mouseSensitivity = 0.12f;
@@ -89,22 +91,40 @@ namespace Hanger51.Player
             Vector3 horizontalMovement = transform.right * input.x + transform.forward * input.y;
             horizontalMovement *= currentSpeed;
 
-            if (characterController.isGrounded && verticalVelocity < 0f)
+            bool wasGrounded = characterController.isGrounded;
+
+            if (wasGrounded && verticalVelocity < 0f)
             {
-                verticalVelocity = -2f;
+                verticalVelocity = groundedGravity;
             }
 
-            if (characterController.isGrounded && keyboard.spaceKey.wasPressedThisFrame)
+            if (wasGrounded && keyboard.spaceKey.wasPressedThisFrame)
             {
                 verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
             }
-
-            verticalVelocity += gravity * Time.deltaTime;
+            else
+            {
+                verticalVelocity += gravity * Time.deltaTime;
+                verticalVelocity = Mathf.Max(verticalVelocity, -terminalVelocity);
+            }
 
             Vector3 finalMovement = horizontalMovement;
             finalMovement.y = verticalVelocity;
 
-            characterController.Move(finalMovement * Time.deltaTime);
+            CollisionFlags collisionFlags = characterController.Move(finalMovement * Time.deltaTime);
+
+            bool hitGround = (collisionFlags & CollisionFlags.Below) != 0;
+            bool hitCeiling = (collisionFlags & CollisionFlags.Above) != 0;
+
+            if (hitGround && verticalVelocity < 0f)
+            {
+                verticalVelocity = groundedGravity;
+            }
+
+            if (hitCeiling && verticalVelocity > 0f)
+            {
+                verticalVelocity = 0f;
+            }
         }
 
         private void HandleLook()
@@ -150,6 +170,8 @@ namespace Hanger51.Player
         {
             sprintSpeed = Mathf.Max(sprintSpeed, walkSpeed);
             gravity = Mathf.Min(gravity, -0.01f);
+            groundedGravity = Mathf.Min(groundedGravity, -0.01f);
+            terminalVelocity = Mathf.Max(terminalVelocity, 1f);
         }
     }
 }
