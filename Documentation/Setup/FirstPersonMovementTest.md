@@ -10,7 +10,7 @@ Create a small enclosed test area where the player can walk, sprint, look around
 - This is a PC-first prototype using keyboard and mouse.
 - The Unity Input System package is installed.
 - Placeholder cubes are acceptable until gameplay is proven.
-- This feature has not yet been validated inside the Unity Editor. It must be playtested before merging.
+- Movement feel must be validated inside Unity before the pull request is merged.
 
 ## Files created or changed
 
@@ -44,9 +44,20 @@ After restarting, confirm this setting:
    - `Assets/_Project/Scenes/FirstPersonMovementTest.unity`
 4. The generated `Player` object is selected automatically.
 
-### 3. Save Unity-generated metadata
+### 3. Update an existing test scene
 
-Unity will create `.meta` files for the new folders, scripts, and scene. Commit those files to GitHub with the scene after the test succeeds.
+After pulling controller improvements, update the existing player without rebuilding the scene:
+
+1. Open `Assets/_Project/Scenes/FirstPersonMovementTest.unity`.
+2. Exit Play mode.
+3. Select **Hanger 51 > Setup > Apply First-Person Smoothing Defaults**.
+4. Save the scene with **File > Save** or `Ctrl+S`.
+
+This command corrects the test player's starting height, applies the recommended Character Controller values, and applies the current movement-smoothing and ground-probe values.
+
+### 4. Save Unity-generated metadata
+
+Unity creates `.meta` files for the folders, scripts, and scene. Commit those files to GitHub with the scene after the test succeeds.
 
 ## Controls
 
@@ -63,20 +74,28 @@ Unity will create `.meta` files for the new folders, scripts, and scene. Commit 
 
 1. Open `Assets/_Project/Scenes/FirstPersonMovementTest.unity`.
 2. Press **Play**.
-3. Move forward, backward, left, and right.
-4. Move diagonally and confirm it is not faster than straight movement.
-5. Hold **Left Shift** and confirm sprinting is faster than walking.
-6. Press **Space** while grounded and confirm the player jumps once.
-7. Walk into every outer wall and confirm the player cannot pass through it.
-8. Walk onto the low step and confirm the Character Controller climbs it.
-9. Walk between the two narrow-passage walls and confirm collision feels consistent.
-10. Look fully up and down and confirm the camera stops before flipping upside down.
-11. Press **Escape**, then left-click the Game view to recapture the mouse.
-12. Stop Play mode and check the Console for errors or warnings.
+3. Start and stop repeatedly. Confirm speed eases in and out without feeling delayed.
+4. Change direction quickly and confirm there is no sharp visual snap.
+5. Move diagonally and confirm it is not faster than straight movement.
+6. Hold **Left Shift** and confirm sprinting is faster than walking.
+7. Jump several times while standing still.
+8. Jump while walking and while sprinting.
+9. Confirm the jump arc rises and falls smoothly with no repeated vertical shaking.
+10. Walk off the low step without jumping and confirm the player falls cleanly.
+11. Walk into every outer wall and confirm the player cannot pass through it.
+12. Walk onto the low step and confirm the Character Controller climbs it.
+13. Walk between the two narrow-passage walls and confirm collision feels consistent.
+14. Look fully up and down and confirm the camera stops before flipping upside down.
+15. Press **Escape**, then left-click the Game view to recapture the mouse.
+16. Stop Play mode and check the Console for errors or warnings.
 
 ## Expected Inspector settings
 
 Select the `Player` object.
+
+### Transform
+
+- Position Y in the generated test scene: `0.02`
 
 ### Character Controller
 
@@ -85,15 +104,40 @@ Select the `Player` object.
 - Center: `(0, 1, 0)`
 - Step Offset: `0.3`
 - Slope Limit: `45`
-- Skin Width: `0.08`
+- Skin Width: `0.04`
+- Min Move Distance: `0`
 
 ### First Person Controller
 
-- Player Camera: `Player Camera`
+#### Movement Speed
+
 - Walk Speed: `5`
 - Sprint Speed: `8`
+
+#### Movement Smoothing
+
+- Ground Acceleration: `30`
+- Ground Deceleration: `40`
+- Air Acceleration: `10`
+- Air Deceleration: `4`
+
+#### Jump and Gravity
+
 - Jump Height: `1.2`
-- Gravity: `-20`
+- Gravity: `-24`
+- Ground Stick Velocity: `-1.5`
+- Terminal Velocity: `50`
+
+#### Ground Probe
+
+- Ground Layers: `Everything`
+- Ground Probe Distance: `0.12`
+- Ground Probe Start Offset: `0.05`
+- Ground Probe Radius Inset: `0.03`
+
+#### Mouse Look
+
+- Player Camera: `Player Camera`
 - Mouse Sensitivity: `0.12`
 - Vertical Look Limit: `85`
 - Lock Cursor On Start: enabled
@@ -112,6 +156,14 @@ Check **Edit > Project Settings > Player > Other Settings > Configuration > Acti
 
 Open **Window > General > Console** and resolve all red compiler errors. Unity does not load Editor scripts when compilation fails.
 
+### The smoothing-default command cannot find the Player
+
+The active scene must contain a GameObject named exactly `Player` with:
+
+- `Character Controller`
+- `First Person Controller`
+- A child Camera
+
 ### The mouse is trapped in the Game view
 
 Press **Escape** to release it.
@@ -120,10 +172,18 @@ Press **Escape** to release it.
 
 Confirm that the generated `Floor` object still has its `Box Collider` and that the `Player` still has its `Character Controller`.
 
-### Movement feels too fast, slow, or sensitive
+### Movement feels too slow to respond
 
-Select the `Player` and adjust the serialized values on `First Person Controller`. Change one value at a time and retest.
+Increase **Ground Acceleration** in small increments, such as `30` to `35`. Higher values respond faster. Lower values feel softer.
+
+### Movement stops too slowly
+
+Increase **Ground Deceleration** in small increments, such as `40` to `45`.
+
+### Jumping still appears jittery
+
+Test the jump while completely stationary on the center of the flat floor. If it is smooth there but rough near the low step, the remaining problem is step collision rather than the jump arc. Also confirm the Game view is focused and the Console is not rapidly printing messages every frame.
 
 ## Recommended next step
 
-After this scene passes the full test, commit the Unity-generated scene and `.meta` files. The next small feature should be a visible interaction prompt and a single test object that the player can inspect or pick up.
+Do not add interaction or aircraft systems until walking, stopping, sprinting, and jumping feel consistently smooth on the flat floor and around the low step.
