@@ -33,7 +33,9 @@ A later milestone may introduce an Input Actions asset when rebinding, gamepad s
 
 **Status:** Accepted
 
-The first-person test scene is generated from **Hanger 51 > Setup > Create First-Person Test Area**. This reduces manual scene-building mistakes and makes the initial setup repeatable.
+The first-person test scene is generated from **Hanger 51 > Setup > Create First-Person Test Area**. Existing test players can be updated with **Hanger 51 > Setup > Apply First-Person Smoothing Defaults**.
+
+This reduces manual scene-building mistakes and keeps controller tuning repeatable.
 
 ## ADR-005: Keep project-owned assets under `Assets/_Project`
 
@@ -41,13 +43,30 @@ The first-person test scene is generated from **Hanger 51 > Setup > Create First
 
 Scripts, scenes, prefabs, materials, and other game-owned assets will live under `Assets/_Project`. Third-party packages and imported assets should remain outside that folder when practical.
 
+## ADR-006: Smooth horizontal velocity and probe the ground explicitly
+
+**Status:** Accepted for prototype
+
+The controller now moves its horizontal velocity toward a desired velocity using separate acceleration and deceleration values. This avoids instant speed changes while keeping the controller responsive.
+
+Grounding uses a short sphere cast beneath the Character Controller instead of depending only on `CharacterController.isGrounded`. The collision flags returned by `CharacterController.Move` remain a secondary confirmation for floor and ceiling contact.
+
+Reasons:
+
+- `isGrounded` can briefly change state near steps, slopes, and frame boundaries.
+- A configurable probe is easier to inspect and tune.
+- Separate ground and air smoothing values allow later adjustment without restructuring the controller.
+
 ## Completed systems
 
 - Repository initialized.
 - Basic first-person controller written.
 - One-click first-person movement test-area generator written.
+- Horizontal acceleration and deceleration added.
+- Explicit ground probing added for jump stability.
+- Existing-scene smoothing setup command added.
 - Setup and gameplay validation procedure documented.
 
 ## Validation status
 
-The code has been reviewed for obvious lifecycle and null-reference risks, but it has not yet been compiled or playtested in Unity. Do not mark the movement milestone complete until the documented gameplay test passes.
+Initial movement has been playtested by the user. The original movement and jump behavior required additional smoothing and grounding changes. The current revision must be pulled, applied with the smoothing-default command, and playtested again before the movement milestone is marked complete.
