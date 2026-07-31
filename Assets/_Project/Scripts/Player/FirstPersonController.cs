@@ -9,40 +9,23 @@ namespace Hanger51.Player
         [Header("References")]
         [SerializeField] private Camera playerCamera;
 
-        [Header("Movement Speed")]
+        [Header("Movement")]
         [SerializeField, Min(0f)] private float walkSpeed = 5f;
         [SerializeField, Min(0f)] private float sprintSpeed = 8f;
-
-        [Header("Movement Response")]
-        [SerializeField, Min(0f)] private float groundAcceleration = 24f;
-        [SerializeField, Min(0f)] private float groundDeceleration = 30f;
-        [SerializeField, Min(0f)] private float directionChangeAcceleration = 28f;
-        [SerializeField, Min(0f)] private float airAcceleration = 8f;
-        [SerializeField, Min(0f)] private float airDeceleration = 3f;
-
-        [Header("Jump and Gravity")]
         [SerializeField, Min(0f)] private float jumpHeight = 1.2f;
         [SerializeField] private float gravity = -24f;
+        [SerializeField] private float groundedVelocity = -2f;
         [SerializeField, Min(1f)] private float terminalVelocity = 50f;
-
-        [Header("Ground Probe")]
-        [SerializeField] private LayerMask groundLayers = ~0;
-        [SerializeField, Min(0.01f)] private float groundProbeDistance = 0.06f;
-        [SerializeField, Min(0f)] private float groundProbeStartOffset = 0.05f;
-        [SerializeField, Min(0f)] private float groundProbeRadiusInset = 0.03f;
 
         [Header("Mouse Look")]
         [SerializeField, Min(0.01f)] private float mouseSensitivity = 0.12f;
         [SerializeField, Range(1f, 89f)] private float verticalLookLimit = 85f;
         [SerializeField] private bool lockCursorOnStart = true;
 
-        private readonly RaycastHit[] groundHits = new RaycastHit[8];
-
         private CharacterController characterController;
-        private Vector3 horizontalVelocity;
         private float verticalVelocity;
         private float cameraPitch;
-        private bool isGrounded;
+        private bool jumpWasHeld;
 
         private void Awake()
         {
@@ -56,9 +39,14 @@ namespace Hanger51.Player
 
             if (playerCamera == null)
             {
-                Debug.LogError($"{nameof(FirstPersonController)} on '{name}' needs a child Camera.", this);
+                Debug.LogError(
+                    $"{nameof(FirstPersonController)} on '{name}' needs a child Camera.",
+                    this);
                 enabled = false;
+                return;
             }
+
+            ValidateInputSystemUpdateMode();
         }
 
         private void Start()
@@ -93,74 +81,58 @@ namespace Hanger51.Player
 
         private void OnDisable()
         {
-            horizontalVelocity = Vector3.zero;
             verticalVelocity = 0f;
-            isGrounded = false;
+            jumpWasHeld = false;
         }
 
         private void HandleMovement(bool controlsAreActive)
         {
-            float deltaTime = Time.deltaTime;
             Keyboard keyboard = Keyboard.current;
-
             Vector2 movementInput = controlsAreActive && keyboard != null
                 ? ReadMovementInput(keyboard)
                 : Vector2.zero;
-
-            // A probe can still see the floor for a few frames after takeoff.
-            // Never treat the player as grounded while vertical velocity is upward.
-            bool isRising = verticalVelocity > 0.01f;
-            isGrounded = !isRising && TryGetGround();
 
             bool isSprinting = controlsAreActive
                 && keyboard != null
                 && keyboard.leftShiftKey.isPressed;
 
-            float targetSpeed = isSprinting ? sprintSpeed : walkSpeed;
-            Vector3 desiredDirection = transform.right * movementInput.x
+            float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
+
+            Vector3 horizontalMovement = transform.right * movementInput.x
                 + transform.forward * movementInput.y;
-            Vector3 desiredHorizontalVelocity = desiredDirection * targetSpeed;
+            horizontalMovement *= currentSpeed;
 
-            float responseRate = SelectHorizontalResponseRate(
-                movementInput,
-                desiredHorizontalVelocity,
-                isGrounded);
+            bool isGrounded = characterController.isGrounded;
 
-            horizontalVelocity = Vector3.MoveTowards(
-                horizontalVelocity,
-                desiredHorizontalVelocity,
-                responseRate * deltaTime);
+            if (isGrounded && verticalVelocity < 0f)
+            {
+                verticalVelocity = groundedVelocity;
+            }
 
-            bool jumpPressed = controlsAreActive
+            bool jumpHeld = controlsAreActive
                 && keyboard != null
-                && keyboard.spaceKey.wasPressedThisFrame;
+                && keyboard.spaceKey.isPressed;
 
-            if (isGrounded)
-            {
-                // The custom ground probe keeps contact reliable, so there is no need
-                // to push the controller downward every frame. Removing that constant
-                // downward motion prevents tiny height corrections while strafing.
-                verticalVelocity = 0f;
+            bool jumpPressed = jumpHeld && !jumpWasHeld;
+            jumpWasHeld = jumpHeld;
 
-                if (jumpPressed)
-                {
-                    verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
-                    isGrounded = false;
-                }
-            }
-            else
+            if (isGrounded && jumpPressed)
             {
-                verticalVelocity += gravity * deltaTime;
-                verticalVelocity = Mathf.Max(verticalVelocity, -terminalVelocity);
+                verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
             }
 
-            Vector3 finalVelocity = horizontalVelocity + Vector3.up * verticalVelocity;
-            CollisionFlags collisionFlags = characterController.Move(finalVelocity * deltaTime);
+            verticalVelocity += gravity * Time.deltaTime;
+            verticalVelocity = Mathf.Max(verticalVelocity, -terminalVelocity);
+
+            Vector3 finalMovement = horizontalMovement;
+            finalMovement.y = verticalVelocity;
+
+            CollisionFlags collisionFlags = characterController.Move(
+                finalMovement * Time.deltaTime);
 
             if ((collisionFlags & CollisionFlags.Below) != 0 && verticalVelocity < 0f)
             {
-                verticalVelocity = 0f;
-                isGrounded = true;
+                verticalVelocity = groundedVelocity;
             }
 
             if ((collisionFlags & CollisionFlags.Above) != 0 && verticalVelocity > 0f)
@@ -179,97 +151,6 @@ namespace Hanger51.Player
             if (keyboard.aKey.isPressed) input.x -= 1f;
 
             return Vector2.ClampMagnitude(input, 1f);
-        }
-
-        private float SelectHorizontalResponseRate(
-            Vector2 movementInput,
-            Vector3 desiredHorizontalVelocity,
-            bool grounded)
-        {
-            bool hasMovementInput = movementInput.sqrMagnitude > 0.001f;
-
-            if (!hasMovementInput)
-            {
-                return grounded ? groundDeceleration : airDeceleration;
-            }
-
-            if (horizontalVelocity.sqrMagnitude < 0.001f)
-            {
-                return grounded ? groundAcceleration : airAcceleration;
-            }
-
-            float directionAlignment = Vector3.Dot(
-                horizontalVelocity.normalized,
-                desiredHorizontalVelocity.normalized);
-
-            if (directionAlignment < 0.5f)
-            {
-                return grounded ? directionChangeAcceleration : airAcceleration;
-            }
-
-            bool isSpeedingUp = desiredHorizontalVelocity.sqrMagnitude
-                > horizontalVelocity.sqrMagnitude + 0.001f;
-
-            if (grounded)
-            {
-                return isSpeedingUp ? groundAcceleration : groundDeceleration;
-            }
-
-            return isSpeedingUp ? airAcceleration : airDeceleration;
-        }
-
-        private bool TryGetGround()
-        {
-            float horizontalScale = Mathf.Max(
-                Mathf.Abs(transform.lossyScale.x),
-                Mathf.Abs(transform.lossyScale.z));
-
-            float verticalScale = Mathf.Abs(transform.lossyScale.y);
-            float radius = characterController.radius * horizontalScale;
-            float height = Mathf.Max(characterController.height * verticalScale, radius * 2f);
-            float probeRadius = Mathf.Max(0.01f, radius - groundProbeRadiusInset);
-
-            Vector3 worldCenter = transform.TransformPoint(characterController.center);
-            float lowerSphereCenterY = worldCenter.y - (height * 0.5f) + radius;
-
-            Vector3 probeOrigin = new Vector3(
-                worldCenter.x,
-                lowerSphereCenterY + groundProbeStartOffset,
-                worldCenter.z);
-
-            float castDistance = groundProbeStartOffset + groundProbeDistance;
-
-            int hitCount = Physics.SphereCastNonAlloc(
-                probeOrigin,
-                probeRadius,
-                Vector3.down,
-                groundHits,
-                castDistance,
-                groundLayers,
-                QueryTriggerInteraction.Ignore);
-
-            for (int index = 0; index < hitCount; index++)
-            {
-                RaycastHit hit = groundHits[index];
-
-                if (hit.collider == null || hit.collider == characterController)
-                {
-                    continue;
-                }
-
-                if (hit.collider.transform.IsChildOf(transform))
-                {
-                    continue;
-                }
-
-                float groundAngle = Vector3.Angle(hit.normal, Vector3.up);
-                if (groundAngle <= characterController.slopeLimit + 0.1f)
-                {
-                    return true;
-                }
-            }
-
-            return false;
         }
 
         private void HandleLookInput()
@@ -306,6 +187,25 @@ namespace Hanger51.Player
             }
         }
 
+        private void ValidateInputSystemUpdateMode()
+        {
+            InputSettings settings = InputSystem.settings;
+            if (settings == null)
+            {
+                return;
+            }
+
+            if (settings.updateMode != InputSettings.UpdateMode.ProcessEventsInDynamicUpdate)
+            {
+                Debug.LogWarning(
+                    "The FirstPersonController reads input in Update(). Open "
+                    + "Edit > Project Settings > Input System Package and set "
+                    + "Update Mode to 'Process Events In Dynamic Update'. A Fixed Update "
+                    + "input mode can cause stuttering and missed jump presses.",
+                    this);
+            }
+        }
+
         private static void SetCursorLocked(bool isLocked)
         {
             Cursor.lockState = isLocked ? CursorLockMode.Locked : CursorLockMode.None;
@@ -316,11 +216,8 @@ namespace Hanger51.Player
         {
             sprintSpeed = Mathf.Max(sprintSpeed, walkSpeed);
             gravity = Mathf.Min(gravity, -0.01f);
+            groundedVelocity = Mathf.Min(groundedVelocity, -0.01f);
             terminalVelocity = Mathf.Max(terminalVelocity, 1f);
-
-            groundProbeDistance = Mathf.Max(groundProbeDistance, 0.01f);
-            groundProbeStartOffset = Mathf.Max(groundProbeStartOffset, 0f);
-            groundProbeRadiusInset = Mathf.Max(groundProbeRadiusInset, 0f);
         }
     }
 }
