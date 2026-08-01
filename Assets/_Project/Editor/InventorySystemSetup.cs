@@ -18,7 +18,7 @@ namespace Hanger51.EditorTools
         private const string ItemFolder = InventoryRootFolder + "/Items";
         private const string MaterialFolder = InventoryRootFolder + "/Materials";
 
-        [MenuItem("Hanger 51/Inventory/1 - Install Inventory System")]
+        [MenuItem("Hanger 51/Inventory/1 - Install or Refresh Inventory System")]
         public static void InstallInventorySystem()
         {
             if (EditorApplication.isPlaying)
@@ -48,29 +48,29 @@ namespace Hanger51.EditorTools
 
             EnsureProjectFolders();
 
-            InventoryItemDefinition shopRag = CreateOrLoadItem(
+            InventoryItemDefinition shopRag = CreateOrUpdateItem(
                 "ShopRag",
                 "shop-rag",
                 "Shop Rag",
                 "A basic rag used for cleaning aircraft parts.",
                 10,
-                new Color(0.24f, 0.58f, 0.88f));
+                new Color(0.24f, 0.58f, 0.88f, 1f));
 
-            InventoryItemDefinition oilFilter = CreateOrLoadItem(
+            InventoryItemDefinition oilFilter = CreateOrUpdateItem(
                 "OilFilter",
                 "oil-filter",
                 "Oil Filter",
                 "A placeholder aircraft oil filter.",
                 5,
-                new Color(0.92f, 0.64f, 0.18f));
+                new Color(1f, 0.42f, 0.04f, 1f));
 
-            InventoryItemDefinition sparkPlug = CreateOrLoadItem(
+            InventoryItemDefinition sparkPlug = CreateOrUpdateItem(
                 "SparkPlug",
                 "spark-plug",
                 "Spark Plug",
                 "A placeholder aviation spark plug.",
                 12,
-                new Color(0.78f, 0.78f, 0.82f));
+                new Color(0.78f, 0.78f, 0.82f, 1f));
 
             PlayerInventory inventory = player.GetComponent<PlayerInventory>();
             if (inventory == null)
@@ -95,9 +95,33 @@ namespace Hanger51.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
+            Scene activeScene = SceneManager.GetActiveScene();
+            if (string.IsNullOrWhiteSpace(activeScene.path))
+            {
+                Debug.LogError(
+                    "Inventory Step 1 created the system, but the active scene has never been saved. "
+                    + "Use File > Save As, then run Inventory Step 1 again.");
+                return;
+            }
+
+            if (!EditorSceneManager.SaveScene(activeScene))
+            {
+                Debug.LogError("Inventory Step 1 failed to save the active scene.");
+                return;
+            }
+
+            if (!Hanger51BuildTools.PrepareCurrentSceneForBuild(false))
+            {
+                Debug.LogError(
+                    "Inventory Step 1 installed the inventory, but automatic build preparation failed. "
+                    + "Run Hanger 51 > Build > 1 - Prepare Current Scene for Build.");
+                return;
+            }
+
             Selection.activeGameObject = player;
             Debug.Log(
-                "Inventory Step 1 complete. Added the inventory, UI, interaction prompt, and three test pickups. Save the scene with Ctrl+S.",
+                "Inventory Step 1 complete. Refreshed the inventory, UI, three visible test pickups, "
+                + "saved the scene, and prepared it for Build and Run.",
                 player);
         }
 
@@ -167,10 +191,71 @@ namespace Hanger51.EditorTools
                 passed = false;
             }
 
+            string[] expectedPickupNames =
+            {
+                "Shop Rag Pickup",
+                "Oil Filter Pickup",
+                "Spark Plug Pickup"
+            };
+
+            for (int index = 0; index < expectedPickupNames.Length; index++)
+            {
+                string expectedName = expectedPickupNames[index];
+                Transform pickupTransform = pickupRoot != null
+                    ? pickupRoot.transform.Find(expectedName)
+                    : null;
+
+                if (pickupTransform == null)
+                {
+                    Debug.LogError($"Inventory validation failed: missing '{expectedName}'.");
+                    passed = false;
+                    continue;
+                }
+
+                GameObject pickupObject = pickupTransform.gameObject;
+                Renderer renderer = pickupObject.GetComponent<Renderer>();
+                Collider pickupCollider = pickupObject.GetComponent<Collider>();
+                InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
+
+                if (!pickupObject.activeInHierarchy)
+                {
+                    Debug.LogError($"Inventory validation failed: '{expectedName}' is inactive.");
+                    passed = false;
+                }
+
+                if (renderer == null || !renderer.enabled || renderer.sharedMaterial == null)
+                {
+                    Debug.LogError(
+                        $"Inventory validation failed: '{expectedName}' does not have a visible renderer and material.");
+                    passed = false;
+                }
+
+                if (pickupCollider == null || !pickupCollider.enabled)
+                {
+                    Debug.LogError($"Inventory validation failed: '{expectedName}' has no enabled collider.");
+                    passed = false;
+                }
+
+                if (pickup == null || pickup.Item == null)
+                {
+                    Debug.LogError($"Inventory validation failed: '{expectedName}' has no item definition.");
+                    passed = false;
+                }
+            }
+
+            if (!Hanger51BuildTools.ValidateBuildSetup(false))
+            {
+                Debug.LogError(
+                    "Inventory validation failed: the current scene is not ready for Build and Run. "
+                    + "Run Hanger 51 > Build > 1 - Prepare Current Scene for Build.");
+                passed = false;
+            }
+
             if (passed)
             {
                 Debug.Log(
-                    "Inventory Step 2 passed. Player inventory, eight UI slots, prompt UI, and three test pickups are ready.");
+                    "Inventory Step 2 passed. Player inventory, eight UI slots, all three visible pickups, "
+                    + "and the standalone build setup are ready.");
             }
         }
 
@@ -210,7 +295,11 @@ namespace Hanger51.EditorTools
                 24,
                 TextAnchor.MiddleCenter,
                 Color.white);
-            SetAnchoredRect(crosshair.rectTransform, new Vector2(0.5f, 0.5f), Vector2.zero, new Vector2(40f, 40f));
+            SetAnchoredRect(
+                crosshair.rectTransform,
+                new Vector2(0.5f, 0.5f),
+                Vector2.zero,
+                new Vector2(40f, 40f));
 
             Text promptText = CreateText(
                 "Interaction Prompt",
@@ -219,7 +308,11 @@ namespace Hanger51.EditorTools
                 24,
                 TextAnchor.MiddleCenter,
                 Color.white);
-            SetAnchoredRect(promptText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 125f), new Vector2(900f, 48f));
+            SetAnchoredRect(
+                promptText.rectTransform,
+                new Vector2(0.5f, 0f),
+                new Vector2(0f, 125f),
+                new Vector2(900f, 48f));
 
             Text statusText = CreateText(
                 "Status Text",
@@ -228,7 +321,11 @@ namespace Hanger51.EditorTools
                 22,
                 TextAnchor.MiddleCenter,
                 new Color(0.94f, 0.86f, 0.34f));
-            SetAnchoredRect(statusText.rectTransform, new Vector2(0.5f, 0f), new Vector2(0f, 175f), new Vector2(900f, 48f));
+            SetAnchoredRect(
+                statusText.rectTransform,
+                new Vector2(0.5f, 0f),
+                new Vector2(0f, 175f),
+                new Vector2(900f, 48f));
 
             GameObject panelObject = CreateImageObject(
                 "Inventory Panel",
@@ -247,7 +344,11 @@ namespace Hanger51.EditorTools
                 30,
                 TextAnchor.MiddleLeft,
                 Color.white);
-            SetAnchoredRect(titleText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -34f), new Vector2(700f, 48f));
+            SetAnchoredRect(
+                titleText.rectTransform,
+                new Vector2(0.5f, 1f),
+                new Vector2(0f, -34f),
+                new Vector2(700f, 48f));
 
             Text instructionText = CreateText(
                 "Instructions",
@@ -256,7 +357,11 @@ namespace Hanger51.EditorTools
                 18,
                 TextAnchor.MiddleRight,
                 new Color(0.72f, 0.76f, 0.82f));
-            SetAnchoredRect(instructionText.rectTransform, new Vector2(0.5f, 1f), new Vector2(0f, -34f), new Vector2(700f, 48f));
+            SetAnchoredRect(
+                instructionText.rectTransform,
+                new Vector2(0.5f, 1f),
+                new Vector2(0f, -34f),
+                new Vector2(700f, 48f));
 
             GameObject gridObject = new GameObject(
                 "Slot Grid",
@@ -322,7 +427,11 @@ namespace Hanger51.EditorTools
                 slotObject.transform,
                 Color.clear);
             RectTransform colorRect = colorObject.GetComponent<RectTransform>();
-            SetAnchoredRect(colorRect, new Vector2(0.5f, 0.65f), Vector2.zero, new Vector2(62f, 62f));
+            SetAnchoredRect(
+                colorRect,
+                new Vector2(0.5f, 0.65f),
+                Vector2.zero,
+                new Vector2(62f, 62f));
             colorObject.GetComponent<Image>().raycastTarget = false;
 
             Text itemNameText = CreateText(
@@ -332,7 +441,11 @@ namespace Hanger51.EditorTools
                 18,
                 TextAnchor.MiddleCenter,
                 Color.white);
-            SetAnchoredRect(itemNameText.rectTransform, new Vector2(0.5f, 0.18f), Vector2.zero, new Vector2(145f, 48f));
+            SetAnchoredRect(
+                itemNameText.rectTransform,
+                new Vector2(0.5f, 0.18f),
+                Vector2.zero,
+                new Vector2(145f, 48f));
 
             Text quantityText = CreateText(
                 "Quantity",
@@ -341,7 +454,11 @@ namespace Hanger51.EditorTools
                 18,
                 TextAnchor.MiddleRight,
                 Color.white);
-            SetAnchoredRect(quantityText.rectTransform, new Vector2(1f, 0f), new Vector2(-12f, 12f), new Vector2(60f, 30f));
+            SetAnchoredRect(
+                quantityText.rectTransform,
+                new Vector2(1f, 0f),
+                new Vector2(-12f, 12f),
+                new Vector2(60f, 30f));
 
             Text slotNumberText = CreateText(
                 "Slot Number",
@@ -350,7 +467,11 @@ namespace Hanger51.EditorTools
                 14,
                 TextAnchor.MiddleLeft,
                 new Color(0.58f, 0.62f, 0.68f));
-            SetAnchoredRect(slotNumberText.rectTransform, new Vector2(0f, 1f), new Vector2(10f, -10f), new Vector2(30f, 24f));
+            SetAnchoredRect(
+                slotNumberText.rectTransform,
+                new Vector2(0f, 1f),
+                new Vector2(10f, -10f),
+                new Vector2(30f, 24f));
 
             InventorySlotView slotView = slotObject.AddComponent<InventorySlotView>();
             SerializedObject serializedSlotView = new SerializedObject(slotView);
@@ -391,9 +512,26 @@ namespace Hanger51.EditorTools
             GameObject root = new GameObject(PickupRootObjectName);
             Undo.RegisterCreatedObjectUndo(root, "Create inventory test pickups");
 
-            CreatePickup("Shop Rag Pickup", shopRag, 3, new Vector3(-2f, 0.35f, -6f), root.transform);
-            CreatePickup("Oil Filter Pickup", oilFilter, 1, new Vector3(0f, 0.35f, -6f), root.transform);
-            CreatePickup("Spark Plug Pickup", sparkPlug, 4, new Vector3(2f, 0.35f, -6f), root.transform);
+            CreatePickup(
+                "Shop Rag Pickup",
+                shopRag,
+                3,
+                new Vector3(-2.5f, 0.45f, -5.8f),
+                root.transform);
+
+            CreatePickup(
+                "Oil Filter Pickup",
+                oilFilter,
+                1,
+                new Vector3(0f, 0.45f, -4.8f),
+                root.transform);
+
+            CreatePickup(
+                "Spark Plug Pickup",
+                sparkPlug,
+                4,
+                new Vector3(2.5f, 0.45f, -5.8f),
+                root.transform);
         }
 
         private static void CreatePickup(
@@ -408,13 +546,22 @@ namespace Hanger51.EditorTools
             pickupObject.name = objectName;
             pickupObject.transform.SetParent(parent);
             pickupObject.transform.position = position;
-            pickupObject.transform.localScale = Vector3.one * 0.6f;
+            pickupObject.transform.localScale = Vector3.one * 0.8f;
+            pickupObject.SetActive(true);
 
             Renderer renderer = pickupObject.GetComponent<Renderer>();
-            Material material = CreateOrLoadMaterial(item);
-            if (renderer != null && material != null)
+            Material material = CreateOrUpdateMaterial(item);
+            if (renderer != null)
             {
+                renderer.enabled = true;
                 renderer.sharedMaterial = material;
+            }
+
+            Collider pickupCollider = pickupObject.GetComponent<Collider>();
+            if (pickupCollider != null)
+            {
+                pickupCollider.enabled = true;
+                pickupCollider.isTrigger = false;
             }
 
             InventoryPickup pickup = pickupObject.AddComponent<InventoryPickup>();
@@ -424,7 +571,7 @@ namespace Hanger51.EditorTools
             serializedPickup.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static InventoryItemDefinition CreateOrLoadItem(
+        private static InventoryItemDefinition CreateOrUpdateItem(
             string assetName,
             string itemId,
             string displayName,
@@ -433,16 +580,15 @@ namespace Hanger51.EditorTools
             Color placeholderColor)
         {
             string assetPath = $"{ItemFolder}/{assetName}.asset";
-            InventoryItemDefinition existingItem =
+            InventoryItemDefinition item =
                 AssetDatabase.LoadAssetAtPath<InventoryItemDefinition>(assetPath);
 
-            if (existingItem != null)
+            if (item == null)
             {
-                return existingItem;
+                item = ScriptableObject.CreateInstance<InventoryItemDefinition>();
+                item.name = assetName;
+                AssetDatabase.CreateAsset(item, assetPath);
             }
-
-            InventoryItemDefinition item = ScriptableObject.CreateInstance<InventoryItemDefinition>();
-            item.name = assetName;
 
             SerializedObject serializedItem = new SerializedObject(item);
             serializedItem.FindProperty("itemId").stringValue = itemId;
@@ -452,11 +598,11 @@ namespace Hanger51.EditorTools
             serializedItem.FindProperty("placeholderColor").colorValue = placeholderColor;
             serializedItem.ApplyModifiedPropertiesWithoutUndo();
 
-            AssetDatabase.CreateAsset(item, assetPath);
+            EditorUtility.SetDirty(item);
             return item;
         }
 
-        private static Material CreateOrLoadMaterial(InventoryItemDefinition item)
+        private static Material CreateOrUpdateMaterial(InventoryItemDefinition item)
         {
             if (item == null)
             {
@@ -464,31 +610,52 @@ namespace Hanger51.EditorTools
             }
 
             string assetPath = $"{MaterialFolder}/{item.name}Material.mat";
-            Material existingMaterial = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
-            if (existingMaterial != null)
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(assetPath);
+
+            if (material == null)
             {
-                return existingMaterial;
+                Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+                if (shader == null)
+                {
+                    shader = Shader.Find("Standard");
+                }
+
+                if (shader == null)
+                {
+                    Debug.LogWarning($"Could not find a shader for pickup material '{item.name}'.");
+                    return null;
+                }
+
+                material = new Material(shader)
+                {
+                    name = item.name + " Material"
+                };
+
+                AssetDatabase.CreateAsset(material, assetPath);
             }
 
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
+            Color visibleColor = item.PlaceholderColor;
+            visibleColor.a = 1f;
+            material.color = visibleColor;
+
+            if (material.HasProperty("_BaseColor"))
             {
-                shader = Shader.Find("Standard");
+                material.SetColor("_BaseColor", visibleColor);
             }
 
-            if (shader == null)
+            if (material.HasProperty("_Color"))
             {
-                Debug.LogWarning($"Could not find a shader for pickup material '{item.name}'.");
-                return null;
+                material.SetColor("_Color", visibleColor);
             }
 
-            Material material = new Material(shader)
+            if (material.HasProperty("_Surface"))
             {
-                name = item.name + " Material",
-                color = item.PlaceholderColor
-            };
+                material.SetFloat("_Surface", 0f);
+            }
 
-            AssetDatabase.CreateAsset(material, assetPath);
+            material.renderQueue = -1;
+            material.enableInstancing = true;
+            EditorUtility.SetDirty(material);
             return material;
         }
 
