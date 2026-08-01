@@ -91,13 +91,13 @@ Reasons:
 - Stack size, description, and placeholder color remain in one inspectable asset.
 - New items can be added without changing the inventory storage code.
 
-## ADR-012: Keep the first inventory fixed and slot-based
+## ADR-012: Keep the inventory fixed and slot-based
 
-**Status:** Accepted for first inventory milestone
+**Status:** Accepted for the current prototype
 
 `PlayerInventory` contains eight fixed slots. Existing stacks are filled before empty slots are used.
 
-The first milestone intentionally excludes dragging, dropping, using, equipping, aircraft installation, durability, and save data. Those behaviors will be added only after basic pickup and display are validated.
+The UI now allows selecting an occupied slot, but dragging and rearranging slots remain outside the current milestone.
 
 ## ADR-013: Block gameplay input through the existing controller
 
@@ -123,7 +123,7 @@ Reasons:
 
 **Status:** Accepted
 
-From the inventory milestone onward, each meaningful feature must pass both Unity Play mode testing and a standalone Windows build.
+Each meaningful feature must pass both Unity Play mode testing and a standalone Windows build.
 
 The permanent workflow is:
 
@@ -133,11 +133,55 @@ The permanent workflow is:
 
 `Hanger51BuildTools` saves all open scenes, puts the active scene first in the enabled build list, checks scene paths and Windows Build Support, builds to `Builds/Windows/TheHanger51.exe`, and launches the result.
 
+## ADR-016: Store equipment state in PlayerInventory
+
+**Status:** Accepted for prototype
+
+`PlayerInventory` owns the currently equipped `InventoryItemDefinition` rather than letting the UI own equipment state.
+
 Reasons:
 
-- Editor-only success does not prove that a feature is included in a Player build.
-- Saving before every build prevents stale standalone tests.
-- One permanent numbered workflow can validate all future features.
+- Equipment remains correct when the UI closes or is rebuilt.
+- Other systems can query the equipped item without depending on a Canvas.
+- Dropping the final copy of an equipped item can automatically unequip it.
+
+The current Equip button toggles the selected item between equipped and unequipped.
+
+## ADR-017: Drop one unit at a time
+
+**Status:** Accepted for prototype
+
+`InventoryItemDropper` removes one unit from the selected slot and creates an `InventoryPickup` approximately 1.5 meters in front of the Player. A downward raycast aligns the pickup with the floor when possible.
+
+Reasons:
+
+- Dropping one unit avoids accidentally discarding an entire stack.
+- The dropped object immediately reuses the existing E-key pickup workflow.
+- Stack behavior can be validated without adding a quantity-selection dialog.
+
+## ADR-018: Use a separate equipped-item view
+
+**Status:** Accepted for placeholder phase
+
+`EquippedItemView` listens to inventory changes and displays a small colored placeholder object under the Player Camera.
+
+Reasons:
+
+- Equipment has an immediate visible result.
+- The placeholder proves the data flow before item-specific hand models exist.
+- Finished models can replace the placeholder without changing inventory storage.
+
+## ADR-019: Use an Input System UI module for clickable inventory controls
+
+**Status:** Accepted
+
+The equipment installer creates or repairs an `EventSystem` with `InputSystemUIInputModule`. Occupied slots and action buttons use Unity UI `Button` components.
+
+Reasons:
+
+- The project already uses the Unity Input System.
+- Mouse clicks must work in both Play mode and standalone builds.
+- Slot selection should not require custom mouse-coordinate code.
 
 ## Completed systems
 
@@ -156,9 +200,15 @@ Reasons:
 - Numbered inventory installer and validator added.
 - Pickup asset and material refresh added.
 - Permanent Windows Build and Run workflow added.
+- Top-right quantity badges added to prevent label overlap.
+- Clickable slot selection and selected-item details added.
+- Equip and unequip state added to PlayerInventory.
+- Equipped-item placeholder view added.
+- Drop One and repickup workflow added.
+- Equipment and drop validation commands added.
 
 ## Validation status
 
-The first-person movement scene and standalone build were validated successfully by the user.
+The first-person movement scene and standalone build were validated successfully by the user. Basic inventory pickup and display were also validated, including the refreshed orange Oil Filter pickup.
 
-The inventory foundation is implemented on `agent/inventory-ui-foundation`. The missing Oil Filter visual has been addressed by refreshing its asset and material, forcing a fully opaque bright-orange color, increasing the pickup size, and moving it to a clearer center-front position. The current inventory revision must now pass Inventory Steps 1 and 2, Play mode testing, and Build Steps 1 through 3 before it is considered complete.
+The equipment-and-drop revision is implemented on `agent/inventory-ui-foundation`. It must now pass Inventory Steps 1 through 4, the Play-mode equip/drop checklist, and Build Steps 1 through 3 before this milestone is considered complete.
