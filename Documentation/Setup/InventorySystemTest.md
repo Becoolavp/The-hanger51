@@ -37,7 +37,7 @@ Follow these numbered steps in order.
 4. Open **Window > General > Console**.
 5. Confirm the Console reports **Inventory Step 1 complete**.
 
-Step 1 now automatically saves the active scene and prepares it for Build and Run. It also refreshes existing item assets and materials instead of leaving old placeholder values unchanged.
+Step 1 automatically saves the active scene and prepares it for Build and Run. It also refreshes existing item assets and materials instead of leaving old placeholder values unchanged.
 
 Step 1 creates:
 
