@@ -8,15 +8,18 @@ namespace Hanger51.Inventory
     {
         [SerializeField, Min(1)] private int slotCount = 8;
         [SerializeField] private List<InventorySlotData> slots = new List<InventorySlotData>();
+        [SerializeField] private InventoryItemDefinition equippedItem;
 
         public event Action InventoryChanged;
 
         public IReadOnlyList<InventorySlotData> Slots => slots;
         public int SlotCount => slotCount;
+        public InventoryItemDefinition EquippedItem => equippedItem;
 
         private void Awake()
         {
             EnsureSlotCount();
+            RemoveInvalidEquippedItem();
         }
 
         public int AddItem(InventoryItemDefinition item, int quantity)
@@ -67,17 +70,79 @@ namespace Hanger51.Inventory
 
             if (changed)
             {
-                InventoryChanged?.Invoke();
+                NotifyInventoryChanged();
             }
 
             return remaining;
+        }
+
+        public bool ToggleEquipSlot(int slotIndex)
+        {
+            InventorySlotData slot = GetSlot(slotIndex);
+            if (slot == null || slot.IsEmpty)
+            {
+                return false;
+            }
+
+            equippedItem = equippedItem == slot.Item ? null : slot.Item;
+            NotifyInventoryChanged();
+            return true;
+        }
+
+        public void Unequip()
+        {
+            if (equippedItem == null)
+            {
+                return;
+            }
+
+            equippedItem = null;
+            NotifyInventoryChanged();
+        }
+
+        public bool TryRemoveFromSlot(
+            int slotIndex,
+            int requestedQuantity,
+            out InventoryItemDefinition removedItem,
+            out int removedQuantity)
+        {
+            removedItem = null;
+            removedQuantity = 0;
+
+            InventorySlotData slot = GetSlot(slotIndex);
+            if (slot == null || slot.IsEmpty || requestedQuantity <= 0)
+            {
+                return false;
+            }
+
+            removedItem = slot.Item;
+            removedQuantity = Mathf.Min(requestedQuantity, slot.Quantity);
+            slot.Set(removedItem, slot.Quantity - removedQuantity);
+
+            RemoveInvalidEquippedItem();
+            NotifyInventoryChanged();
+            return true;
+        }
+
+        public InventorySlotData GetSlot(int slotIndex)
+        {
+            EnsureSlotCount();
+
+            if (slotIndex < 0 || slotIndex >= slots.Count)
+            {
+                return null;
+            }
+
+            return slots[slotIndex];
         }
 
         public void ClearInventory()
         {
             EnsureSlotCount();
 
-            bool changed = false;
+            bool changed = equippedItem != null;
+            equippedItem = null;
+
             for (int index = 0; index < slots.Count; index++)
             {
                 if (slots[index].IsEmpty)
@@ -91,8 +156,40 @@ namespace Hanger51.Inventory
 
             if (changed)
             {
-                InventoryChanged?.Invoke();
+                NotifyInventoryChanged();
             }
+        }
+
+        private bool ContainsItem(InventoryItemDefinition item)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            for (int index = 0; index < slots.Count; index++)
+            {
+                InventorySlotData slot = slots[index];
+                if (!slot.IsEmpty && slot.Item == item)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+
+        private void RemoveInvalidEquippedItem()
+        {
+            if (equippedItem != null && !ContainsItem(equippedItem))
+            {
+                equippedItem = null;
+            }
+        }
+
+        private void NotifyInventoryChanged()
+        {
+            InventoryChanged?.Invoke();
         }
 
         private void EnsureSlotCount()
@@ -121,6 +218,7 @@ namespace Hanger51.Inventory
         private void OnValidate()
         {
             EnsureSlotCount();
+            RemoveInvalidEquippedItem();
         }
     }
 }
