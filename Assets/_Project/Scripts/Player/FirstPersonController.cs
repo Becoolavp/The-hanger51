@@ -14,18 +14,27 @@ namespace Hanger51.Player
         [SerializeField, Min(0f)] private float sprintSpeed = 8f;
         [SerializeField, Min(0f)] private float jumpHeight = 1.2f;
         [SerializeField] private float gravity = -24f;
-        [SerializeField] private float groundedVelocity = -2f;
         [SerializeField, Min(1f)] private float terminalVelocity = 50f;
+
+        [Header("Ground Detection")]
+        [SerializeField] private LayerMask groundLayers = ~0;
+        [SerializeField, Min(0.01f)] private float groundProbeDistance = 0.12f;
+        [SerializeField, Min(0f)] private float groundProbeStartOffset = 0.05f;
+        [SerializeField, Min(0f)] private float groundProbeRadiusInset = 0.04f;
 
         [Header("Mouse Look")]
         [SerializeField, Min(0.01f)] private float mouseSensitivity = 0.12f;
         [SerializeField, Range(1f, 89f)] private float verticalLookLimit = 85f;
         [SerializeField] private bool lockCursorOnStart = true;
 
+        private readonly RaycastHit[] groundHits = new RaycastHit[8];
+
         private CharacterController characterController;
         private float verticalVelocity;
         private float cameraPitch;
         private bool jumpWasHeld;
+
+        public float CameraPitch => cameraPitch;
 
         private void Awake()
         {
@@ -40,7 +49,7 @@ namespace Hanger51.Player
             if (playerCamera == null)
             {
                 Debug.LogError(
-                    $"{nameof(FirstPersonController)} on '{name}' needs a child Camera.",
+                    $"{nameof(FirstPersonController)} on '{name}' needs a Camera reference.",
                     this);
                 enabled = false;
                 return;
@@ -71,14 +80,6 @@ namespace Hanger51.Player
             HandleMovement(controlsAreActive);
         }
 
-        private void LateUpdate()
-        {
-            if (playerCamera != null)
-            {
-                playerCamera.transform.localRotation = Quaternion.Euler(cameraPitch, 0f, 0f);
-            }
-        }
-
         private void OnDisable()
         {
             verticalVelocity = 0f;
@@ -102,13 +103,6 @@ namespace Hanger51.Player
                 + transform.forward * movementInput.y;
             horizontalMovement *= currentSpeed;
 
-            bool isGrounded = characterController.isGrounded;
-
-            if (isGrounded && verticalVelocity < 0f)
-            {
-                verticalVelocity = groundedVelocity;
-            }
-
             bool jumpHeld = controlsAreActive
                 && keyboard != null
                 && keyboard.spaceKey.isPressed;
@@ -116,13 +110,25 @@ namespace Hanger51.Player
             bool jumpPressed = jumpHeld && !jumpWasHeld;
             jumpWasHeld = jumpHeld;
 
-            if (isGrounded && jumpPressed)
+            bool isRising = verticalVelocity > 0.01f;
+            bool isGrounded = !isRising && IsStandingOnGround();
+
+            if (isGrounded)
             {
-                verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                verticalVelocity = 0f;
+
+                if (jumpPressed)
+                {
+                    verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+                    isGrounded = false;
+                }
             }
 
-            verticalVelocity += gravity * Time.deltaTime;
-            verticalVelocity = Mathf.Max(verticalVelocity, -terminalVelocity);
+            if (!isGrounded)
+            {
+                verticalVelocity += gravity * Time.deltaTime;
+                verticalVelocity = Mathf.Max(verticalVelocity, -terminalVelocity);
+            }
 
             Vector3 finalMovement = horizontalMovement;
             finalMovement.y = verticalVelocity;
@@ -132,7 +138,7 @@ namespace Hanger51.Player
 
             if ((collisionFlags & CollisionFlags.Below) != 0 && verticalVelocity < 0f)
             {
-                verticalVelocity = groundedVelocity;
+                verticalVelocity = 0f;
             }
 
             if ((collisionFlags & CollisionFlags.Above) != 0 && verticalVelocity > 0f)
@@ -151,6 +157,65 @@ namespace Hanger51.Player
             if (keyboard.aKey.isPressed) input.x -= 1f;
 
             return Vector2.ClampMagnitude(input, 1f);
+        }
+
+        private bool IsStandingOnGround()
+        {
+            if (characterController.isGrounded)
+            {
+                return true;
+            }
+
+            float horizontalScale = Mathf.Max(
+                Mathf.Abs(transform.lossyScale.x),
+                Mathf.Abs(transform.lossyScale.z));
+
+            float verticalScale = Mathf.Abs(transform.lossyScale.y);
+            float radius = characterController.radius * horizontalScale;
+            float height = Mathf.Max(characterController.height * verticalScale, radius * 2f);
+            float probeRadius = Mathf.Max(0.01f, radius - groundProbeRadiusInset);
+
+            Vector3 worldCenter = transform.TransformPoint(characterController.center);
+            float lowerSphereCenterY = worldCenter.y - (height * 0.5f) + radius;
+
+            Vector3 probeOrigin = new Vector3(
+                worldCenter.x,
+                lowerSphereCenterY + groundProbeStartOffset,
+                worldCenter.z);
+
+            float castDistance = groundProbeStartOffset + groundProbeDistance;
+
+            int hitCount = Physics.SphereCastNonAlloc(
+                probeOrigin,
+                probeRadius,
+                Vector3.down,
+                groundHits,
+                castDistance,
+                groundLayers,
+                QueryTriggerInteraction.Ignore);
+
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit hit = groundHits[index];
+
+                if (hit.collider == null || hit.collider == characterController)
+                {
+                    continue;
+                }
+
+                if (hit.collider.transform.IsChildOf(transform))
+                {
+                    continue;
+                }
+
+                float groundAngle = Vector3.Angle(hit.normal, Vector3.up);
+                if (groundAngle <= characterController.slopeLimit + 0.1f)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private void HandleLookInput()
@@ -198,10 +263,8 @@ namespace Hanger51.Player
             if (settings.updateMode != InputSettings.UpdateMode.ProcessEventsInDynamicUpdate)
             {
                 Debug.LogWarning(
-                    "The FirstPersonController reads input in Update(). Open "
-                    + "Edit > Project Settings > Input System Package and set "
-                    + "Update Mode to 'Process Events In Dynamic Update'. A Fixed Update "
-                    + "input mode can cause stuttering and missed jump presses.",
+                    "The FirstPersonController reads input in Update(). Run "
+                    + "Hanger 51 > Setup > 3 - Configure Input and Frame Pacing.",
                     this);
             }
         }
@@ -216,8 +279,10 @@ namespace Hanger51.Player
         {
             sprintSpeed = Mathf.Max(sprintSpeed, walkSpeed);
             gravity = Mathf.Min(gravity, -0.01f);
-            groundedVelocity = Mathf.Min(groundedVelocity, -0.01f);
             terminalVelocity = Mathf.Max(terminalVelocity, 1f);
+            groundProbeDistance = Mathf.Max(groundProbeDistance, 0.01f);
+            groundProbeStartOffset = Mathf.Max(groundProbeStartOffset, 0f);
+            groundProbeRadiusInset = Mathf.Max(groundProbeRadiusInset, 0f);
         }
     }
 }
