@@ -33,7 +33,7 @@ The project setting must therefore be **Process Events In Dynamic Update**. The 
 
 **Status:** Accepted
 
-The Unity menu provides a numbered sequence:
+The movement setup menu provides a numbered sequence:
 
 1. Create or recreate the test area.
 2. Apply the movement and camera fix.
@@ -41,7 +41,7 @@ The Unity menu provides a numbered sequence:
 4. Add the test scene to the build.
 5. Validate all setup.
 
-Numbering reduces ambiguity for a beginner and makes test reports easier to diagnose.
+The inventory menu also uses numbered installation and validation commands. Numbering reduces ambiguity for a beginner and makes test reports easier to diagnose.
 
 ## ADR-005: Keep project-owned assets under `Assets/_Project`
 
@@ -87,18 +87,52 @@ Every generated test scene contains a `Game Systems` object with `FramePacingCon
 
 The setup tool adds `Assets/_Project/Scenes/FirstPersonMovementTest.unity` as the first enabled build scene. This prevents a standalone build from opening without the test environment or Player.
 
+## ADR-011: Use item-definition assets for inventory content
+
+**Status:** Accepted
+
+Inventory items are represented by `InventoryItemDefinition` ScriptableObject assets rather than hard-coded strings inside the Player inventory.
+
+Reasons:
+
+- One item definition can be reused by pickups, UI, aircraft parts, shops, and save data.
+- Stack size, description, and placeholder color remain in one inspectable asset.
+- New items can be added without changing the inventory storage code.
+
+## ADR-012: Keep the first inventory fixed and slot-based
+
+**Status:** Accepted for first inventory milestone
+
+`PlayerInventory` contains eight fixed slots. Existing stacks are filled before empty slots are used.
+
+The first milestone intentionally excludes dragging, dropping, using, equipping, aircraft installation, durability, and save data. Those behaviors will be added only after basic pickup and display are validated.
+
+## ADR-013: Block gameplay input through the existing controller
+
+**Status:** Accepted
+
+Opening inventory calls `FirstPersonController.SetExternalInputBlocked(true)`. This unlocks the cursor and prevents walking, jumping, mouse look, and accidental cursor recapture while the inventory panel is open.
+
+This is a small integration point rather than a replacement of the working movement architecture.
+
 ## Completed systems
 
 - Repository initialized.
-- Responsive first-person movement controller written.
-- Stable repeated-jump grounding added.
-- First-person camera smoothing added.
+- Responsive first-person movement controller written and playtested.
+- Stable repeated-jump grounding added and playtested.
+- First-person camera smoothing added and playtested.
 - Runtime frame pacing added.
 - One-click test-area generator written.
 - Numbered setup and validation workflow added.
-- Test scene build inclusion automated.
-- Setup, gameplay, and standalone-build validation documented.
+- Test scene build inclusion automated and validated in a standalone build.
+- Eight-slot inventory data model added.
+- Reusable inventory item-definition assets added.
+- E-key world pickup interaction added.
+- I-key inventory panel and interaction prompt added.
+- Numbered inventory installer and validator added.
 
 ## Validation status
 
-The user identified movement jitter and a standalone build that did not start in the generated test scene. The current revision directly addresses both issues. It must be pulled, applied through numbered Steps 2 through 5, then tested in both Play mode and a standalone build before the movement milestone is complete.
+The first-person movement scene and standalone build were validated successfully by the user.
+
+The inventory foundation is implemented on `agent/inventory-ui-foundation` but still requires Unity compilation and gameplay validation through the numbered inventory setup steps before it is considered complete.
