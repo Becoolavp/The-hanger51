@@ -25,6 +25,13 @@ namespace Hanger51.Inventory
             }
         }
 
+        public void Configure(InventoryItemDefinition configuredItem, int configuredQuantity)
+        {
+            item = configuredItem;
+            quantity = Mathf.Max(1, configuredQuantity);
+            name = item != null ? $"{item.DisplayName} Pickup" : "Inventory Pickup";
+        }
+
         public bool TryPickup(PlayerInventory inventory)
         {
             if (inventory == null || item == null || quantity <= 0)
