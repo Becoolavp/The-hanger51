@@ -1,3 +1,4 @@
+using System;
 using Hanger51.EngineAssembly;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -14,6 +15,7 @@ namespace Hanger51.Inventory
 
         private InventoryPickup currentPickup;
         private EngineAssemblyStation currentAssemblyStation;
+        private EngineAssemblyInteractionTarget currentAssemblyTarget;
 
         private void Awake()
         {
@@ -45,6 +47,7 @@ namespace Hanger51.Inventory
         {
             if (inventoryUI.IsOpen)
             {
+                CancelCurrentAssemblyHold();
                 currentPickup = null;
                 return;
             }
@@ -52,6 +55,22 @@ namespace Hanger51.Inventory
             FindInteractionTarget();
 
             Keyboard keyboard = Keyboard.current;
+            if (currentAssemblyTarget != null)
+            {
+                bool holdingE = keyboard != null && keyboard.eKey.isPressed;
+                if (currentAssemblyTarget.ProcessHold(
+                        inventory,
+                        holdingE,
+                        Time.deltaTime,
+                        out string assemblyMessage))
+                {
+                    inventoryUI.ShowStatusMessage(assemblyMessage, 2f);
+                }
+
+                inventoryUI.SetInteractionPrompt(currentAssemblyTarget.InteractionText);
+                return;
+            }
+
             if (currentPickup == null || keyboard == null || !keyboard.eKey.wasPressedThisFrame)
             {
                 return;
@@ -65,7 +84,7 @@ namespace Hanger51.Inventory
             if (pickedUp)
             {
                 inventoryUI.ShowStatusMessage($"Picked up {itemName}");
-                SetInteractionTarget(null, null);
+                SetInteractionTarget(null, null, null);
             }
             else
             {
@@ -76,49 +95,88 @@ namespace Hanger51.Inventory
         private void FindInteractionTarget()
         {
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                interactionDistance,
+                interactionLayers,
+                QueryTriggerInteraction.Ignore);
 
-            if (!Physics.Raycast(
-                    ray,
-                    out RaycastHit hit,
-                    interactionDistance,
-                    interactionLayers,
-                    QueryTriggerInteraction.Ignore))
+            if (hits.Length == 0)
             {
-                SetInteractionTarget(null, null);
+                SetInteractionTarget(null, null, null);
                 return;
             }
 
-            InventoryPickup pickup = hit.collider.GetComponentInParent<InventoryPickup>();
-            if (pickup != null)
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+
+            EngineAssemblyStation nearestStation = null;
+
+            for (int index = 0; index < hits.Length; index++)
             {
-                SetInteractionTarget(pickup, null);
-                return;
+                InventoryPickup pickup = hits[index].collider.GetComponentInParent<InventoryPickup>();
+                if (pickup != null)
+                {
+                    SetInteractionTarget(pickup, null, null);
+                    return;
+                }
+
+                EngineAssemblyInteractionTarget assemblyTarget =
+                    hits[index].collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
+                if (assemblyTarget != null && assemblyTarget.IsInteractable)
+                {
+                    EngineAssemblyStation targetStation =
+                        assemblyTarget.GetComponentInParent<EngineAssemblyStation>();
+                    SetInteractionTarget(null, targetStation, assemblyTarget);
+                    return;
+                }
+
+                if (nearestStation == null)
+                {
+                    nearestStation = hits[index].collider.GetComponentInParent<EngineAssemblyStation>();
+                }
             }
 
-            EngineAssemblyStation assemblyStation =
-                hit.collider.GetComponentInParent<EngineAssemblyStation>();
-            SetInteractionTarget(null, assemblyStation);
+            SetInteractionTarget(null, nearestStation, null);
         }
 
         private void SetInteractionTarget(
             InventoryPickup pickup,
-            EngineAssemblyStation assemblyStation)
+            EngineAssemblyStation assemblyStation,
+            EngineAssemblyInteractionTarget assemblyTarget)
         {
+            if (currentAssemblyTarget != assemblyTarget)
+            {
+                CancelCurrentAssemblyHold();
+            }
+
             currentPickup = pickup;
             currentAssemblyStation = assemblyStation;
+            currentAssemblyTarget = assemblyTarget;
             inventoryUI.SetAssemblyStation(currentAssemblyStation);
 
             string prompt = currentPickup != null
                 ? currentPickup.InteractionText
-                : currentAssemblyStation != null
-                    ? currentAssemblyStation.InteractionText
-                    : string.Empty;
+                : currentAssemblyTarget != null
+                    ? currentAssemblyTarget.InteractionText
+                    : currentAssemblyStation != null
+                        ? currentAssemblyStation.InteractionText
+                        : string.Empty;
 
             inventoryUI.SetInteractionPrompt(prompt);
         }
 
+        private void CancelCurrentAssemblyHold()
+        {
+            if (currentAssemblyTarget != null)
+            {
+                currentAssemblyTarget.CancelHold();
+            }
+        }
+
         private void OnDisable()
         {
+            CancelCurrentAssemblyHold();
+
             if (inventoryUI != null)
             {
                 inventoryUI.SetAssemblyStation(null);
