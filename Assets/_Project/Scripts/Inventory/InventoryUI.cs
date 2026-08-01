@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hanger51.EngineAssembly;
 using Hanger51.Player;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -21,9 +22,12 @@ namespace Hanger51.Inventory
         [SerializeField] private Text selectedItemNameText;
         [SerializeField] private Text selectedItemDescriptionText;
         [SerializeField] private Text equippedItemText;
+        [SerializeField] private Text installationTargetText;
         [SerializeField] private Button equipButton;
         [SerializeField] private Text equipButtonText;
         [SerializeField] private Button dropButton;
+        [SerializeField] private Button installButton;
+        [SerializeField] private Text installButtonText;
 
         [Header("Controls")]
         [SerializeField] private bool openWithIKey = true;
@@ -31,8 +35,10 @@ namespace Hanger51.Inventory
         private float statusMessageClearTime;
         private bool isOpen;
         private int selectedSlotIndex = -1;
+        private EngineAssemblyStation activeAssemblyStation;
 
         public bool IsOpen => isOpen;
+        public EngineAssemblyStation ActiveAssemblyStation => activeAssemblyStation;
 
         private void Awake()
         {
@@ -132,6 +138,21 @@ namespace Hanger51.Inventory
             }
         }
 
+        public void SetAssemblyStation(EngineAssemblyStation station)
+        {
+            if (activeAssemblyStation == station)
+            {
+                return;
+            }
+
+            activeAssemblyStation = station;
+
+            if (isOpen)
+            {
+                RefreshSelectedItemDetails();
+            }
+        }
+
         public void SetInteractionPrompt(string message)
         {
             if (interactionPromptText == null)
@@ -180,6 +201,12 @@ namespace Hanger51.Inventory
                 dropButton.onClick.RemoveAllListeners();
                 dropButton.onClick.AddListener(DropSelectedItem);
             }
+
+            if (installButton != null)
+            {
+                installButton.onClick.RemoveAllListeners();
+                installButton.onClick.AddListener(InstallSelectedItem);
+            }
         }
 
         private void SelectSlot(int slotIndex)
@@ -207,6 +234,12 @@ namespace Hanger51.Inventory
                 return;
             }
 
+            if (!selectedSlot.Item.CanEquip)
+            {
+                ShowStatusMessage($"{selectedSlot.Item.DisplayName} is too large to equip.");
+                return;
+            }
+
             bool wasEquipped = inventory.EquippedItem == selectedSlot.Item;
             if (inventory.ToggleEquipSlot(selectedSlotIndex))
             {
@@ -231,6 +264,32 @@ namespace Hanger51.Inventory
             }
 
             ShowStatusMessage(resultMessage);
+            RefreshSlots();
+        }
+
+        private void InstallSelectedItem()
+        {
+            if (activeAssemblyStation == null)
+            {
+                ShowStatusMessage("Aim at the engine stand before opening inventory.");
+                return;
+            }
+
+            if (selectedSlotIndex < 0)
+            {
+                ShowStatusMessage("Select an item to install.");
+                return;
+            }
+
+            if (activeAssemblyStation.TryInstall(
+                    inventory,
+                    selectedSlotIndex,
+                    out string resultMessage))
+            {
+                SelectFirstAvailableSlotWhenNeeded();
+            }
+
+            ShowStatusMessage(resultMessage, 2f);
             RefreshSlots();
         }
 
@@ -289,7 +348,7 @@ namespace Hanger51.Inventory
             {
                 selectedItemDescriptionText.text = hasSelection
                     ? $"{selectedSlot.Item.Description}\n\nQuantity: {selectedSlot.Quantity}"
-                    : "Click an occupied inventory slot to equip or drop it.";
+                    : "Click an occupied slot, then Equip, Drop One, or Install.";
             }
 
             if (equippedItemText != null)
@@ -299,9 +358,18 @@ namespace Hanger51.Inventory
                     : "Equipped: None";
             }
 
+            if (installationTargetText != null)
+            {
+                installationTargetText.text = activeAssemblyStation != null
+                    ? activeAssemblyStation.ProgressText
+                    : "Install target: None — aim at engine stand, then press I";
+            }
+
+            bool selectedItemCanEquip = hasSelection && selectedSlot.Item.CanEquip;
+
             if (equipButton != null)
             {
-                equipButton.interactable = hasSelection;
+                equipButton.interactable = selectedItemCanEquip;
             }
 
             if (dropButton != null)
@@ -314,7 +382,29 @@ namespace Hanger51.Inventory
                 bool selectedItemIsEquipped = hasSelection
                     && inventory.EquippedItem == selectedSlot.Item;
 
-                equipButtonText.text = selectedItemIsEquipped ? "Unequip" : "Equip";
+                equipButtonText.text = !hasSelection
+                    ? "Equip"
+                    : !selectedSlot.Item.CanEquip
+                        ? "Install Only"
+                        : selectedItemIsEquipped
+                            ? "Unequip"
+                            : "Equip";
+            }
+
+            bool canInstall = hasSelection
+                && activeAssemblyStation != null
+                && activeAssemblyStation.CanInstall(selectedSlot.Item, out _);
+
+            if (installButton != null)
+            {
+                installButton.interactable = canInstall;
+            }
+
+            if (installButtonText != null)
+            {
+                installButtonText.text = hasSelection && activeAssemblyStation != null
+                    ? activeAssemblyStation.GetInstallButtonLabel(selectedSlot.Item)
+                    : "Install";
             }
         }
 
