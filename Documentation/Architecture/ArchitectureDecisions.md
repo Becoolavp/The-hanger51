@@ -33,15 +33,7 @@ The project setting must therefore be **Process Events In Dynamic Update**. The 
 
 **Status:** Accepted
 
-The movement setup menu provides a numbered sequence:
-
-1. Create or recreate the test area.
-2. Apply the movement and camera fix.
-3. Configure input and frame pacing.
-4. Add the test scene to the build.
-5. Validate all setup.
-
-The inventory menu also uses numbered installation and validation commands. Numbering reduces ambiguity for a beginner and makes test reports easier to diagnose.
+Movement, inventory, and build setup commands use numbered Unity menu items. Numbering reduces ambiguity for a beginner and makes test reports easier to diagnose.
 
 ## ADR-005: Keep project-owned assets under `Assets/_Project`
 
@@ -81,11 +73,11 @@ The controller does not continuously push downward while standing. It also ignor
 
 Every generated test scene contains a `Game Systems` object with `FramePacingController`. The prototype enables VSync at runtime so the Editor Game view and standalone build use consistent frame pacing.
 
-## ADR-010: The test scene must be first in the build
+## ADR-010: The current feature scene must be first in the build
 
 **Status:** Accepted
 
-The setup tool adds `Assets/_Project/Scenes/FirstPersonMovementTest.unity` as the first enabled build scene. This prevents a standalone build from opening without the test environment or Player.
+The build workflow saves the active scene and inserts it as the first enabled build scene. This prevents a standalone build from opening without the feature currently being tested.
 
 ## ADR-011: Use item-definition assets for inventory content
 
@@ -115,6 +107,38 @@ Opening inventory calls `FirstPersonController.SetExternalInputBlocked(true)`. T
 
 This is a small integration point rather than a replacement of the working movement architecture.
 
+## ADR-014: Refresh generated item assets and pickup materials
+
+**Status:** Accepted
+
+The inventory installer updates existing item-definition assets and materials every time it runs. Generated pickup materials are forced to use an opaque placeholder color, and each expected pickup is validated by exact name.
+
+Reasons:
+
+- An old or partially initialized asset should not survive repeated setup runs.
+- Placeholder pickup visibility must be deterministic.
+- Validation should identify the exact missing or invisible object.
+
+## ADR-015: Every feature must pass standalone Build and Run testing
+
+**Status:** Accepted
+
+From the inventory milestone onward, each meaningful feature must pass both Unity Play mode testing and a standalone Windows build.
+
+The permanent workflow is:
+
+1. **Hanger 51 > Build > 1 - Prepare Current Scene for Build**
+2. **Hanger 51 > Build > 2 - Validate Build Setup**
+3. **Hanger 51 > Build > 3 - Build and Run Windows**
+
+`Hanger51BuildTools` saves all open scenes, puts the active scene first in the enabled build list, checks scene paths and Windows Build Support, builds to `Builds/Windows/TheHanger51.exe`, and launches the result.
+
+Reasons:
+
+- Editor-only success does not prove that a feature is included in a Player build.
+- Saving before every build prevents stale standalone tests.
+- One permanent numbered workflow can validate all future features.
+
 ## Completed systems
 
 - Repository initialized.
@@ -130,9 +154,11 @@ This is a small integration point rather than a replacement of the working movem
 - E-key world pickup interaction added.
 - I-key inventory panel and interaction prompt added.
 - Numbered inventory installer and validator added.
+- Pickup asset and material refresh added.
+- Permanent Windows Build and Run workflow added.
 
 ## Validation status
 
 The first-person movement scene and standalone build were validated successfully by the user.
 
-The inventory foundation is implemented on `agent/inventory-ui-foundation` but still requires Unity compilation and gameplay validation through the numbered inventory setup steps before it is considered complete.
+The inventory foundation is implemented on `agent/inventory-ui-foundation`. The missing Oil Filter visual has been addressed by refreshing its asset and material, forcing a fully opaque bright-orange color, increasing the pickup size, and moving it to a clearer center-front position. The current inventory revision must now pass Inventory Steps 1 and 2, Play mode testing, and Build Steps 1 through 3 before it is considered complete.
