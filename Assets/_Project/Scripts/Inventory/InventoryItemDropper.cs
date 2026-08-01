@@ -34,14 +34,14 @@ namespace Hanger51.Inventory
                 return false;
             }
 
-            Vector3 dropPosition = FindDropPosition();
-            CreateDroppedPickup(removedItem, removedQuantity, dropPosition);
+            Vector3 groundPosition = FindDropGroundPosition();
+            CreateDroppedPickup(removedItem, removedQuantity, groundPosition);
 
             resultMessage = $"Dropped {removedItem.DisplayName}.";
             return true;
         }
 
-        private Vector3 FindDropPosition()
+        private Vector3 FindDropGroundPosition()
         {
             Transform origin = dropOrigin != null ? dropOrigin : transform;
             Vector3 flatForward = Vector3.ProjectOnPlane(origin.forward, Vector3.up).normalized;
@@ -62,32 +62,90 @@ namespace Hanger51.Inventory
                     ~0,
                     QueryTriggerInteraction.Ignore))
             {
-                return groundHit.point + Vector3.up * (pickupScale * 0.5f + 0.02f);
+                return groundHit.point;
             }
 
-            return candidatePosition + Vector3.up * (pickupScale * 0.5f + 0.02f);
+            return candidatePosition;
         }
 
         private void CreateDroppedPickup(
             InventoryItemDefinition item,
             int quantity,
-            Vector3 position)
+            Vector3 groundPosition)
         {
-            GameObject pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            pickupObject.transform.position = position;
-            pickupObject.transform.localScale = Vector3.one * pickupScale;
+            GameObject pickupObject;
+            bool usesItemPrefab = item != null && item.WorldPrefab != null;
 
-            InventoryPickup pickup = pickupObject.AddComponent<InventoryPickup>();
-            pickup.Configure(item, quantity);
-
-            Renderer pickupRenderer = pickupObject.GetComponent<Renderer>();
-            if (pickupRenderer != null)
+            if (usesItemPrefab)
             {
-                Material runtimeMaterial = CreateRuntimeMaterial(item);
-                if (runtimeMaterial != null)
-                {
-                    pickupRenderer.material = runtimeMaterial;
-                }
+                pickupObject = Instantiate(item.WorldPrefab);
+            }
+            else
+            {
+                pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pickupObject.transform.localScale = Vector3.one * pickupScale;
+                ApplyFallbackMaterial(pickupObject, item);
+            }
+
+            pickupObject.SetActive(true);
+            pickupObject.transform.position = groundPosition;
+            pickupObject.transform.rotation = Quaternion.identity;
+
+            InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
+            if (pickup == null)
+            {
+                pickup = pickupObject.AddComponent<InventoryPickup>();
+            }
+
+            pickup.Configure(item, quantity);
+            EnsurePickupCollider(pickupObject);
+            AlignBottomToGround(pickupObject, groundPosition.y);
+        }
+
+        private static void EnsurePickupCollider(GameObject pickupObject)
+        {
+            if (pickupObject.GetComponentInChildren<Collider>() != null)
+            {
+                return;
+            }
+
+            BoxCollider collider = pickupObject.AddComponent<BoxCollider>();
+            collider.size = Vector3.one;
+        }
+
+        private static void AlignBottomToGround(GameObject pickupObject, float groundY)
+        {
+            Renderer[] renderers = pickupObject.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+            {
+                pickupObject.transform.position += Vector3.up * 0.02f;
+                return;
+            }
+
+            Bounds combinedBounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                combinedBounds.Encapsulate(renderers[index].bounds);
+            }
+
+            float verticalOffset = groundY - combinedBounds.min.y + 0.02f;
+            pickupObject.transform.position += Vector3.up * verticalOffset;
+        }
+
+        private static void ApplyFallbackMaterial(
+            GameObject pickupObject,
+            InventoryItemDefinition item)
+        {
+            Renderer pickupRenderer = pickupObject.GetComponent<Renderer>();
+            if (pickupRenderer == null)
+            {
+                return;
+            }
+
+            Material runtimeMaterial = CreateRuntimeMaterial(item);
+            if (runtimeMaterial != null)
+            {
+                pickupRenderer.material = runtimeMaterial;
             }
         }
 
