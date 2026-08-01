@@ -1,4 +1,6 @@
+using System.Collections.Generic;
 using Hanger51.Player;
+using Hanger51.Systems;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -10,10 +12,11 @@ namespace Hanger51.EditorTools
     public static class FirstPersonTestAreaBuilder
     {
         private const string PlayerObjectName = "Player";
+        private const string SystemsObjectName = "Game Systems";
         private const string SceneFolderPath = "Assets/_Project/Scenes";
         private const string ScenePath = SceneFolderPath + "/FirstPersonMovementTest.unity";
 
-        [MenuItem("Hanger 51/Setup/Create First-Person Test Area")]
+        [MenuItem("Hanger 51/Setup/1 - Create or Recreate Test Area")]
         public static void CreateTestArea()
         {
             if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
@@ -29,93 +32,205 @@ namespace Hanger51.EditorTools
 
             CreateLighting();
             CreateEnvironment();
+            CreateGameSystems();
             CreatePlayer();
 
             EditorSceneManager.SaveScene(scene, ScenePath);
+            ConfigureInputAndFramePacing();
+            AddTestSceneToBuild();
+
             AssetDatabase.SaveAssets();
             AssetDatabase.Refresh();
 
             Selection.activeGameObject = GameObject.Find(PlayerObjectName);
-            Debug.Log($"Created first-person movement test scene at '{ScenePath}'.");
+            Debug.Log(
+                $"Step 1 complete. Created the test scene at '{ScenePath}' and added it to the build.");
         }
 
-        [MenuItem("Hanger 51/Setup/Apply First-Person Controller Defaults")]
-        public static void ApplyFirstPersonControllerDefaults()
+        [MenuItem("Hanger 51/Setup/2 - Apply Movement and Camera Fix")]
+        public static void ApplyMovementAndCameraFix()
         {
             GameObject player = GameObject.Find(PlayerObjectName);
             if (player == null)
             {
-                Debug.LogError($"Could not find a GameObject named '{PlayerObjectName}' in the active scene.");
+                Debug.LogError(
+                    $"Step 2 failed. Could not find a GameObject named '{PlayerObjectName}' in the active scene.");
                 return;
             }
 
-            CharacterController controller = player.GetComponent<CharacterController>();
+            CharacterController characterController = player.GetComponent<CharacterController>();
             FirstPersonController firstPersonController = player.GetComponent<FirstPersonController>();
             Camera playerCamera = player.GetComponentInChildren<Camera>();
 
-            if (controller == null || firstPersonController == null || playerCamera == null)
+            if (characterController == null || firstPersonController == null || playerCamera == null)
             {
                 Debug.LogError(
-                    "The Player must have a CharacterController, a FirstPersonController, and a child Camera.",
+                    "Step 2 failed. Player needs a CharacterController, FirstPersonController, and child Camera.",
                     player);
                 return;
             }
 
-            Undo.RecordObject(player.transform, "Apply first-person controller defaults");
-            Undo.RecordObject(controller, "Apply first-person controller defaults");
-            Undo.RecordObject(firstPersonController, "Apply first-person controller defaults");
+            FirstPersonCameraSmoother cameraSmoother =
+                playerCamera.GetComponent<FirstPersonCameraSmoother>();
+
+            if (cameraSmoother == null)
+            {
+                cameraSmoother = Undo.AddComponent<FirstPersonCameraSmoother>(playerCamera.gameObject);
+            }
+
+            Undo.RecordObject(player.transform, "Apply movement and camera fix");
+            Undo.RecordObject(characterController, "Apply movement and camera fix");
+            Undo.RecordObject(firstPersonController, "Apply movement and camera fix");
+            Undo.RecordObject(cameraSmoother, "Apply movement and camera fix");
 
             if (SceneManager.GetActiveScene().name == "FirstPersonMovementTest")
             {
-                Vector3 position = player.transform.position;
-                position.y = 0.02f;
-                player.transform.position = position;
+                Vector3 playerPosition = player.transform.position;
+                playerPosition.y = 0.02f;
+                player.transform.position = playerPosition;
             }
 
-            ConfigureCharacterController(controller);
+            ConfigureCharacterController(characterController);
             ConfigureFirstPersonController(firstPersonController, playerCamera);
+            ConfigureCameraSmoother(cameraSmoother, player.transform, firstPersonController);
+            EnsureGameSystemsExist();
 
             EditorUtility.SetDirty(player.transform);
-            EditorUtility.SetDirty(controller);
+            EditorUtility.SetDirty(characterController);
             EditorUtility.SetDirty(firstPersonController);
+            EditorUtility.SetDirty(cameraSmoother);
             EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
 
             Selection.activeGameObject = player;
-            Debug.Log("Applied the responsive first-person controller defaults.", player);
+            Debug.Log("Step 2 complete. Applied movement, grounding, and camera defaults.", player);
         }
 
-        // Kept temporarily so an existing instruction or habit still works.
-        [MenuItem("Hanger 51/Setup/Apply First-Person Smoothing Defaults")]
-        public static void ApplyLegacySmoothingDefaultsMenu()
+        [MenuItem("Hanger 51/Setup/3 - Configure Input and Frame Pacing")]
+        public static void ConfigureInputAndFramePacing()
         {
-            ApplyFirstPersonControllerDefaults();
-        }
+            InputSettings inputSettings = InputSystem.settings;
 
-        [MenuItem("Hanger 51/Setup/Validate First-Person Project Settings")]
-        public static void ValidateFirstPersonProjectSettings()
-        {
-            InputSettings settings = InputSystem.settings;
-            if (settings == null)
+            if (inputSettings == null)
             {
                 Debug.LogError(
-                    "Unity could not find the Input System settings asset. Open "
-                    + "Edit > Project Settings > Input System Package and review the settings.");
+                    "Step 3 failed. Unity could not find Input System settings. Confirm the Input System package is installed.");
                 return;
             }
 
-            if (settings.updateMode != InputSettings.UpdateMode.ProcessEventsInDynamicUpdate)
-            {
-                Debug.LogError(
-                    "Incorrect Input System Update Mode. Open Edit > Project Settings > "
-                    + "Input System Package and set Update Mode to 'Process Events In Dynamic Update'. "
-                    + "The first-person controller reads input in Update(), so Fixed Update mode can "
-                    + "cause stuttering and missed jump presses.");
-                return;
-            }
+            inputSettings.updateMode = InputSettings.UpdateMode.ProcessEventsInDynamicUpdate;
+            EditorUtility.SetDirty(inputSettings);
+
+            QualitySettings.vSyncCount = 1;
+            AssetDatabase.SaveAssets();
 
             Debug.Log(
-                $"First-person project settings passed. Unity version: {Application.unityVersion}. "
-                + "Input System Update Mode: Process Events In Dynamic Update.");
+                "Step 3 complete. Input System uses Dynamic Update and VSync is enabled for the active quality level.");
+        }
+
+        [MenuItem("Hanger 51/Setup/4 - Add Test Scene to Build")]
+        public static void AddTestSceneToBuild()
+        {
+            SceneAsset sceneAsset = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
+            if (sceneAsset == null)
+            {
+                Debug.LogError(
+                    $"Step 4 failed. The scene does not exist at '{ScenePath}'. Run Step 1 first.");
+                return;
+            }
+
+            List<EditorBuildSettingsScene> scenes =
+                new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
+
+            for (int index = scenes.Count - 1; index >= 0; index--)
+            {
+                if (scenes[index].path == ScenePath)
+                {
+                    scenes.RemoveAt(index);
+                }
+            }
+
+            scenes.Insert(0, new EditorBuildSettingsScene(ScenePath, true));
+            EditorBuildSettings.scenes = scenes.ToArray();
+
+            Debug.Log(
+                $"Step 4 complete. '{ScenePath}' is now the first enabled scene in the build.");
+        }
+
+        [MenuItem("Hanger 51/Setup/5 - Validate All Setup")]
+        public static void ValidateAllSetup()
+        {
+            bool passed = true;
+
+            if (!Application.unityVersion.StartsWith("6000.3"))
+            {
+                Debug.LogWarning(
+                    $"Unity version warning: this project is running {Application.unityVersion}. "
+                    + "The project target is Unity 6.3 LTS (6000.3.x). Version differences can affect packages and settings.");
+            }
+
+            InputSettings inputSettings = InputSystem.settings;
+            if (inputSettings == null
+                || inputSettings.updateMode != InputSettings.UpdateMode.ProcessEventsInDynamicUpdate)
+            {
+                Debug.LogError("Validation failed: Input System Update Mode is not Dynamic Update.");
+                passed = false;
+            }
+
+            if (QualitySettings.vSyncCount < 1)
+            {
+                Debug.LogError("Validation failed: VSync is disabled for the active quality level.");
+                passed = false;
+            }
+
+            SceneAsset sceneAsset = AssetDatabase.LoadAssetAtPath<SceneAsset>(ScenePath);
+            if (sceneAsset == null)
+            {
+                Debug.LogError($"Validation failed: missing scene '{ScenePath}'.");
+                passed = false;
+            }
+
+            bool sceneIsFirstAndEnabled = EditorBuildSettings.scenes.Length > 0
+                && EditorBuildSettings.scenes[0].path == ScenePath
+                && EditorBuildSettings.scenes[0].enabled;
+
+            if (!sceneIsFirstAndEnabled)
+            {
+                Debug.LogError(
+                    "Validation failed: the first-person test scene is not the first enabled build scene.");
+                passed = false;
+            }
+
+            GameObject player = GameObject.Find(PlayerObjectName);
+            if (player == null)
+            {
+                Debug.LogError("Validation failed: the active scene has no GameObject named 'Player'.");
+                passed = false;
+            }
+            else
+            {
+                Camera playerCamera = player.GetComponentInChildren<Camera>();
+                if (playerCamera == null
+                    || playerCamera.GetComponent<FirstPersonCameraSmoother>() == null)
+                {
+                    Debug.LogError(
+                        "Validation failed: Player Camera is missing FirstPersonCameraSmoother.",
+                        player);
+                    passed = false;
+                }
+            }
+
+            if (GameObject.Find(SystemsObjectName) == null)
+            {
+                Debug.LogError("Validation failed: the active scene has no 'Game Systems' object.");
+                passed = false;
+            }
+
+            if (passed)
+            {
+                Debug.Log(
+                    $"Step 5 passed. Unity {Application.unityVersion}; Dynamic Input; VSync enabled; "
+                    + "test scene is first in the build; Player and Game Systems are present.");
+            }
         }
 
         private static void CreateLighting()
@@ -156,13 +271,36 @@ namespace Hanger51.EditorTools
             CreatePrimitive("Reference Cube", PrimitiveType.Cube, new Vector3(-8f, 1f, 7f), new Vector3(2f, 2f, 2f), environmentRoot.transform);
         }
 
+        private static void CreateGameSystems()
+        {
+            GameObject systemsObject = new GameObject(SystemsObjectName);
+            systemsObject.AddComponent<FramePacingController>();
+        }
+
+        private static void EnsureGameSystemsExist()
+        {
+            GameObject systemsObject = GameObject.Find(SystemsObjectName);
+            if (systemsObject == null)
+            {
+                systemsObject = new GameObject(SystemsObjectName);
+                Undo.RegisterCreatedObjectUndo(systemsObject, "Create Game Systems");
+            }
+
+            if (systemsObject.GetComponent<FramePacingController>() == null)
+            {
+                Undo.AddComponent<FramePacingController>(systemsObject);
+            }
+
+            EditorUtility.SetDirty(systemsObject);
+        }
+
         private static void CreatePlayer()
         {
             GameObject player = new GameObject(PlayerObjectName);
             player.transform.position = new Vector3(0f, 0.02f, -10f);
 
-            CharacterController controller = player.AddComponent<CharacterController>();
-            ConfigureCharacterController(controller);
+            CharacterController characterController = player.AddComponent<CharacterController>();
+            ConfigureCharacterController(characterController);
 
             GameObject cameraObject = new GameObject("Player Camera");
             cameraObject.transform.SetParent(player.transform, false);
@@ -176,6 +314,10 @@ namespace Hanger51.EditorTools
 
             FirstPersonController firstPersonController = player.AddComponent<FirstPersonController>();
             ConfigureFirstPersonController(firstPersonController, playerCamera);
+
+            FirstPersonCameraSmoother cameraSmoother =
+                cameraObject.AddComponent<FirstPersonCameraSmoother>();
+            ConfigureCameraSmoother(cameraSmoother, player.transform, firstPersonController);
         }
 
         private static void ConfigureCharacterController(CharacterController controller)
@@ -185,7 +327,7 @@ namespace Hanger51.EditorTools
             controller.center = new Vector3(0f, 1f, 0f);
             controller.stepOffset = 0.3f;
             controller.slopeLimit = 45f;
-            controller.skinWidth = 0.04f;
+            controller.skinWidth = 0.08f;
             controller.minMoveDistance = 0f;
         }
 
@@ -200,13 +342,32 @@ namespace Hanger51.EditorTools
             serializedController.FindProperty("sprintSpeed").floatValue = 8f;
             serializedController.FindProperty("jumpHeight").floatValue = 1.2f;
             serializedController.FindProperty("gravity").floatValue = -24f;
-            serializedController.FindProperty("groundedVelocity").floatValue = -2f;
             serializedController.FindProperty("terminalVelocity").floatValue = 50f;
+            serializedController.FindProperty("groundLayers").intValue = ~0;
+            serializedController.FindProperty("groundProbeDistance").floatValue = 0.12f;
+            serializedController.FindProperty("groundProbeStartOffset").floatValue = 0.05f;
+            serializedController.FindProperty("groundProbeRadiusInset").floatValue = 0.04f;
             serializedController.FindProperty("mouseSensitivity").floatValue = 0.12f;
             serializedController.FindProperty("verticalLookLimit").floatValue = 85f;
             serializedController.FindProperty("lockCursorOnStart").boolValue = true;
 
             serializedController.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void ConfigureCameraSmoother(
+            FirstPersonCameraSmoother cameraSmoother,
+            Transform playerTransform,
+            FirstPersonController firstPersonController)
+        {
+            SerializedObject serializedSmoother = new SerializedObject(cameraSmoother);
+
+            serializedSmoother.FindProperty("followTarget").objectReferenceValue = playerTransform;
+            serializedSmoother.FindProperty("playerController").objectReferenceValue = firstPersonController;
+            serializedSmoother.FindProperty("eyeOffset").vector3Value = new Vector3(0f, 1.65f, 0f);
+            serializedSmoother.FindProperty("positionSmoothTime").floatValue = 0.025f;
+
+            serializedSmoother.ApplyModifiedPropertiesWithoutUndo();
+            cameraSmoother.SnapToTarget();
         }
 
         private static GameObject CreatePrimitive(
