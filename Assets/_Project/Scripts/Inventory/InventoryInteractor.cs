@@ -1,3 +1,4 @@
+using Hanger51.EngineAssembly;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -12,6 +13,7 @@ namespace Hanger51.Inventory
         [SerializeField] private LayerMask interactionLayers = ~0;
 
         private InventoryPickup currentPickup;
+        private EngineAssemblyStation currentAssemblyStation;
 
         private void Awake()
         {
@@ -43,11 +45,11 @@ namespace Hanger51.Inventory
         {
             if (inventoryUI.IsOpen)
             {
-                SetCurrentPickup(null);
+                currentPickup = null;
                 return;
             }
 
-            FindPickupTarget();
+            FindInteractionTarget();
 
             Keyboard keyboard = Keyboard.current;
             if (currentPickup == null || keyboard == null || !keyboard.eKey.wasPressedThisFrame)
@@ -63,7 +65,7 @@ namespace Hanger51.Inventory
             if (pickedUp)
             {
                 inventoryUI.ShowStatusMessage($"Picked up {itemName}");
-                SetCurrentPickup(null);
+                SetInteractionTarget(null, null);
             }
             else
             {
@@ -71,7 +73,7 @@ namespace Hanger51.Inventory
             }
         }
 
-        private void FindPickupTarget()
+        private void FindInteractionTarget()
         {
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
 
@@ -82,21 +84,35 @@ namespace Hanger51.Inventory
                     interactionLayers,
                     QueryTriggerInteraction.Ignore))
             {
-                SetCurrentPickup(null);
+                SetInteractionTarget(null, null);
                 return;
             }
 
             InventoryPickup pickup = hit.collider.GetComponentInParent<InventoryPickup>();
-            SetCurrentPickup(pickup);
+            if (pickup != null)
+            {
+                SetInteractionTarget(pickup, null);
+                return;
+            }
+
+            EngineAssemblyStation assemblyStation =
+                hit.collider.GetComponentInParent<EngineAssemblyStation>();
+            SetInteractionTarget(null, assemblyStation);
         }
 
-        private void SetCurrentPickup(InventoryPickup pickup)
+        private void SetInteractionTarget(
+            InventoryPickup pickup,
+            EngineAssemblyStation assemblyStation)
         {
             currentPickup = pickup;
+            currentAssemblyStation = assemblyStation;
+            inventoryUI.SetAssemblyStation(currentAssemblyStation);
 
             string prompt = currentPickup != null
                 ? currentPickup.InteractionText
-                : string.Empty;
+                : currentAssemblyStation != null
+                    ? currentAssemblyStation.InteractionText
+                    : string.Empty;
 
             inventoryUI.SetInteractionPrompt(prompt);
         }
@@ -105,6 +121,7 @@ namespace Hanger51.Inventory
         {
             if (inventoryUI != null)
             {
+                inventoryUI.SetAssemblyStation(null);
                 inventoryUI.SetInteractionPrompt(string.Empty);
             }
         }
