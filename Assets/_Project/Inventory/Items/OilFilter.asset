@@ -1,0 +1,19 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
+  m_Name: OilFilter
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
+  itemId: oil-filter
+  displayName: Oil Filter
+  description: A placeholder aircraft oil filter.
+  maxStackSize: 5
+  placeholderColor: {r: 1, g: 0.42, b: 0.04, a: 1}

@@ -33,6 +33,7 @@ namespace Hanger51.Player
         private float verticalVelocity;
         private float cameraPitch;
         private bool jumpWasHeld;
+        private bool externalInputBlocked;
 
         public float CameraPitch => cameraPitch;
 
@@ -70,7 +71,8 @@ namespace Hanger51.Player
         {
             HandleCursorState();
 
-            bool controlsAreActive = Cursor.lockState == CursorLockMode.Locked;
+            bool controlsAreActive = !externalInputBlocked
+                && Cursor.lockState == CursorLockMode.Locked;
 
             if (controlsAreActive)
             {
@@ -84,6 +86,14 @@ namespace Hanger51.Player
         {
             verticalVelocity = 0f;
             jumpWasHeld = false;
+            externalInputBlocked = false;
+        }
+
+        public void SetExternalInputBlocked(bool isBlocked)
+        {
+            externalInputBlocked = isBlocked;
+            jumpWasHeld = false;
+            SetCursorLocked(!isBlocked);
         }
 
         private void HandleMovement(bool controlsAreActive)
@@ -236,6 +246,11 @@ namespace Hanger51.Player
 
         private void HandleCursorState()
         {
+            if (externalInputBlocked)
+            {
+                return;
+            }
+
             Keyboard keyboard = Keyboard.current;
             Mouse mouse = Mouse.current;
 
