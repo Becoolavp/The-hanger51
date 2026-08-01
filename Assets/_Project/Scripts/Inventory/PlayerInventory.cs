@@ -79,7 +79,7 @@ namespace Hanger51.Inventory
         public bool ToggleEquipSlot(int slotIndex)
         {
             InventorySlotData slot = GetSlot(slotIndex);
-            if (slot == null || slot.IsEmpty)
+            if (slot == null || slot.IsEmpty || !slot.Item.CanEquip)
             {
                 return false;
             }
@@ -181,7 +181,8 @@ namespace Hanger51.Inventory
 
         private void RemoveInvalidEquippedItem()
         {
-            if (equippedItem != null && !ContainsItem(equippedItem))
+            if (equippedItem != null
+                && (!equippedItem.CanEquip || !ContainsItem(equippedItem)))
             {
                 equippedItem = null;
             }
