@@ -50,6 +50,7 @@ namespace Hanger51.EngineAssembly
         private void Awake()
         {
             interactionCollider = GetComponent<Collider>();
+            DisableVisualColliders();
             RefreshFromStation();
         }
 
@@ -75,6 +76,7 @@ namespace Hanger51.EngineAssembly
             rotationTurns = Mathf.Max(0f, configuredRotationTurns);
 
             interactionCollider = GetComponent<Collider>();
+            DisableVisualColliders();
             RefreshFromStation();
         }
 
@@ -139,6 +141,8 @@ namespace Hanger51.EngineAssembly
             {
                 interactionCollider = GetComponent<Collider>();
             }
+
+            DisableVisualColliders();
 
             bool available = IsInteractable;
             bool completed = station != null
@@ -206,6 +210,19 @@ namespace Hanger51.EngineAssembly
             animatedVisual.transform.SetPositionAndRotation(
                 worldPosition,
                 worldRotation);
+        }
+
+        private void DisableVisualColliders()
+        {
+            Collider[] colliders = GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
+            {
+                Collider collider = colliders[index];
+                if (collider != null && collider != interactionCollider)
+                {
+                    collider.enabled = false;
+                }
+            }
         }
 
         private void OnDisable()
