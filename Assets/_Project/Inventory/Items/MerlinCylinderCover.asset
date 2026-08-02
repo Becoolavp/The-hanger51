@@ -10,13 +10,13 @@ MonoBehaviour:
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
-  m_Name: SparkPlug
+  m_Name: MerlinCylinderCover
   m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
-  itemId: spark-plug
-  displayName: V-1650 Spark Plug
-  description: A detailed aircraft spark plug. Equip it to reveal the open wells,
-    then hold E to screw it into the cover. Two plugs are required per cylinder.
-  maxStackSize: 24
-  placeholderColor: {r: 0.78, g: 0.79, b: 0.82, a: 1}
+  itemId: merlin-cylinder-cover
+  displayName: V-1650 Cylinder Cover
+  description: A long cam and valve cover for one six-cylinder bank. Equip it to
+    reveal the highlighted mounting area, then secure it with six bolts.
+  maxStackSize: 2
+  placeholderColor: {r: 0.12, g: 0.13, b: 0.15, a: 1}
   canEquip: 1
-  worldPrefab: {fileID: 1122768364169028156, guid: eb2ed383adcfd8e44895ea914f5e8ffd, type: 3}
+  worldPrefab: {fileID: 2773478007903451656, guid: 4683301852e443c4c9433fd5d6377bcb, type: 3}
