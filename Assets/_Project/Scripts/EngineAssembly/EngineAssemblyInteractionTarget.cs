@@ -24,8 +24,6 @@ namespace Hanger51.EngineAssembly
         [SerializeField, Min(0f)] private float rotationTurns = 2f;
 
         private Collider interactionCollider;
-        private Vector3 finalLocalPosition;
-        private Quaternion finalLocalRotation;
         private float holdProgress;
         private bool isHolding;
 
@@ -35,6 +33,11 @@ namespace Hanger51.EngineAssembly
         public float HoldProgress => holdProgress;
         public bool IsInteractable => station != null
             && station.IsTargetAvailable(interactionKind, groupIndex, targetIndex);
+
+        public Vector3 FinalWorldPosition => transform.position;
+        public Quaternion FinalWorldRotation => transform.rotation;
+        public Vector3 RaisedWorldPosition =>
+            FinalWorldPosition + transform.up * animationLift;
 
         public string InteractionText => station != null
             ? station.GetTargetInteractionText(
@@ -47,7 +50,6 @@ namespace Hanger51.EngineAssembly
         private void Awake()
         {
             interactionCollider = GetComponent<Collider>();
-            CacheFinalVisualPose();
             RefreshFromStation();
         }
 
@@ -73,7 +75,6 @@ namespace Hanger51.EngineAssembly
             rotationTurns = Mathf.Max(0f, configuredRotationTurns);
 
             interactionCollider = GetComponent<Collider>();
-            CacheFinalVisualPose();
             RefreshFromStation();
         }
 
@@ -160,30 +161,17 @@ namespace Hanger51.EngineAssembly
                 return;
             }
 
-            animatedVisual.transform.localRotation = finalLocalRotation;
-
             if (interactionKind == EngineAssemblyInteractionKind.CoverBolt)
             {
                 animatedVisual.SetActive(true);
-                animatedVisual.transform.localPosition = completed
-                    ? finalLocalPosition
-                    : GetRaisedLocalPosition();
+                SetAnimatedWorldPose(
+                    completed ? FinalWorldPosition : RaisedWorldPosition,
+                    FinalWorldRotation);
                 return;
             }
 
-            animatedVisual.transform.localPosition = finalLocalPosition;
+            SetAnimatedWorldPose(FinalWorldPosition, FinalWorldRotation);
             animatedVisual.SetActive(completed);
-        }
-
-        private void CacheFinalVisualPose()
-        {
-            if (animatedVisual == null)
-            {
-                return;
-            }
-
-            finalLocalPosition = animatedVisual.transform.localPosition;
-            finalLocalRotation = animatedVisual.transform.localRotation;
         }
 
         private void ApplyAnimatedPose(float normalizedProgress)
@@ -194,26 +182,30 @@ namespace Hanger51.EngineAssembly
             }
 
             animatedVisual.SetActive(true);
-            animatedVisual.transform.localPosition = Vector3.Lerp(
-                GetRaisedLocalPosition(),
-                finalLocalPosition,
+
+            Vector3 animatedPosition = Vector3.Lerp(
+                RaisedWorldPosition,
+                FinalWorldPosition,
                 normalizedProgress);
 
             Quaternion spin = Quaternion.AngleAxis(
                 360f * rotationTurns * normalizedProgress,
-                Vector3.up);
-            animatedVisual.transform.localRotation = finalLocalRotation * spin;
+                transform.up);
+            Quaternion animatedRotation = spin * FinalWorldRotation;
+
+            SetAnimatedWorldPose(animatedPosition, animatedRotation);
         }
 
-        private Vector3 GetRaisedLocalPosition()
+        private void SetAnimatedWorldPose(Vector3 worldPosition, Quaternion worldRotation)
         {
             if (animatedVisual == null)
             {
-                return finalLocalPosition;
+                return;
             }
 
-            Vector3 localLiftDirection = finalLocalRotation * Vector3.up;
-            return finalLocalPosition + localLiftDirection * animationLift;
+            animatedVisual.transform.SetPositionAndRotation(
+                worldPosition,
+                worldRotation);
         }
 
         private void OnDisable()
