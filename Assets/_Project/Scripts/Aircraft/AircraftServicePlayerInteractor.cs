@@ -63,12 +63,13 @@ namespace Hanger51.Aircraft
 
                 if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
                 {
+                    string pickupMessage = string.Empty;
                     if (currentLooseCowling.ServiceController != null
                         && currentLooseCowling.ServiceController.TryBeginCowlingCarry(
                             cowlingCarryAnchor,
                             carryLocalPosition,
                             carryLocalRotation,
-                            out string pickupMessage))
+                            out pickupMessage))
                     {
                         carriedCowlingService = currentLooseCowling.ServiceController;
                         currentLooseCowling = null;
