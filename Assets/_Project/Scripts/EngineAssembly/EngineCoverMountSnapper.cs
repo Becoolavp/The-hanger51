@@ -109,9 +109,13 @@ namespace Hanger51.EngineAssembly
                 return;
             }
 
+            // Preserve the cover's authored scale. The real-scale setup reduces
+            // the engine and covers together, and resetting scale here would
+            // make the cover oversized again after a mount repair.
+            Vector3 preservedScale = cover.localScale;
             cover.position = bank.TransformPoint(bankLocalMountOffset);
             cover.rotation = bank.rotation;
-            cover.localScale = Vector3.one;
+            cover.localScale = preservedScale;
         }
 
         private void OnValidate()
