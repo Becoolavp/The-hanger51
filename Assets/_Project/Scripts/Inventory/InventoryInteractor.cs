@@ -58,9 +58,12 @@ namespace Hanger51.Inventory
             if (currentAssemblyTarget != null)
             {
                 bool holdingE = keyboard != null && keyboard.eKey.isPressed;
-                if (currentAssemblyTarget.ProcessHold(
+                bool holdingR = keyboard != null && keyboard.rKey.isPressed;
+
+                if (currentAssemblyTarget.ProcessInteraction(
                         inventory,
                         holdingE,
+                        holdingR,
                         Time.deltaTime,
                         out string assemblyMessage))
                 {
@@ -68,6 +71,30 @@ namespace Hanger51.Inventory
                 }
 
                 inventoryUI.SetInteractionPrompt(currentAssemblyTarget.InteractionText);
+                return;
+            }
+
+            if (currentAssemblyStation != null)
+            {
+                EngineAssemblyRemovalController removalController =
+                    currentAssemblyStation.GetComponent<EngineAssemblyRemovalController>();
+                bool holdingR = keyboard != null && keyboard.rKey.isPressed;
+
+                if (removalController != null
+                    && removalController.ProcessEngineRemovalHold(
+                        inventory,
+                        holdingR,
+                        Time.deltaTime,
+                        out string removalMessage))
+                {
+                    inventoryUI.ShowStatusMessage(removalMessage, 2f);
+                }
+
+                string stationPrompt = removalController != null
+                    && removalController.CanRemoveEngineBlock
+                        ? removalController.EngineRemovalInteractionText
+                        : currentAssemblyStation.InteractionText;
+                inventoryUI.SetInteractionPrompt(stationPrompt);
                 return;
             }
 
@@ -122,7 +149,7 @@ namespace Hanger51.Inventory
 
                 EngineAssemblyInteractionTarget assemblyTarget =
                     hits[index].collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
-                if (assemblyTarget != null && assemblyTarget.IsInteractable)
+                if (assemblyTarget != null && assemblyTarget.CanInteract)
                 {
                     EngineAssemblyStation targetStation =
                         assemblyTarget.GetComponentInParent<EngineAssemblyStation>();
@@ -144,7 +171,8 @@ namespace Hanger51.Inventory
             EngineAssemblyStation assemblyStation,
             EngineAssemblyInteractionTarget assemblyTarget)
         {
-            if (currentAssemblyTarget != assemblyTarget)
+            if (currentAssemblyTarget != assemblyTarget
+                || currentAssemblyStation != assemblyStation)
             {
                 CancelCurrentAssemblyHold();
             }
@@ -154,15 +182,32 @@ namespace Hanger51.Inventory
             currentAssemblyTarget = assemblyTarget;
             inventoryUI.SetAssemblyStation(currentAssemblyStation);
 
-            string prompt = currentPickup != null
-                ? currentPickup.InteractionText
-                : currentAssemblyTarget != null
-                    ? currentAssemblyTarget.InteractionText
-                    : currentAssemblyStation != null
-                        ? currentAssemblyStation.InteractionText
-                        : string.Empty;
+            inventoryUI.SetInteractionPrompt(GetCurrentPrompt());
+        }
 
-            inventoryUI.SetInteractionPrompt(prompt);
+        private string GetCurrentPrompt()
+        {
+            if (currentPickup != null)
+            {
+                return currentPickup.InteractionText;
+            }
+
+            if (currentAssemblyTarget != null)
+            {
+                return currentAssemblyTarget.InteractionText;
+            }
+
+            if (currentAssemblyStation == null)
+            {
+                return string.Empty;
+            }
+
+            EngineAssemblyRemovalController removalController =
+                currentAssemblyStation.GetComponent<EngineAssemblyRemovalController>();
+
+            return removalController != null && removalController.CanRemoveEngineBlock
+                ? removalController.EngineRemovalInteractionText
+                : currentAssemblyStation.InteractionText;
         }
 
         private void CancelCurrentAssemblyHold()
@@ -170,6 +215,13 @@ namespace Hanger51.Inventory
             if (currentAssemblyTarget != null)
             {
                 currentAssemblyTarget.CancelHold();
+            }
+
+            if (currentAssemblyStation != null)
+            {
+                EngineAssemblyRemovalController removalController =
+                    currentAssemblyStation.GetComponent<EngineAssemblyRemovalController>();
+                removalController?.CancelEngineRemovalHold();
             }
         }
 
