@@ -46,7 +46,7 @@ namespace Hanger51.Aircraft
         [SerializeField, Min(0.05f)] private float groundProbeDistance = 0.32f;
         [SerializeField, Min(0f)] private float groundSteeringTorque = 12500f;
         [SerializeField, Min(0f)] private float groundLateralGrip = 4500f;
-        [SerializeField, Min(0f)] private float rollingResistance = 520f;
+        [SerializeField, Min(0f)] private float rollingResistance = 80f;
         [SerializeField, Min(0f)] private float wheelBrakeStrength = 8800f;
 
         private readonly RaycastHit[] groundHits = new RaycastHit[12];
@@ -411,7 +411,7 @@ namespace Hanger51.Aircraft
             Vector3 controlTorque = new Vector3(
                 pitchInput * pitchTorque,
                 sideslipAngle * yawStabilityTorque,
-                -rollInput * rollTorque) * authority;
+                rollInput * rollTorque) * authority;
             aircraftBody.AddRelativeTorque(controlTorque, ForceMode.Force);
 
             Vector3 localAngularVelocity = transform.InverseTransformDirection(
@@ -502,15 +502,7 @@ namespace Hanger51.Aircraft
 
             float rpm = engineRunning
                 ? Mathf.Lerp(idlePropellerRpm, maximumPropellerRpm, throttle)
-                : Mathf.MoveTowards(
-                    0f,
-                    idlePropellerRpm * 0.12f,
-                    0f);
-
-            if (!engineRunning)
-            {
-                rpm = 0f;
-            }
+                : 0f;
 
             propellerAngle = Mathf.Repeat(
                 propellerAngle + rpm * 6f * Time.deltaTime,
