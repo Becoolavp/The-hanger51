@@ -20,3 +20,4 @@ MonoBehaviour:
   placeholderColor: {r: 0.12, g: 0.13, b: 0.15, a: 1}
   canEquip: 1
   worldPrefab: {fileID: 2773478007903451656, guid: 4683301852e443c4c9433fd5d6377bcb, type: 3}
+  worldScale: {x: 0.36, y: 0.36, z: 0.36}
