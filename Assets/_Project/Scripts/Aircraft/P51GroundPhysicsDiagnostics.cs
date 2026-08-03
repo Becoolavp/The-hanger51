@@ -67,10 +67,11 @@ namespace Hanger51.Aircraft
                 + $"Gear contacts: {landingGear.GroundedWheelCount}/3 ({wheelState})\n"
                 + $"Forward speed: {localVelocity.z:F1} m/s\n"
                 + $"Body dynamic: {!aircraftBody.isKinematic}\n"
+                + $"Engine running: {flightController.EngineRunning}\n"
                 + $"Throttle command: {flightController.Throttle * 100f:F0}%";
 
             GUI.Box(
-                new Rect(18f, 232f, 300f, 112f),
+                new Rect(18f, 232f, 300f, 132f),
                 diagnostics,
                 diagnosticStyle);
         }
