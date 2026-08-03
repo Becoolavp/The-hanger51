@@ -68,7 +68,7 @@ namespace Hanger51.Inventory
             return candidatePosition;
         }
 
-        private void CreateDroppedPickup(
+        private Vector3 CreateDroppedPickup(
             InventoryItemDefinition item,
             int quantity,
             Vector3 groundPosition)
@@ -79,6 +79,7 @@ namespace Hanger51.Inventory
             if (usesItemPrefab)
             {
                 pickupObject = Instantiate(item.WorldPrefab);
+                pickupObject.transform.localScale = item.WorldScale;
             }
             else
             {
@@ -100,6 +101,7 @@ namespace Hanger51.Inventory
             pickup.Configure(item, quantity);
             EnsurePickupCollider(pickupObject);
             AlignBottomToGround(pickupObject, groundPosition.y);
+            return pickupObject.transform.position;
         }
 
         private static void EnsurePickupCollider(GameObject pickupObject)
