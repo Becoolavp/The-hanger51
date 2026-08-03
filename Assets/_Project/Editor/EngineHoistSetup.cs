@@ -204,14 +204,29 @@ namespace Hanger51.EditorTools
             else
             {
                 Bounds hoistBounds = CalculateRendererBounds(hoist);
-                if (hoistBounds.size.y < 1.8f || hoistBounds.size.y > 3.0f
-                    || hoistBounds.size.z < 1.8f || hoistBounds.size.z > 3.4f)
+                float horizontalLength = Mathf.Max(hoistBounds.size.x, hoistBounds.size.z);
+                float horizontalWidth = Mathf.Min(hoistBounds.size.x, hoistBounds.size.z);
+                float height = hoistBounds.size.y;
+
+                bool heightValid = height >= 1.8f && height <= 3.0f;
+                bool lengthValid = horizontalLength >= 1.8f && horizontalLength <= 3.4f;
+                bool widthValid = horizontalWidth >= 0.85f && horizontalWidth <= 1.8f;
+
+                if (!heightValid || !lengthValid || !widthValid)
                 {
                     Debug.LogError(
-                        $"Engine Hoist Step 2 failed: hoist dimensions are {hoistBounds.size.x:F2} × "
-                        + $"{hoistBounds.size.y:F2} × {hoistBounds.size.z:F2} m, outside the expected shop-crane range.",
+                        $"Engine Hoist Step 2 failed: rotation-safe hoist dimensions are "
+                        + $"{horizontalLength:F2} m long × {height:F2} m high × {horizontalWidth:F2} m wide, "
+                        + "outside the expected shop-crane range.",
                         hoist);
                     passed = false;
+                }
+                else
+                {
+                    Debug.Log(
+                        $"Engine Hoist dimensions passed: {horizontalLength:F2} m long × "
+                        + $"{height:F2} m high × {horizontalWidth:F2} m wide.",
+                        hoist);
                 }
             }
 
