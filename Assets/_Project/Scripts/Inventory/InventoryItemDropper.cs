@@ -68,7 +68,7 @@ namespace Hanger51.Inventory
             return candidatePosition;
         }
 
-        private Vector3 CreateDroppedPickup(
+        private void CreateDroppedPickup(
             InventoryItemDefinition item,
             int quantity,
             Vector3 groundPosition)
@@ -101,7 +101,6 @@ namespace Hanger51.Inventory
             pickup.Configure(item, quantity);
             EnsurePickupCollider(pickupObject);
             AlignBottomToGround(pickupObject, groundPosition.y);
-            return pickupObject.transform.position;
         }
 
         private static void EnsurePickupCollider(GameObject pickupObject)
