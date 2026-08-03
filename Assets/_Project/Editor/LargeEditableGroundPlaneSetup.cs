@@ -176,10 +176,11 @@ namespace Hanger51.EditorTools
             string meshPath = meshFilter != null && meshFilter.sharedMesh != null
                 ? AssetDatabase.GetAssetPath(meshFilter.sharedMesh)
                 : string.Empty;
-            if (string.IsNullOrWhiteSpace(meshPath))
+            if (string.IsNullOrWhiteSpace(meshPath)
+                || !meshPath.StartsWith("Assets/"))
             {
                 Debug.LogError(
-                    "Environment Step 2 failed: Plane still uses an unsaved/shared mesh instead of its own editable mesh asset.",
+                    "Environment Step 2 failed: Plane still uses Unity's shared built-in mesh instead of its own editable project mesh.",
                     plane);
                 passed = false;
             }
@@ -259,7 +260,9 @@ namespace Hanger51.EditorTools
                 return;
             }
 
-            if (string.IsNullOrWhiteSpace(currentPath))
+            bool isProjectMesh = !string.IsNullOrWhiteSpace(currentPath)
+                && currentPath.StartsWith("Assets/");
+            if (!isProjectMesh)
             {
                 Mesh editableMesh = Object.Instantiate(currentMesh);
                 editableMesh.name = "Large Editable Ground Plane";
@@ -282,11 +285,9 @@ namespace Hanger51.EditorTools
         private static Material CreateOrUpdateGroundMaterial()
         {
             Material material = AssetDatabase.LoadAssetAtPath<Material>(GroundMaterialPath);
-            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
-            if (shader == null)
-            {
-                shader = Shader.Find("Standard");
-            }
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit")
+                ?? Shader.Find("Standard")
+                ?? Shader.Find("Hidden/InternalErrorShader");
 
             if (material == null)
             {
