@@ -22,7 +22,6 @@ namespace Hanger51.EngineAssembly
         private FieldInfo coverBoltsTightenedField;
         private FieldInfo sparkPlugInstalledField;
         private MethodInfo ensureStateListsMethod;
-        private MethodInfo clampStateMethod;
         private MethodInfo refreshVisualsMethod;
 
         private float engineRemovalProgress;
@@ -187,7 +186,7 @@ namespace Hanger51.EngineAssembly
                     return false;
             }
 
-            ApplyStationState();
+            RefreshStationVisuals();
             return true;
         }
 
@@ -230,7 +229,7 @@ namespace Hanger51.EngineAssembly
 
             engineBlockInstalledField.SetValue(station, false);
             engineRemovalProgress = 0f;
-            ApplyStationState();
+            RefreshStationVisuals();
             resultMessage = "Removed the V-1650 engine block and returned it to inventory.";
             return true;
         }
@@ -253,7 +252,6 @@ namespace Hanger51.EngineAssembly
             coverBoltsTightenedField = stationType.GetField("coverBoltsTightened", PrivateInstance);
             sparkPlugInstalledField = stationType.GetField("sparkPlugInstalled", PrivateInstance);
             ensureStateListsMethod = stationType.GetMethod("EnsureStateLists", PrivateInstance);
-            clampStateMethod = stationType.GetMethod("ClampState", PrivateInstance);
             refreshVisualsMethod = stationType.GetMethod("RefreshVisuals", PrivateInstance);
 
             IsReady = station != null
@@ -265,7 +263,6 @@ namespace Hanger51.EngineAssembly
                 && coverBoltsTightenedField != null
                 && sparkPlugInstalledField != null
                 && ensureStateListsMethod != null
-                && clampStateMethod != null
                 && refreshVisualsMethod != null;
 
             if (!IsReady)
@@ -310,9 +307,12 @@ namespace Hanger51.EngineAssembly
             ensureStateListsMethod?.Invoke(station, null);
         }
 
-        private void ApplyStationState()
+        private void RefreshStationVisuals()
         {
-            clampStateMethod?.Invoke(station, null);
+            // The station's ClampState method was written for forward-only
+            // assembly and clears installed plugs whenever any bolt is loose.
+            // Disassembly intentionally preserves the opposite bank, so only
+            // refresh visual state here.
             refreshVisualsMethod?.Invoke(station, null);
         }
 
