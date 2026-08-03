@@ -106,6 +106,14 @@ namespace Hanger51.EditorTools
                 rightVisual,
                 tailVisual);
 
+            P51GroundPhysicsDiagnostics diagnostics =
+                aircraft.GetComponent<P51GroundPhysicsDiagnostics>();
+            if (diagnostics == null)
+            {
+                diagnostics = Undo.AddComponent<P51GroundPhysicsDiagnostics>(aircraft);
+            }
+            diagnostics.Configure(flightController, raycastGear, body);
+
             ConfigureFlightControllerForRaycastGear(flightController);
             body.centerOfMass = new Vector3(0f, 0.84f, -1.05f);
             body.linearDamping = 0.005f;
@@ -117,6 +125,7 @@ namespace Hanger51.EditorTools
             EditorUtility.SetDirty(service);
             EditorUtility.SetDirty(cowlingTarget);
             EditorUtility.SetDirty(raycastGear);
+            EditorUtility.SetDirty(diagnostics);
             EditorUtility.SetDirty(flightController);
             EditorUtility.SetDirty(body);
 
@@ -142,7 +151,7 @@ namespace Hanger51.EditorTools
             Debug.Log(
                 "P-51 Step 12 complete. Removed the box-and-sphere cowling guide, restored animated cowling lift and placement using the actual panel, "
                 + "reused the original cowling-shaped highlight, removed the failed SphereCollider/WheelCollider contacts, installed deterministic three-point raycast suspension and rolling tire forces, "
-                + "reduced duplicate ground drag, increased test thrust, and preserved the edited P-51 visuals.",
+                + "reduced duplicate ground drag, increased test thrust, added cockpit gear diagnostics, and preserved the edited P-51 visuals.",
                 aircraft);
         }
 
@@ -213,10 +222,15 @@ namespace Hanger51.EditorTools
 
             P51RaycastLandingGear raycastGear =
                 aircraft.GetComponent<P51RaycastLandingGear>();
-            if (raycastGear == null || !raycastGear.IsConfigured)
+            P51GroundPhysicsDiagnostics diagnostics =
+                aircraft.GetComponent<P51GroundPhysicsDiagnostics>();
+            if (raycastGear == null
+                || !raycastGear.IsConfigured
+                || diagnostics == null
+                || !diagnostics.IsConfigured)
             {
                 Debug.LogError(
-                    "P-51 Step 13 failed: the deterministic three-point raycast landing gear is missing or incomplete.",
+                    "P-51 Step 13 failed: the deterministic landing gear or cockpit diagnostics are missing or incomplete.",
                     aircraft);
                 passed = false;
             }
@@ -254,7 +268,7 @@ namespace Hanger51.EditorTools
             {
                 Debug.Log(
                     "P-51 Step 13 passed. The actual cowling panel is animated, only the cowling-shaped highlight remains, the temporary box/balls are gone, "
-                    + "all failed wheel colliders are removed, three raycast suspension anchors are configured, duplicate ground drag is disabled, and the Rigidbody is balanced for taildragger testing.",
+                    + "all failed wheel colliders are removed, three raycast suspension anchors and cockpit diagnostics are configured, duplicate ground drag is disabled, and the Rigidbody is balanced for taildragger testing.",
                     aircraft);
             }
         }
