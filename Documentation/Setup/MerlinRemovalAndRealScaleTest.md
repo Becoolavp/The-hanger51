@@ -58,7 +58,7 @@ Configured world scales:
 11. Aim at the center of the installed cover.
 12. Hold `R` until the cover lifts off.
 13. Confirm the cover returns to inventory.
-14. Confirm the opposite bank remains unchanged.
+14. Confirm the opposite bank, including any installed plugs, remains unchanged.
 15. Reinstall the removed cover and retighten its bolts.
 
 ## Complete teardown test
