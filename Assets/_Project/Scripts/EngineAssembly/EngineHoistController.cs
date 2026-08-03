@@ -1,4 +1,5 @@
 using System.Collections;
+using Hanger51.Aircraft;
 using Hanger51.Inventory;
 using UnityEngine;
 
@@ -25,6 +26,7 @@ namespace Hanger51.EngineAssembly
         [SerializeField, Min(0.25f)] private float attachmentDistance = 1.15f;
         [SerializeField, Min(0.15f)] private float suspendedSlingLength = 0.52f;
         [SerializeField, Min(0.25f)] private float standSnapDistance = 1.15f;
+        [SerializeField, Min(0.5f)] private float aircraftSnapDistance = 1.75f;
         [SerializeField, Min(0.2f)] private float placementDuration = 0.9f;
         [SerializeField] private LayerMask groundLayers = ~0;
 
@@ -41,6 +43,7 @@ namespace Hanger51.EngineAssembly
         public bool HasAttachedEngine => hasAttachedEngine;
         public bool IsBusy => isPlacingEngine;
         public Transform HookPoint => hookPoint;
+        public EngineAssemblyTransportController EngineTransport => engineTransport;
 
         public string InteractionText
         {
@@ -57,6 +60,22 @@ namespace Hanger51.EngineAssembly
 
                 if (hasAttachedEngine)
                 {
+                    AircraftEngineMountReceiver aircraftReceiver =
+                        FindNearbyAircraftReceiver();
+                    if (aircraftReceiver != null)
+                    {
+                        if (aircraftReceiver.CanAcceptEngine(
+                                engineTransport,
+                                hookPoint.position,
+                                aircraftSnapDistance,
+                                out string aircraftReason))
+                        {
+                            return $"{controlText} | F: lower engine into highlighted P-51 engine bay";
+                        }
+
+                        return $"{controlText} | {aircraftReason}";
+                    }
+
                     bool nearStand = engineTransport != null
                         && engineTransport.HorizontalDistanceFromHookToStand(hookPoint.position)
                             <= standSnapDistance;
@@ -71,12 +90,24 @@ namespace Hanger51.EngineAssembly
                     return controlText;
                 }
 
+                AircraftEngineMountReceiver currentReceiver =
+                    AircraftEngineMountReceiver.FindReceiverForTransport(engineTransport);
+                if (currentReceiver != null
+                    && !currentReceiver.CanReleaseEngineForHoist(
+                        engineTransport,
+                        out string releaseReason))
+                {
+                    return $"{controlText} | {releaseReason}";
+                }
+
                 if (engineTransport.CanAttach(
                         hookPoint.position,
                         attachmentDistance,
                         out _))
                 {
-                    return $"{controlText} | F: connect hook and lift engine";
+                    return currentReceiver != null
+                        ? $"{controlText} | F: connect hook and lift engine from P-51"
+                        : $"{controlText} | F: connect hook and lift engine";
                 }
 
                 return $"{controlText} | Move hook over engine, then press F";
@@ -201,12 +232,41 @@ namespace Hanger51.EngineAssembly
 
             if (hasAttachedEngine)
             {
+                AircraftEngineMountReceiver nearbyReceiver =
+                    FindNearbyAircraftReceiver();
+                if (nearbyReceiver != null
+                    && !nearbyReceiver.CanAcceptEngine(
+                        engineTransport,
+                        hookPoint.position,
+                        aircraftSnapDistance,
+                        out resultMessage))
+                {
+                    return false;
+                }
+
                 StartCoroutine(PlaceEngineRoutine());
-                resultMessage = engineTransport.HorizontalDistanceFromHookToStand(hookPoint.position)
-                    <= standSnapDistance
-                        ? "Lowering the engine back onto the stand."
-                        : "Lowering the engine onto the floor marker.";
+                if (nearbyReceiver != null)
+                {
+                    resultMessage = "Lowering the engine into the highlighted P-51 engine bay.";
+                }
+                else
+                {
+                    resultMessage = engineTransport.HorizontalDistanceFromHookToStand(hookPoint.position)
+                        <= standSnapDistance
+                            ? "Lowering the engine back onto the stand."
+                            : "Lowering the engine onto the floor marker.";
+                }
                 return true;
+            }
+
+            AircraftEngineMountReceiver currentReceiver =
+                AircraftEngineMountReceiver.FindReceiverForTransport(engineTransport);
+            if (currentReceiver != null
+                && !currentReceiver.CanReleaseEngineForHoist(
+                    engineTransport,
+                    out resultMessage))
+            {
+                return false;
             }
 
             bool wasOnStand = engineTransport.IsOnStand;
@@ -218,12 +278,22 @@ namespace Hanger51.EngineAssembly
                 return false;
             }
 
+            if (currentReceiver != null
+                && !currentReceiver.PrepareEngineForHoist(
+                    engineTransport,
+                    out resultMessage))
+            {
+                return false;
+            }
+
             engineTransport.BeginSuspension();
             hasAttachedEngine = true;
             RefreshCableVisibility();
-            resultMessage = wasOnStand
-                ? "Connected the lifting slings and lifted the engine clear of the stand."
-                : "Connected the lifting slings and lifted the engine from its placed location.";
+            resultMessage = currentReceiver != null
+                ? "Connected the lifting slings and lifted the engine clear of the P-51 mounts."
+                : wasOnStand
+                    ? "Connected the lifting slings and lifted the engine clear of the stand."
+                    : "Connected the lifting slings and lifted the engine from its placed location.";
             return true;
         }
 
@@ -269,15 +339,31 @@ namespace Hanger51.EngineAssembly
         private IEnumerator PlaceEngineRoutine()
         {
             isPlacingEngine = true;
-            bool returnToStand = engineTransport.HorizontalDistanceFromHookToStand(hookPoint.position)
-                <= standSnapDistance;
+
+            AircraftEngineMountReceiver aircraftReceiver =
+                FindNearbyAircraftReceiver();
+            bool placeInAircraft = aircraftReceiver != null
+                && aircraftReceiver.CanAcceptEngine(
+                    engineTransport,
+                    hookPoint.position,
+                    aircraftSnapDistance,
+                    out _);
+            bool returnToStand = !placeInAircraft
+                && engineTransport.HorizontalDistanceFromHookToStand(hookPoint.position)
+                    <= standSnapDistance;
 
             Vector3 startPosition = engineTransport.TransportRoot.position;
             Quaternion startRotation = engineTransport.TransportRoot.rotation;
             Vector3 targetPosition;
             Quaternion targetRotation;
 
-            if (returnToStand)
+            if (placeInAircraft)
+            {
+                aircraftReceiver.GetEngineRootTargetPose(
+                    out targetPosition,
+                    out targetRotation);
+            }
+            else if (returnToStand)
             {
                 targetPosition = engineTransport.StandWorldPosition;
                 targetRotation = engineTransport.StandWorldRotation;
@@ -291,11 +377,14 @@ namespace Hanger51.EngineAssembly
                     targetRotation);
             }
 
+            float duration = placeInAircraft
+                ? placementDuration * 1.35f
+                : placementDuration;
             float elapsed = 0f;
-            while (elapsed < placementDuration)
+            while (elapsed < duration)
             {
                 elapsed += Time.deltaTime;
-                float normalized = Mathf.Clamp01(elapsed / placementDuration);
+                float normalized = Mathf.Clamp01(elapsed / duration);
                 float smooth = normalized * normalized * (3f - 2f * normalized);
                 engineTransport.SetWorldPose(
                     Vector3.Lerp(startPosition, targetPosition, smooth),
@@ -306,12 +395,31 @@ namespace Hanger51.EngineAssembly
 
             engineTransport.SetWorldPose(targetPosition, targetRotation);
             engineTransport.CompletePlacement(returnToStand);
+            if (placeInAircraft)
+            {
+                aircraftReceiver.CompleteEnginePlacement(engineTransport);
+            }
+
             hasAttachedEngine = false;
             isPlacingEngine = false;
             RefreshCableVisibility();
-            pendingStatusMessage = returnToStand
-                ? "Placed the engine back onto the maintenance stand with its assembly state preserved."
-                : "Placed the engine on the floor with its assembly state preserved.";
+            pendingStatusMessage = placeInAircraft
+                ? "Placed the engine in the P-51 engine bay. Tighten the four highlighted engine-mount bolts."
+                : returnToStand
+                    ? "Placed the engine back onto the maintenance stand with its assembly state preserved."
+                    : "Placed the engine on the floor with its assembly state preserved.";
+        }
+
+        private AircraftEngineMountReceiver FindNearbyAircraftReceiver()
+        {
+            if (hookPoint == null)
+            {
+                return null;
+            }
+
+            return AircraftEngineMountReceiver.FindNearestReceiver(
+                hookPoint.position,
+                aircraftSnapDistance);
         }
 
         private Vector3 FindGroundPointBelowHook()
@@ -360,6 +468,22 @@ namespace Hanger51.EngineAssembly
             placementMarker.SetActive(shouldShow);
             if (!shouldShow)
             {
+                return;
+            }
+
+            AircraftEngineMountReceiver aircraftReceiver =
+                FindNearbyAircraftReceiver();
+            if (aircraftReceiver != null
+                && aircraftReceiver.CanAcceptEngine(
+                    engineTransport,
+                    hookPoint.position,
+                    aircraftSnapDistance,
+                    out _))
+            {
+                placementMarker.transform.position =
+                    aircraftReceiver.PlacementReferencePosition;
+                placementMarker.transform.rotation =
+                    aircraftReceiver.PlacementReferenceRotation;
                 return;
             }
 
@@ -496,6 +620,7 @@ namespace Hanger51.EngineAssembly
             attachmentDistance = Mathf.Max(0.25f, attachmentDistance);
             suspendedSlingLength = Mathf.Max(0.15f, suspendedSlingLength);
             standSnapDistance = Mathf.Max(0.25f, standSnapDistance);
+            aircraftSnapDistance = Mathf.Max(0.5f, aircraftSnapDistance);
             placementDuration = Mathf.Max(0.2f, placementDuration);
         }
     }
