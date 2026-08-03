@@ -198,12 +198,12 @@ namespace Hanger51.Aircraft
 
             if (interactionKind == AircraftServiceInteractionKind.CowlingPanel)
             {
-                Transform targetPose = serviceController.IsTopCowlingInstalled
-                    ? transform
-                    : alternatePose;
-                if (targetPose != null)
+                // The portable-cowling controller owns the panel pose while it is
+                // carried or resting in the world. Only force the installed pose
+                // after the service controller says the panel is installed.
+                if (serviceController.IsTopCowlingInstalled)
                 {
-                    SetAnimatedWorldPose(targetPose.position, targetPose.rotation);
+                    SetAnimatedWorldPose(FinalWorldPosition, FinalWorldRotation);
                 }
                 return;
             }
@@ -225,40 +225,29 @@ namespace Hanger51.Aircraft
 
             animatedVisual.SetActive(true);
 
-            Vector3 startPosition;
-            Vector3 endPosition;
-            Quaternion startRotation;
-            Quaternion endRotation;
+            // Do not drag the freely portable cowling toward the obsolete service
+            // pose during a hold. The panel remains in the Player's hands or at its
+            // placed world pose until the completed interaction snaps it home.
+            if (interactionKind == AircraftServiceInteractionKind.CowlingPanel)
+            {
+                return;
+            }
 
-            if (interactionKind == AircraftServiceInteractionKind.CowlingPanel
-                && alternatePose != null)
-            {
-                startPosition = removing ? FinalWorldPosition : alternatePose.position;
-                endPosition = removing ? alternatePose.position : FinalWorldPosition;
-                startRotation = removing ? FinalWorldRotation : alternatePose.rotation;
-                endRotation = removing ? alternatePose.rotation : FinalWorldRotation;
-            }
-            else
-            {
-                startPosition = removing ? FinalWorldPosition : RaisedWorldPosition;
-                endPosition = removing ? RaisedWorldPosition : FinalWorldPosition;
-                startRotation = FinalWorldRotation;
-                endRotation = FinalWorldRotation;
-            }
+            Vector3 startPosition = removing ? FinalWorldPosition : RaisedWorldPosition;
+            Vector3 endPosition = removing ? RaisedWorldPosition : FinalWorldPosition;
+            Quaternion startRotation = FinalWorldRotation;
+            Quaternion endRotation = FinalWorldRotation;
 
             float smooth = normalizedProgress * normalizedProgress
                 * (3f - 2f * normalizedProgress);
             Vector3 animatedPosition = Vector3.Lerp(startPosition, endPosition, smooth);
             Quaternion animatedRotation = Quaternion.Slerp(startRotation, endRotation, smooth);
 
-            if (interactionKind != AircraftServiceInteractionKind.CowlingPanel)
-            {
-                float spinDirection = removing ? -1f : 1f;
-                Quaternion spin = Quaternion.AngleAxis(
-                    360f * rotationTurns * normalizedProgress * spinDirection,
-                    transform.up);
-                animatedRotation = spin * FinalWorldRotation;
-            }
+            float spinDirection = removing ? -1f : 1f;
+            Quaternion spin = Quaternion.AngleAxis(
+                360f * rotationTurns * normalizedProgress * spinDirection,
+                transform.up);
+            animatedRotation = spin * FinalWorldRotation;
 
             SetAnimatedWorldPose(animatedPosition, animatedRotation);
         }
