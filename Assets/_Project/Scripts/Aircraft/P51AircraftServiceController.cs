@@ -8,15 +8,21 @@ namespace Hanger51.Aircraft
         [SerializeField] private GameObject topCowlingPanel;
         [SerializeField] private Transform cowlingInstalledPose;
         [SerializeField] private Transform cowlingRemovedPose;
+        [SerializeField] private Transform cowlingInstalledParent;
+        [SerializeField] private P51PortableCowlingPanel portableCowlingPanel;
         [SerializeField, Min(1)] private int cowlingScrewCount = 10;
         [SerializeField] private bool[] cowlingScrewsTightened = new bool[10];
         [SerializeField] private bool topCowlingInstalled = true;
+        [SerializeField] private bool cowlingCarried;
 
         [Header("Engine Installation")]
         [SerializeField] private AircraftEngineMountReceiver engineMountReceiver;
 
         public bool IsTopCowlingInstalled => topCowlingInstalled;
         public bool IsTopCowlingRemoved => !topCowlingInstalled;
+        public bool IsCowlingCarried => !topCowlingInstalled && cowlingCarried;
+        public bool IsCowlingLoose => !topCowlingInstalled && !cowlingCarried;
+        public GameObject TopCowlingPanel => topCowlingPanel;
         public int CowlingScrewCount => cowlingScrewsTightened != null
             ? cowlingScrewsTightened.Length
             : 0;
@@ -25,12 +31,14 @@ namespace Hanger51.Aircraft
         private void Awake()
         {
             EnsureScrewArray();
+            ResolveCowlingReferences();
             RefreshTargetsAndVisuals();
         }
 
         private void OnEnable()
         {
             EnsureScrewArray();
+            ResolveCowlingReferences();
             RefreshTargetsAndVisuals();
         }
 
@@ -44,6 +52,9 @@ namespace Hanger51.Aircraft
             topCowlingPanel = configuredTopCowlingPanel;
             cowlingInstalledPose = configuredInstalledPose;
             cowlingRemovedPose = configuredRemovedPose;
+            cowlingInstalledParent = configuredTopCowlingPanel != null
+                ? configuredTopCowlingPanel.transform.parent
+                : transform;
             engineMountReceiver = configuredEngineMountReceiver;
             cowlingScrewCount = Mathf.Max(1, configuredScrewCount);
             cowlingScrewsTightened = new bool[cowlingScrewCount];
@@ -53,7 +64,77 @@ namespace Hanger51.Aircraft
             }
 
             topCowlingInstalled = true;
+            cowlingCarried = false;
+            ResolveCowlingReferences();
             RefreshTargetsAndVisuals();
+        }
+
+        public void ConfigurePortableCowling(P51PortableCowlingPanel configuredPortablePanel)
+        {
+            portableCowlingPanel = configuredPortablePanel;
+            if (topCowlingPanel == null && portableCowlingPanel != null)
+            {
+                topCowlingPanel = portableCowlingPanel.gameObject;
+            }
+
+            if (cowlingInstalledParent == null && topCowlingPanel != null)
+            {
+                cowlingInstalledParent = topCowlingPanel.transform.parent;
+            }
+
+            portableCowlingPanel?.RefreshFromService();
+        }
+
+        public bool TryBeginCowlingCarry(
+            Transform carryAnchor,
+            Vector3 localCarryPosition,
+            Quaternion localCarryRotation,
+            out string resultMessage)
+        {
+            resultMessage = string.Empty;
+            if (topCowlingInstalled)
+            {
+                resultMessage = "Unscrew and remove the top cowling before carrying it.";
+                return false;
+            }
+
+            if (topCowlingPanel == null || carryAnchor == null)
+            {
+                resultMessage = "The portable cowling or Player carry point is missing.";
+                return false;
+            }
+
+            cowlingCarried = true;
+            topCowlingPanel.transform.SetParent(carryAnchor, false);
+            topCowlingPanel.transform.localPosition = localCarryPosition;
+            topCowlingPanel.transform.localRotation = localCarryRotation;
+            topCowlingPanel.transform.localScale = Vector3.one;
+            portableCowlingPanel?.RefreshFromService();
+            RefreshTargetsAndVisuals();
+            resultMessage = "Picked up the top cowling. Press E to place it, or hold E at the highlighted engine opening to reinstall it.";
+            return true;
+        }
+
+        public bool TryPlaceCarriedCowling(
+            Vector3 worldPosition,
+            Quaternion worldRotation,
+            out string resultMessage)
+        {
+            resultMessage = string.Empty;
+            if (!IsCowlingCarried || topCowlingPanel == null)
+            {
+                resultMessage = "You are not carrying the top cowling.";
+                return false;
+            }
+
+            topCowlingPanel.transform.SetParent(null, true);
+            topCowlingPanel.transform.SetPositionAndRotation(worldPosition, worldRotation);
+            topCowlingPanel.transform.localScale = Vector3.one;
+            cowlingCarried = false;
+            portableCowlingPanel?.RefreshFromService();
+            RefreshTargetsAndVisuals();
+            resultMessage = "Placed the top cowling. Aim at it and press E to pick it up again.";
+            return true;
         }
 
         public bool CanInstallTarget(
@@ -69,6 +150,7 @@ namespace Hanger51.Aircraft
 
                 case AircraftServiceInteractionKind.CowlingPanel:
                     return !topCowlingInstalled
+                        && cowlingCarried
                         && (engineMountReceiver == null
                             || !engineMountReceiver.EnginePositioned
                             || engineMountReceiver.AllMountBoltsTightened);
@@ -171,8 +253,8 @@ namespace Hanger51.Aircraft
 
                 case AircraftServiceInteractionKind.CowlingPanel:
                     return removing
-                        ? $"Hold R to lift the top cowling onto its service cradle{progressText}"
-                        : $"Hold E to place the top cowling over the engine bay{progressText}";
+                        ? $"Hold R to lift and carry the top cowling{progressText}"
+                        : $"Hold E to reinstall the carried top cowling{progressText}";
 
                 case AircraftServiceInteractionKind.EngineMountBolt:
                     return removing
@@ -213,11 +295,15 @@ namespace Hanger51.Aircraft
                             && engineMountReceiver.EnginePositioned
                             && !engineMountReceiver.AllMountBoltsTightened
                                 ? "Secure all four engine-mount bolts before replacing the cowling."
-                                : "The top cowling cannot be installed right now.";
+                                : cowlingCarried
+                                    ? "The top cowling cannot be installed right now."
+                                    : "Pick up the loose top cowling before reinstalling it.";
                         return false;
                     }
 
+                    cowlingCarried = false;
                     topCowlingInstalled = true;
+                    AttachCowlingToInstalledParent();
                     EnsureScrewArray();
                     for (int index = 0; index < cowlingScrewsTightened.Length; index++)
                     {
@@ -260,7 +346,7 @@ namespace Hanger51.Aircraft
 
                     cowlingScrewsTightened[targetIndex] = false;
                     resultMessage = AreAllCowlingScrewsLoose()
-                        ? "All top-cowling screws are loose. Aim at the highlighted panel and hold R to remove it."
+                        ? "All top-cowling screws are loose. Aim at the highlighted panel and hold R to lift it."
                         : $"Unscrewed top-cowling screw {targetIndex + 1}.";
                     break;
 
@@ -272,10 +358,11 @@ namespace Hanger51.Aircraft
                     }
 
                     topCowlingInstalled = false;
+                    cowlingCarried = false;
                     resultMessage = engineMountReceiver != null
                         && engineMountReceiver.EnginePositioned
-                            ? "Removed the top cowling. The installed engine and mount bolts are accessible."
-                            : "Removed the top cowling. The P-51 engine-bay placement area is accessible.";
+                            ? "Lifted the top cowling free. The installed engine and mount bolts are accessible."
+                            : "Lifted the top cowling free. The P-51 engine bay is accessible.";
                     break;
 
                 case AircraftServiceInteractionKind.EngineMountBolt:
@@ -297,6 +384,7 @@ namespace Hanger51.Aircraft
         public void RefreshTargetsAndVisuals()
         {
             EnsureScrewArray();
+            ResolveCowlingReferences();
             SyncCowlingPanelPose();
 
             AircraftServiceInteractionTarget[] targets =
@@ -308,11 +396,15 @@ namespace Hanger51.Aircraft
                     targets[index].RefreshFromController();
                 }
             }
+
+            portableCowlingPanel?.RefreshFromService();
         }
 
         public void ResetAircraftService()
         {
+            cowlingCarried = false;
             topCowlingInstalled = true;
+            AttachCowlingToInstalledParent();
             EnsureScrewArray();
             for (int index = 0; index < cowlingScrewsTightened.Length; index++)
             {
@@ -325,22 +417,42 @@ namespace Hanger51.Aircraft
 
         private void SyncCowlingPanelPose()
         {
+            if (!topCowlingInstalled || topCowlingPanel == null || cowlingInstalledPose == null)
+            {
+                return;
+            }
+
+            AttachCowlingToInstalledParent();
+            topCowlingPanel.transform.SetPositionAndRotation(
+                cowlingInstalledPose.position,
+                cowlingInstalledPose.rotation);
+            topCowlingPanel.transform.localScale = Vector3.one;
+        }
+
+        private void AttachCowlingToInstalledParent()
+        {
             if (topCowlingPanel == null)
             {
                 return;
             }
 
-            Transform targetPose = topCowlingInstalled
-                ? cowlingInstalledPose
-                : cowlingRemovedPose;
-            if (targetPose == null)
+            Transform targetParent = cowlingInstalledParent != null
+                ? cowlingInstalledParent
+                : transform;
+            topCowlingPanel.transform.SetParent(targetParent, true);
+        }
+
+        private void ResolveCowlingReferences()
+        {
+            if (topCowlingPanel != null && cowlingInstalledParent == null && topCowlingPanel.transform.parent != null)
             {
-                return;
+                cowlingInstalledParent = topCowlingPanel.transform.parent;
             }
 
-            topCowlingPanel.transform.SetPositionAndRotation(
-                targetPose.position,
-                targetPose.rotation);
+            if (portableCowlingPanel == null && topCowlingPanel != null)
+            {
+                portableCowlingPanel = topCowlingPanel.GetComponent<P51PortableCowlingPanel>();
+            }
         }
 
         private bool AreAllCowlingScrewsTight()
@@ -398,6 +510,7 @@ namespace Hanger51.Aircraft
         {
             cowlingScrewCount = Mathf.Max(1, cowlingScrewCount);
             EnsureScrewArray();
+            ResolveCowlingReferences();
         }
     }
 }
