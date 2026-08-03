@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Reflection;
 using UnityEngine;
 
 namespace Hanger51.EngineAssembly
@@ -6,6 +7,11 @@ namespace Hanger51.EngineAssembly
     [RequireComponent(typeof(EngineAssemblyStation))]
     public sealed class EngineAssemblyTransportController : MonoBehaviour
     {
+        private const BindingFlags PrivateInstance =
+            BindingFlags.Instance | BindingFlags.NonPublic;
+        private static readonly FieldInfo HighlightRootField =
+            typeof(EngineAssemblyInteractionTarget).GetField("highlightRoot", PrivateInstance);
+
         [Header("Portable Assembly")]
         [SerializeField] private Transform transportRoot;
         [SerializeField] private Transform liftPoint;
@@ -328,22 +334,14 @@ namespace Hanger51.EngineAssembly
                     targetCollider.enabled = false;
                 }
 
-                Transform[] descendants = target.GetComponentsInChildren<Transform>(true);
-                for (int childIndex = 0; childIndex < descendants.Length; childIndex++)
+                GameObject highlightRoot =
+                    HighlightRootField?.GetValue(target) as GameObject;
+                if (highlightRoot != null)
                 {
-                    Transform child = descendants[childIndex];
-                    if (child == null || child == target.transform)
-                    {
-                        continue;
-                    }
-
-                    string childName = child.name;
-                    if (childName.Contains("Highlight")
-                        || childName.Contains("Placement Beacon")
-                        || childName.Contains("Beacon Stem"))
-                    {
-                        child.gameObject.SetActive(false);
-                    }
+                    // Disable only the configured root. Child beacon and stem
+                    // active states remain intact so RefreshFromStation can
+                    // restore the complete marker after placement.
+                    highlightRoot.SetActive(false);
                 }
             }
         }
