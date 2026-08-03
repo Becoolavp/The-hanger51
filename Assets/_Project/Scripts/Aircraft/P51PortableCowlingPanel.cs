@@ -2,7 +2,7 @@ using UnityEngine;
 
 namespace Hanger51.Aircraft
 {
-    [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(BoxCollider))]
     public sealed class P51PortableCowlingPanel : MonoBehaviour
     {
         [SerializeField] private P51AircraftServiceController serviceController;
@@ -49,7 +49,7 @@ namespace Hanger51.Aircraft
         {
             if (pickupCollider == null)
             {
-                pickupCollider = GetComponent<Collider>();
+                pickupCollider = GetComponent<BoxCollider>();
             }
         }
 
