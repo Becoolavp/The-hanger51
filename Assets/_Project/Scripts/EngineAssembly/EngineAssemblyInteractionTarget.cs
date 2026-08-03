@@ -24,8 +24,10 @@ namespace Hanger51.EngineAssembly
         [SerializeField, Min(0f)] private float rotationTurns = 2f;
 
         private Collider interactionCollider;
+        private EngineAssemblyRemovalController removalController;
         private float holdProgress;
         private bool isHolding;
+        private bool isRemoving;
 
         public EngineAssemblyInteractionKind InteractionKind => interactionKind;
         public int GroupIndex => groupIndex;
@@ -33,23 +35,42 @@ namespace Hanger51.EngineAssembly
         public float HoldProgress => holdProgress;
         public bool IsInteractable => station != null
             && station.IsTargetAvailable(interactionKind, groupIndex, targetIndex);
+        public bool CanRemove => removalController != null
+            && removalController.CanRemoveTarget(interactionKind, groupIndex, targetIndex);
+        public bool CanInteract => IsInteractable || CanRemove;
 
         public Vector3 FinalWorldPosition => transform.position;
         public Quaternion FinalWorldRotation => transform.rotation;
         public Vector3 RaisedWorldPosition =>
             FinalWorldPosition + transform.up * animationLift;
 
-        public string InteractionText => station != null
-            ? station.GetTargetInteractionText(
-                interactionKind,
-                groupIndex,
-                targetIndex,
-                holdProgress)
-            : string.Empty;
+        public string InteractionText
+        {
+            get
+            {
+                if (IsInteractable)
+                {
+                    return station.GetTargetInteractionText(
+                        interactionKind,
+                        groupIndex,
+                        targetIndex,
+                        holdProgress);
+                }
+
+                return CanRemove
+                    ? removalController.GetRemovalInteractionText(
+                        interactionKind,
+                        groupIndex,
+                        targetIndex,
+                        holdProgress)
+                    : string.Empty;
+            }
+        }
 
         private void Awake()
         {
             interactionCollider = GetComponent<Collider>();
+            ResolveRemovalController();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -76,6 +97,7 @@ namespace Hanger51.EngineAssembly
             rotationTurns = Mathf.Max(0f, configuredRotationTurns);
 
             interactionCollider = GetComponent<Collider>();
+            ResolveRemovalController();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -86,39 +108,65 @@ namespace Hanger51.EngineAssembly
             float deltaTime,
             out string resultMessage)
         {
+            return ProcessInteraction(
+                inventory,
+                isHeld,
+                false,
+                deltaTime,
+                out resultMessage);
+        }
+
+        public bool ProcessInteraction(
+            PlayerInventory inventory,
+            bool installHeld,
+            bool removeHeld,
+            float deltaTime,
+            out string resultMessage)
+        {
             resultMessage = string.Empty;
 
-            if (!IsInteractable)
+            bool shouldInstall = installHeld && !removeHeld && IsInteractable;
+            bool shouldRemove = removeHeld && !installHeld && CanRemove;
+
+            if (!shouldInstall && !shouldRemove)
             {
                 CancelHold();
                 return false;
             }
 
-            if (!isHeld)
+            if (isHolding && isRemoving != shouldRemove)
             {
-                CancelHold();
-                return false;
+                holdProgress = 0f;
             }
 
             isHolding = true;
+            isRemoving = shouldRemove;
             holdProgress = Mathf.Clamp01(
                 holdProgress + Mathf.Max(0f, deltaTime) / holdDuration);
-            ApplyAnimatedPose(holdProgress);
+            ApplyAnimatedPose(holdProgress, isRemoving);
 
             if (holdProgress < 1f)
             {
                 return false;
             }
 
-            bool completed = station.TryCompleteTarget(
-                interactionKind,
-                groupIndex,
-                targetIndex,
-                inventory,
-                out resultMessage);
+            bool completed = isRemoving
+                ? removalController.TryRemoveTarget(
+                    interactionKind,
+                    groupIndex,
+                    targetIndex,
+                    inventory,
+                    out resultMessage)
+                : station.TryCompleteTarget(
+                    interactionKind,
+                    groupIndex,
+                    targetIndex,
+                    inventory,
+                    out resultMessage);
 
             holdProgress = 0f;
             isHolding = false;
+            isRemoving = false;
             RefreshFromStation();
             return completed;
         }
@@ -132,6 +180,7 @@ namespace Hanger51.EngineAssembly
 
             holdProgress = 0f;
             isHolding = false;
+            isRemoving = false;
             RefreshFromStation();
         }
 
@@ -142,22 +191,20 @@ namespace Hanger51.EngineAssembly
                 interactionCollider = GetComponent<Collider>();
             }
 
+            ResolveRemovalController();
             DisableVisualColliders();
 
-            bool available = IsInteractable;
             bool completed = station != null
                 && station.IsTargetComplete(interactionKind, groupIndex, targetIndex);
-            bool shouldHighlight = station != null
-                && station.ShouldHighlightTarget(interactionKind, groupIndex, targetIndex);
 
             if (interactionCollider != null)
             {
-                interactionCollider.enabled = available;
+                interactionCollider.enabled = CanInteract;
             }
 
             if (highlightRoot != null)
             {
-                highlightRoot.SetActive(shouldHighlight && !completed);
+                highlightRoot.SetActive(CanInteract);
             }
 
             if (animatedVisual == null || isHolding)
@@ -178,7 +225,7 @@ namespace Hanger51.EngineAssembly
             animatedVisual.SetActive(completed);
         }
 
-        private void ApplyAnimatedPose(float normalizedProgress)
+        private void ApplyAnimatedPose(float normalizedProgress, bool removing)
         {
             if (animatedVisual == null)
             {
@@ -187,13 +234,21 @@ namespace Hanger51.EngineAssembly
 
             animatedVisual.SetActive(true);
 
+            Vector3 startPosition = removing
+                ? FinalWorldPosition
+                : RaisedWorldPosition;
+            Vector3 endPosition = removing
+                ? RaisedWorldPosition
+                : FinalWorldPosition;
+
             Vector3 animatedPosition = Vector3.Lerp(
-                RaisedWorldPosition,
-                FinalWorldPosition,
+                startPosition,
+                endPosition,
                 normalizedProgress);
 
+            float spinDirection = removing ? -1f : 1f;
             Quaternion spin = Quaternion.AngleAxis(
-                360f * rotationTurns * normalizedProgress,
+                360f * rotationTurns * normalizedProgress * spinDirection,
                 transform.up);
             Quaternion animatedRotation = spin * FinalWorldRotation;
 
@@ -210,6 +265,19 @@ namespace Hanger51.EngineAssembly
             animatedVisual.transform.SetPositionAndRotation(
                 worldPosition,
                 worldRotation);
+        }
+
+        private void ResolveRemovalController()
+        {
+            if (station == null)
+            {
+                station = GetComponentInParent<EngineAssemblyStation>();
+            }
+
+            if (removalController == null && station != null)
+            {
+                removalController = station.GetComponent<EngineAssemblyRemovalController>();
+            }
         }
 
         private void DisableVisualColliders()
@@ -229,6 +297,7 @@ namespace Hanger51.EngineAssembly
         {
             holdProgress = 0f;
             isHolding = false;
+            isRemoving = false;
         }
 
         private void OnValidate()
