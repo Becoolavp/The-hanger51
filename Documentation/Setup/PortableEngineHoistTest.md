@@ -94,4 +94,4 @@
 - The hoist currently follows the Player rather than using simulated wheel physics.
 - The boom height and extension are fixed for this milestone.
 - Floor placement uses the ground below the hook.
-- A later aircraft engine-mount receiver can use the same portable engine root and hoist placement flow.
+- The portable engine root is ready for a later aircraft engine-mount receiver, but aircraft installation is not part of this milestone.
