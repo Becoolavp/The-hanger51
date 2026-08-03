@@ -23,7 +23,10 @@ namespace Hanger51.Inventory
         public Color PlaceholderColor => placeholderColor;
         public bool CanEquip => canEquip;
         public GameObject WorldPrefab => worldPrefab;
-        public Vector3 WorldScale => worldScale;
+        public Vector3 WorldScale => new Vector3(
+            Mathf.Max(0.01f, worldScale.x),
+            Mathf.Max(0.01f, worldScale.y),
+            Mathf.Max(0.01f, worldScale.z));
 
         private void OnValidate()
         {
