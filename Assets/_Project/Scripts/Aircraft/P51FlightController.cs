@@ -47,7 +47,7 @@ namespace Hanger51.Aircraft
         [SerializeField, Min(0f)] private float groundSteeringTorque = 12500f;
         [SerializeField, Min(0f)] private float groundLateralGrip = 4500f;
         [SerializeField, Min(0f)] private float rollingResistance = 80f;
-        [SerializeField, Min(0f)] private float wheelBrakeStrength = 8800f;
+        [SerializeField, Min(0f)] private float wheelBrakeStrength = 900f;
 
         private readonly RaycastHit[] groundHits = new RaycastHit[12];
 
@@ -182,6 +182,7 @@ namespace Hanger51.Aircraft
             if (pilotPresent)
             {
                 aircraftBody.isKinematic = false;
+                aircraftBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
                 aircraftBody.useGravity = true;
                 aircraftBody.WakeUp();
                 ShowCockpitMessage(
@@ -199,6 +200,7 @@ namespace Hanger51.Aircraft
                 wheelBrakesApplied = true;
                 aircraftBody.linearVelocity = Vector3.zero;
                 aircraftBody.angularVelocity = Vector3.zero;
+                aircraftBody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
                 aircraftBody.isKinematic = true;
                 cockpitMessage = string.Empty;
             }
@@ -265,7 +267,7 @@ namespace Hanger51.Aircraft
             aircraftBody.mass = Mathf.Max(1000f, aircraftMassKg);
             aircraftBody.useGravity = true;
             aircraftBody.interpolation = RigidbodyInterpolation.Interpolate;
-            aircraftBody.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+            aircraftBody.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
             aircraftBody.maxAngularVelocity = 3.5f;
             aircraftBody.centerOfMass = new Vector3(0f, 1.24f, -0.32f);
             aircraftBody.linearDamping = 0.015f;
@@ -411,7 +413,7 @@ namespace Hanger51.Aircraft
             Vector3 controlTorque = new Vector3(
                 pitchInput * pitchTorque,
                 sideslipAngle * yawStabilityTorque,
-                rollInput * rollTorque) * authority;
+                -rollInput * rollTorque) * authority;
             aircraftBody.AddRelativeTorque(controlTorque, ForceMode.Force);
 
             Vector3 localAngularVelocity = transform.InverseTransformDirection(
