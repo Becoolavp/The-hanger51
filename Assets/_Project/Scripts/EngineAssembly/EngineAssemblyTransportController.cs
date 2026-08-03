@@ -59,6 +59,17 @@ namespace Hanger51.EngineAssembly
             ApplyStationColliderState();
         }
 
+        private void LateUpdate()
+        {
+            if (isSuspended)
+            {
+                // Inventory changes can ask the assembly station to refresh its
+                // targets. Reassert the transport lock after all normal Update
+                // work so a hanging engine never exposes maintenance prompts.
+                EnforceSuspendedInteractionLock();
+            }
+        }
+
         public void Configure(
             Transform configuredTransportRoot,
             Transform configuredLiftPoint,
@@ -279,7 +290,7 @@ namespace Hanger51.EngineAssembly
 
             if (isSuspended)
             {
-                SetMaintenanceInteractionEnabled(false);
+                EnforceSuspendedInteractionLock();
             }
         }
 
@@ -325,24 +336,48 @@ namespace Hanger51.EngineAssembly
                 if (enabledState)
                 {
                     target.RefreshFromStation();
-                    continue;
                 }
-
-                Collider targetCollider = target.GetComponent<Collider>();
-                if (targetCollider != null)
+                else
                 {
-                    targetCollider.enabled = false;
+                    DisableTargetForTransport(target);
                 }
+            }
+        }
 
-                GameObject highlightRoot =
-                    HighlightRootField?.GetValue(target) as GameObject;
-                if (highlightRoot != null)
+        private void EnforceSuspendedInteractionLock()
+        {
+            if (interactionTargets.Count == 0)
+            {
+                RefreshInteractionTargets();
+            }
+
+            for (int index = 0; index < interactionTargets.Count; index++)
+            {
+                EngineAssemblyInteractionTarget target = interactionTargets[index];
+                if (target != null)
                 {
-                    // Disable only the configured root. Child beacon and stem
-                    // active states remain intact so RefreshFromStation can
-                    // restore the complete marker after placement.
-                    highlightRoot.SetActive(false);
+                    DisableTargetForTransport(target);
                 }
+            }
+        }
+
+        private static void DisableTargetForTransport(
+            EngineAssemblyInteractionTarget target)
+        {
+            Collider targetCollider = target.GetComponent<Collider>();
+            if (targetCollider != null)
+            {
+                targetCollider.enabled = false;
+            }
+
+            GameObject highlightRoot =
+                HighlightRootField?.GetValue(target) as GameObject;
+            if (highlightRoot != null)
+            {
+                // Disable only the configured root. Child beacon and stem
+                // active states remain intact so RefreshFromStation can
+                // restore the complete marker after placement.
+                highlightRoot.SetActive(false);
             }
         }
 
