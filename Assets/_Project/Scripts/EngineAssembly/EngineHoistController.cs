@@ -209,6 +209,7 @@ namespace Hanger51.EngineAssembly
                 return true;
             }
 
+            bool wasOnStand = engineTransport.IsOnStand;
             if (!engineTransport.CanAttach(
                     hookPoint.position,
                     attachmentDistance,
@@ -220,9 +221,9 @@ namespace Hanger51.EngineAssembly
             engineTransport.BeginSuspension();
             hasAttachedEngine = true;
             RefreshCableVisibility();
-            resultMessage = engineTransport.IsOnStand
+            resultMessage = wasOnStand
                 ? "Connected the lifting slings and lifted the engine clear of the stand."
-                : "Connected the lifting slings and lifted the engine.";
+                : "Connected the lifting slings and lifted the engine from its placed location.";
             return true;
         }
 
