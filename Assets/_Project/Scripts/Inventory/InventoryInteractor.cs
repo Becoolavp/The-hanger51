@@ -136,34 +136,80 @@ namespace Hanger51.Inventory
 
             Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
 
+            InventoryPickup nearestPickup = null;
+            float nearestPickupDistance = float.PositiveInfinity;
+            EngineAssemblyInteractionTarget bestAssemblyTarget = null;
+            EngineAssemblyStation bestTargetStation = null;
+            float bestTargetDistance = float.PositiveInfinity;
+            int bestTargetPriority = -1;
             EngineAssemblyStation nearestStation = null;
 
             for (int index = 0; index < hits.Length; index++)
             {
-                InventoryPickup pickup = hits[index].collider.GetComponentInParent<InventoryPickup>();
-                if (pickup != null)
+                RaycastHit hit = hits[index];
+
+                InventoryPickup pickup = hit.collider.GetComponentInParent<InventoryPickup>();
+                if (pickup != null && nearestPickup == null)
                 {
-                    SetInteractionTarget(pickup, null, null);
-                    return;
+                    nearestPickup = pickup;
+                    nearestPickupDistance = hit.distance;
                 }
 
                 EngineAssemblyInteractionTarget assemblyTarget =
-                    hits[index].collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
+                    hit.collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
                 if (assemblyTarget != null && assemblyTarget.CanInteract)
                 {
-                    EngineAssemblyStation targetStation =
-                        assemblyTarget.GetComponentInParent<EngineAssemblyStation>();
-                    SetInteractionTarget(null, targetStation, assemblyTarget);
-                    return;
+                    int priority = GetTargetPriority(assemblyTarget.InteractionKind);
+                    if (priority > bestTargetPriority
+                        || (priority == bestTargetPriority && hit.distance < bestTargetDistance))
+                    {
+                        bestAssemblyTarget = assemblyTarget;
+                        bestTargetStation =
+                            assemblyTarget.GetComponentInParent<EngineAssemblyStation>();
+                        bestTargetDistance = hit.distance;
+                        bestTargetPriority = priority;
+                    }
                 }
 
                 if (nearestStation == null)
                 {
-                    nearestStation = hits[index].collider.GetComponentInParent<EngineAssemblyStation>();
+                    nearestStation = hit.collider.GetComponentInParent<EngineAssemblyStation>();
                 }
             }
 
+            // A loose pickup directly under the crosshair should remain easy to
+            // collect, but small plug and bolt targets take priority over the
+            // large cover/stand colliders when they occupy the same view line.
+            if (nearestPickup != null
+                && (bestAssemblyTarget == null
+                    || nearestPickupDistance + 0.05f < bestTargetDistance))
+            {
+                SetInteractionTarget(nearestPickup, null, null);
+                return;
+            }
+
+            if (bestAssemblyTarget != null)
+            {
+                SetInteractionTarget(null, bestTargetStation, bestAssemblyTarget);
+                return;
+            }
+
             SetInteractionTarget(null, nearestStation, null);
+        }
+
+        private static int GetTargetPriority(EngineAssemblyInteractionKind kind)
+        {
+            switch (kind)
+            {
+                case EngineAssemblyInteractionKind.SparkPlug:
+                    return 3;
+                case EngineAssemblyInteractionKind.CoverBolt:
+                    return 2;
+                case EngineAssemblyInteractionKind.CoverPlacement:
+                    return 1;
+                default:
+                    return 0;
+            }
         }
 
         private void SetInteractionTarget(
