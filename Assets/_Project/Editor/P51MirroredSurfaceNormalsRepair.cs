@@ -5,14 +5,21 @@ namespace Hanger51.EditorTools
 {
     public static class P51MirroredSurfaceNormalsRepair
     {
+        private enum SurfaceOrientation
+        {
+            UpperSurface,
+            VerticalSides
+        }
+
         private const string MeshFolder = "Assets/_Project/Aircraft/P51/Meshes";
         private const string LeftWingPath = MeshFolder + "/P51D_LeftWing.asset";
         private const string RightWingPath = MeshFolder + "/P51D_RightWing.asset";
         private const string LeftTailPath = MeshFolder + "/P51D_LeftTailplane.asset";
         private const string RightTailPath = MeshFolder + "/P51D_RightTailplane.asset";
+        private const string VerticalFinPath = MeshFolder + "/P51D_VerticalFin.asset";
 
-        [MenuItem("Hanger 51/P-51 Mustang/6 - Repair Mirrored Wing Normals")]
-        public static void RepairMirroredWingNormals()
+        [MenuItem("Hanger 51/P-51 Mustang/6 - Repair Airframe Surface Normals")]
+        public static void RepairAirframeSurfaceNormals()
         {
             if (EditorApplication.isPlaying)
             {
@@ -23,15 +30,37 @@ namespace Hanger51.EditorTools
             bool loadedAll = true;
             int repairedCount = 0;
 
-            repairedCount += RepairIfInsideOut(LeftWingPath, "left wing", ref loadedAll) ? 1 : 0;
-            repairedCount += RepairIfInsideOut(RightWingPath, "right wing", ref loadedAll) ? 1 : 0;
-            repairedCount += RepairIfInsideOut(LeftTailPath, "left horizontal stabilizer", ref loadedAll) ? 1 : 0;
-            repairedCount += RepairIfInsideOut(RightTailPath, "right horizontal stabilizer", ref loadedAll) ? 1 : 0;
+            repairedCount += RepairIfInsideOut(
+                LeftWingPath,
+                "left wing",
+                SurfaceOrientation.UpperSurface,
+                ref loadedAll) ? 1 : 0;
+            repairedCount += RepairIfInsideOut(
+                RightWingPath,
+                "right wing",
+                SurfaceOrientation.UpperSurface,
+                ref loadedAll) ? 1 : 0;
+            repairedCount += RepairIfInsideOut(
+                LeftTailPath,
+                "left horizontal stabilizer",
+                SurfaceOrientation.UpperSurface,
+                ref loadedAll) ? 1 : 0;
+            repairedCount += RepairIfInsideOut(
+                RightTailPath,
+                "right horizontal stabilizer",
+                SurfaceOrientation.UpperSurface,
+                ref loadedAll) ? 1 : 0;
+            repairedCount += RepairIfInsideOut(
+                VerticalFinPath,
+                "vertical fin and rudder",
+                SurfaceOrientation.VerticalSides,
+                ref loadedAll) ? 1 : 0;
 
             if (!loadedAll)
             {
                 Debug.LogError(
-                    "P-51 Step 6 could not find every wing and stabilizer mesh. Run the original P-51 build step only if those mesh assets are genuinely missing.");
+                    "P-51 Step 6 could not find or evaluate every wing and tail mesh. "
+                    + "Run the original P-51 build step only if those mesh assets are genuinely missing.");
                 return;
             }
 
@@ -40,35 +69,38 @@ namespace Hanger51.EditorTools
 
             if (repairedCount == 0)
             {
-                Debug.Log("P-51 Step 6 complete. All wing and stabilizer exterior normals were already facing outward.");
+                Debug.Log(
+                    "P-51 Step 6 complete. Both wings, both horizontal stabilizers, and the vertical fin/rudder were already facing outward.");
             }
             else
             {
                 Debug.Log(
-                    $"P-51 Step 6 complete. Repaired {repairedCount} inside-out mirrored mesh asset(s). "
+                    $"P-51 Step 6 complete. Repaired {repairedCount} inside-out airframe mesh asset(s). "
                     + "The current aircraft hierarchy and your deleted visual shapes were not rebuilt or changed.");
             }
         }
 
-        [MenuItem("Hanger 51/P-51 Mustang/7 - Validate Wing Normals")]
-        public static void ValidateWingNormals()
+        [MenuItem("Hanger 51/P-51 Mustang/7 - Validate Airframe Surface Normals")]
+        public static void ValidateAirframeSurfaceNormals()
         {
             bool passed = true;
-            passed &= ValidateMesh(LeftWingPath, "left wing");
-            passed &= ValidateMesh(RightWingPath, "right wing");
-            passed &= ValidateMesh(LeftTailPath, "left horizontal stabilizer");
-            passed &= ValidateMesh(RightTailPath, "right horizontal stabilizer");
+            passed &= ValidateMesh(LeftWingPath, "left wing", SurfaceOrientation.UpperSurface);
+            passed &= ValidateMesh(RightWingPath, "right wing", SurfaceOrientation.UpperSurface);
+            passed &= ValidateMesh(LeftTailPath, "left horizontal stabilizer", SurfaceOrientation.UpperSurface);
+            passed &= ValidateMesh(RightTailPath, "right horizontal stabilizer", SurfaceOrientation.UpperSurface);
+            passed &= ValidateMesh(VerticalFinPath, "vertical fin and rudder", SurfaceOrientation.VerticalSides);
 
             if (passed)
             {
                 Debug.Log(
-                    "P-51 Step 7 passed. Both wings and both horizontal stabilizers have outward-facing upper surfaces.");
+                    "P-51 Step 7 passed. Both wings, both horizontal stabilizers, and both sides of the vertical fin/rudder face outward.");
             }
         }
 
         private static bool RepairIfInsideOut(
             string assetPath,
             string surfaceName,
+            SurfaceOrientation orientation,
             ref bool loadedAll)
         {
             Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
@@ -79,10 +111,10 @@ namespace Hanger51.EditorTools
                 return false;
             }
 
-            if (!TryMeasureUpperSurfaceDirection(mesh, out float directionScore))
+            if (!TryMeasureOutwardDirection(mesh, orientation, out float directionScore))
             {
                 Debug.LogError(
-                    $"P-51 Step 6 could not identify an upper surface on the {surfaceName} mesh.",
+                    $"P-51 Step 6 could not identify the exterior faces on the {surfaceName} mesh.",
                     mesh);
                 loadedAll = false;
                 return false;
@@ -112,7 +144,10 @@ namespace Hanger51.EditorTools
             return true;
         }
 
-        private static bool ValidateMesh(string assetPath, string surfaceName)
+        private static bool ValidateMesh(
+            string assetPath,
+            string surfaceName,
+            SurfaceOrientation orientation)
         {
             Mesh mesh = AssetDatabase.LoadAssetAtPath<Mesh>(assetPath);
             if (mesh == null)
@@ -121,10 +156,10 @@ namespace Hanger51.EditorTools
                 return false;
             }
 
-            if (!TryMeasureUpperSurfaceDirection(mesh, out float directionScore))
+            if (!TryMeasureOutwardDirection(mesh, orientation, out float directionScore))
             {
                 Debug.LogError(
-                    $"P-51 Step 7 failed: an upper surface could not be identified on the {surfaceName}.",
+                    $"P-51 Step 7 failed: the exterior faces could not be identified on the {surfaceName}.",
                     mesh);
                 return false;
             }
@@ -140,17 +175,24 @@ namespace Hanger51.EditorTools
             return true;
         }
 
+        private static bool TryMeasureOutwardDirection(
+            Mesh mesh,
+            SurfaceOrientation orientation,
+            out float directionScore)
+        {
+            switch (orientation)
+            {
+                case SurfaceOrientation.VerticalSides:
+                    return TryMeasureVerticalSideDirection(mesh, out directionScore);
+                default:
+                    return TryMeasureUpperSurfaceDirection(mesh, out directionScore);
+            }
+        }
+
         private static bool TryMeasureUpperSurfaceDirection(Mesh mesh, out float directionScore)
         {
             directionScore = 0f;
-            if (mesh == null)
-            {
-                return false;
-            }
-
-            Vector3[] vertices = mesh.vertices;
-            int[] triangles = mesh.triangles;
-            if (vertices == null || vertices.Length == 0 || triangles == null || triangles.Length < 3)
+            if (!TryGetMeshData(mesh, out Vector3[] vertices, out int[] triangles))
             {
                 return false;
             }
@@ -187,6 +229,79 @@ namespace Hanger51.EditorTools
             }
 
             return measuredTriangles > 0;
+        }
+
+        private static bool TryMeasureVerticalSideDirection(Mesh mesh, out float directionScore)
+        {
+            directionScore = 0f;
+            if (!TryGetMeshData(mesh, out Vector3[] vertices, out int[] triangles))
+            {
+                return false;
+            }
+
+            float centerX = mesh.bounds.center.x;
+            float sideThreshold = Mathf.Max(mesh.bounds.extents.x * 0.25f, 0.001f);
+            int measuredTriangles = 0;
+
+            for (int index = 0; index + 2 < triangles.Length; index += 3)
+            {
+                Vector3 a = vertices[triangles[index]];
+                Vector3 b = vertices[triangles[index + 1]];
+                Vector3 c = vertices[triangles[index + 2]];
+                float centroidX = (a.x + b.x + c.x) / 3f;
+
+                float expectedDirection;
+                if (centroidX < centerX - sideThreshold)
+                {
+                    expectedDirection = -1f;
+                }
+                else if (centroidX > centerX + sideThreshold)
+                {
+                    expectedDirection = 1f;
+                }
+                else
+                {
+                    continue;
+                }
+
+                Vector3 faceNormal = Vector3.Cross(b - a, c - a);
+                float area = faceNormal.magnitude;
+                if (area <= 0.000001f)
+                {
+                    continue;
+                }
+
+                float lateralShare = Mathf.Abs(faceNormal.x) / area;
+                if (lateralShare < 0.70f)
+                {
+                    continue;
+                }
+
+                directionScore += expectedDirection * faceNormal.x;
+                measuredTriangles++;
+            }
+
+            return measuredTriangles > 0;
+        }
+
+        private static bool TryGetMeshData(
+            Mesh mesh,
+            out Vector3[] vertices,
+            out int[] triangles)
+        {
+            vertices = null;
+            triangles = null;
+            if (mesh == null)
+            {
+                return false;
+            }
+
+            vertices = mesh.vertices;
+            triangles = mesh.triangles;
+            return vertices != null
+                && vertices.Length > 0
+                && triangles != null
+                && triangles.Length >= 3;
         }
     }
 }
