@@ -22,6 +22,11 @@ namespace Hanger51.Aircraft
         public bool IsTopCowlingRemoved => !topCowlingInstalled;
         public bool IsCowlingCarried => !topCowlingInstalled && cowlingCarried;
         public bool IsCowlingLoose => !topCowlingInstalled && !cowlingCarried;
+        public bool IsCowlingInstallAreaReady => !topCowlingInstalled
+            && topCowlingPanel != null
+            && (engineMountReceiver == null
+                || !engineMountReceiver.EnginePositioned
+                || engineMountReceiver.AllMountBoltsTightened);
         public GameObject TopCowlingPanel => topCowlingPanel;
         public int CowlingScrewCount => cowlingScrewsTightened != null
             ? cowlingScrewsTightened.Length
@@ -133,7 +138,7 @@ namespace Hanger51.Aircraft
             cowlingCarried = false;
             portableCowlingPanel?.RefreshFromService();
             RefreshTargetsAndVisuals();
-            resultMessage = "Placed the top cowling. Aim at it and press E to pick it up again.";
+            resultMessage = "Placed the top cowling. Aim at it and press E to pick it up again, or hold E at the highlighted opening to reinstall it.";
             return true;
         }
 
@@ -149,11 +154,10 @@ namespace Hanger51.Aircraft
                         && !cowlingScrewsTightened[targetIndex];
 
                 case AircraftServiceInteractionKind.CowlingPanel:
-                    return !topCowlingInstalled
-                        && cowlingCarried
-                        && (engineMountReceiver == null
-                            || !engineMountReceiver.EnginePositioned
-                            || engineMountReceiver.AllMountBoltsTightened);
+                    // The panel may be in the Player's hands or resting anywhere in
+                    // the world. Keeping the opening available in both states avoids
+                    // losing the reinstall target after a free placement.
+                    return IsCowlingInstallAreaReady;
 
                 case AircraftServiceInteractionKind.EngineMountBolt:
                     return engineMountReceiver != null
@@ -254,7 +258,7 @@ namespace Hanger51.Aircraft
                 case AircraftServiceInteractionKind.CowlingPanel:
                     return removing
                         ? $"Hold R to lift and carry the top cowling{progressText}"
-                        : $"Hold E to reinstall the carried top cowling{progressText}";
+                        : $"Hold E to reinstall the top cowling at the highlighted opening{progressText}";
 
                 case AircraftServiceInteractionKind.EngineMountBolt:
                     return removing
@@ -295,9 +299,7 @@ namespace Hanger51.Aircraft
                             && engineMountReceiver.EnginePositioned
                             && !engineMountReceiver.AllMountBoltsTightened
                                 ? "Secure all four engine-mount bolts before replacing the cowling."
-                                : cowlingCarried
-                                    ? "The top cowling cannot be installed right now."
-                                    : "Pick up the loose top cowling before reinstalling it.";
+                                : "The top cowling cannot be installed right now.";
                         return false;
                     }
 
