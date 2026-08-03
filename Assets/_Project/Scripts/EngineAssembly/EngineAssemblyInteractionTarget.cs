@@ -204,7 +204,10 @@ namespace Hanger51.EngineAssembly
 
             if (highlightRoot != null)
             {
-                highlightRoot.SetActive(CanInteract);
+                // Installation locations remain highlighted. Installed parts
+                // stay visually clean and are removed by aiming at the physical
+                // hardware and holding R.
+                highlightRoot.SetActive(IsInteractable && !completed);
             }
 
             if (animatedVisual == null || isHolding)
