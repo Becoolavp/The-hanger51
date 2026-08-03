@@ -60,6 +60,12 @@ namespace Hanger51.Aircraft
                 return false;
             }
 
+            if (P51TowBarController.IsAircraftTowBarAttached(flightController))
+            {
+                reason = "Disconnect the tailwheel tow bar before entering the cockpit.";
+                return false;
+            }
+
             if (serviceController != null && serviceController.IsCowlingCarried)
             {
                 reason = "Place or reinstall the cowling before entering the cockpit.";
