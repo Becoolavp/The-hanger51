@@ -101,14 +101,39 @@ namespace Hanger51.Aircraft
                 return true;
             }
 
-            if (flightController != null
-                && !flightController.CanExitCockpit(out reason))
-            {
-                return false;
-            }
+            ResolveReferences();
+            Rigidbody body = flightController != null
+                ? flightController.AircraftBody
+                : null;
+
+            Vector3 preservedLinearVelocity = body != null
+                ? body.linearVelocity
+                : Vector3.zero;
+            Vector3 preservedAngularVelocity = body != null
+                ? body.angularVelocity
+                : Vector3.zero;
+            bool preserveDynamicMotion = body != null
+                && (!flightController.IsGrounded
+                    || flightController.GroundSpeedMetersPerSecond > 0.75f
+                    || Mathf.Abs(preservedLinearVelocity.y) > 0.75f
+                    || preservedAngularVelocity.sqrMagnitude > 0.16f);
 
             occupied = false;
             flightController?.SetPilotPresent(false);
+
+            // SetPilotPresent(false) normally parks a stopped aircraft. During
+            // an emergency exit, restore the current motion so the airplane
+            // does not freeze in mid-air or snap to a stop while moving.
+            if (preserveDynamicMotion && body != null)
+            {
+                body.isKinematic = false;
+                body.useGravity = true;
+                body.collisionDetectionMode = CollisionDetectionMode.ContinuousDynamic;
+                body.linearVelocity = preservedLinearVelocity;
+                body.angularVelocity = preservedAngularVelocity;
+                body.WakeUp();
+            }
+
             return true;
         }
 
