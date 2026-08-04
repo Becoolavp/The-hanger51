@@ -21,6 +21,8 @@ namespace Hanger51.Aircraft
         [SerializeField] private Transform leftMainVisual;
         [SerializeField] private Transform rightMainVisual;
         [SerializeField] private Transform tailwheelVisual;
+        [SerializeField, Min(1f)] private float visualPositionSharpness = 16f;
+        [SerializeField, Min(1f)] private float airborneVisualReturnSharpness = 10f;
 
         [Header("Main Gear")]
         [SerializeField, Min(0.1f)] private float mainWheelRadius = 0.38f;
@@ -46,6 +48,8 @@ namespace Hanger51.Aircraft
         [SerializeField, Range(0.1f, 2f)] private float mainBrakeFriction = 0.92f;
         [SerializeField, Range(0.1f, 2f)] private float tailBrakeFriction = 0.35f;
         [SerializeField, Range(0.1f, 2f)] private float lateralFrictionLimit = 1.15f;
+        [SerializeField, Min(0f)] private float minimumSupportingForce = 1200f;
+        [SerializeField, Min(0f)] private float releaseWhileClimbingSpeed = 0.35f;
 
         [Header("Taildragger Balance")]
         [SerializeField] private Vector3 tunedCenterOfMass = new Vector3(0f, 0.84f, -1.05f);
@@ -76,10 +80,15 @@ namespace Hanger51.Aircraft
             && rightMainVisual != null
             && tailwheelVisual != null;
         public int GroundedWheelCount { get; private set; }
+        public int LoadedWheelCount { get; private set; }
         public bool LeftMainGrounded => leftContact.Grounded;
         public bool RightMainGrounded => rightContact.Grounded;
         public bool TailwheelGrounded => tailContact.Grounded;
+        public bool LeftMainLoaded => leftContact.Loaded;
+        public bool RightMainLoaded => rightContact.Loaded;
+        public bool TailwheelLoaded => tailContact.Loaded;
         public bool AnyWheelGrounded => GroundedWheelCount > 0;
+        public bool AnyWheelLoaded => LoadedWheelCount > 0;
         public Transform LeftMainAnchor => leftMainAnchor;
         public Transform RightMainAnchor => rightMainAnchor;
         public Transform TailwheelAnchor => tailwheelAnchor;
@@ -112,6 +121,7 @@ namespace Hanger51.Aircraft
             if (!IsConfigured)
             {
                 GroundedWheelCount = 0;
+                LoadedWheelCount = 0;
                 return;
             }
 
@@ -176,9 +186,10 @@ namespace Hanger51.Aircraft
                 applyForces);
 
             GroundedWheelCount = 0;
-            if (leftContact.Grounded) GroundedWheelCount++;
-            if (rightContact.Grounded) GroundedWheelCount++;
-            if (tailContact.Grounded) GroundedWheelCount++;
+            LoadedWheelCount = 0;
+            CountContact(leftContact);
+            CountContact(rightContact);
+            CountContact(tailContact);
 
             leftSpinDegrees = AdvanceWheelSpin(
                 leftSpinDegrees,
@@ -193,10 +204,16 @@ namespace Hanger51.Aircraft
                 tailContact.ForwardSpeed,
                 tailwheelRadius);
 
-            if (applyForces && GroundedWheelCount >= 2)
+            if (applyForces && LoadedWheelCount >= 2)
             {
                 ApplyGroundedAngularDamping();
             }
+        }
+
+        private void CountContact(WheelContact contact)
+        {
+            if (contact.Grounded) GroundedWheelCount++;
+            if (contact.Loaded) LoadedWheelCount++;
         }
 
         private void LateUpdate()
@@ -212,24 +229,21 @@ namespace Hanger51.Aircraft
                 leftContact,
                 leftBaseRotation,
                 leftSpinDegrees,
-                0f,
-                mainWheelRadius);
+                0f);
             UpdateWheelVisual(
                 rightMainVisual,
                 rightMainAnchor,
                 rightContact,
                 rightBaseRotation,
                 rightSpinDegrees,
-                0f,
-                mainWheelRadius);
+                0f);
             UpdateWheelVisual(
                 tailwheelVisual,
                 tailwheelAnchor,
                 tailContact,
                 tailBaseRotation,
                 tailSpinDegrees,
-                currentTailwheelSteerAngle,
-                tailwheelRadius);
+                currentTailwheelSteerAngle);
         }
 
         public void Configure(
@@ -271,11 +285,13 @@ namespace Hanger51.Aircraft
             WheelContact contact = new WheelContact
             {
                 Grounded = false,
+                Loaded = false,
                 CenterPosition = wheelAnchor != null
                     ? wheelAnchor.position
                     : transform.position,
                 SurfaceNormal = transform.up,
-                ForwardSpeed = 0f
+                ForwardSpeed = 0f,
+                SuspensionForce = 0f
             };
 
             if (wheelAnchor == null)
@@ -305,7 +321,36 @@ namespace Hanger51.Aircraft
                 return contact;
             }
 
+            Vector3 pointVelocity = aircraftBody != null
+                ? aircraftBody.GetPointVelocity(wheelAnchor.position)
+                : Vector3.zero;
+            float suspensionVelocity = Vector3.Dot(pointVelocity, suspensionUp);
+            float compression = Mathf.Clamp(
+                restGroundDistance - anchorToGroundDistance,
+                0f,
+                suspensionTravel);
+
+            // A surface inside the fully extended ray is not automatically a
+            // load-bearing contact. During takeoff, discard an unloaded ray hit
+            // as soon as the aircraft is moving upward so the wheel cannot act
+            // like a ground magnet.
+            if (compression <= 0.001f
+                && suspensionVelocity > releaseWhileClimbingSpeed)
+            {
+                return contact;
+            }
+
+            float suspensionForce = Mathf.Max(
+                0f,
+                compression * springStrength
+                - suspensionVelocity * damperStrength);
+            suspensionForce = Mathf.Min(
+                suspensionForce,
+                springStrength * suspensionTravel * 1.45f);
+
             contact.Grounded = true;
+            contact.Loaded = suspensionForce >= minimumSupportingForce;
+            contact.SuspensionForce = suspensionForce;
             contact.SurfaceNormal = groundHit.normal.sqrMagnitude > 0.001f
                 ? groundHit.normal.normalized
                 : suspensionUp;
@@ -332,26 +377,10 @@ namespace Hanger51.Aircraft
             Vector3 wheelRight = Vector3.Cross(
                 contact.SurfaceNormal,
                 wheelForward).normalized;
-            Vector3 pointVelocity = aircraftBody != null
-                ? aircraftBody.GetPointVelocity(wheelAnchor.position)
-                : Vector3.zero;
             contact.ForwardSpeed = Vector3.Dot(pointVelocity, wheelForward);
             float lateralSpeed = Vector3.Dot(pointVelocity, wheelRight);
 
-            float compression = Mathf.Clamp(
-                restGroundDistance - anchorToGroundDistance,
-                0f,
-                suspensionTravel);
-            float suspensionVelocity = Vector3.Dot(pointVelocity, suspensionUp);
-            float suspensionForce = Mathf.Max(
-                0f,
-                compression * springStrength
-                - suspensionVelocity * damperStrength);
-            suspensionForce = Mathf.Min(
-                suspensionForce,
-                springStrength * suspensionTravel * 1.45f);
-
-            if (!applyForces || aircraftBody == null)
+            if (!applyForces || aircraftBody == null || suspensionForce <= 0f)
             {
                 return contact;
             }
@@ -466,17 +495,25 @@ namespace Hanger51.Aircraft
             WheelContact contact,
             Quaternion baseLocalRotation,
             float spinDegrees,
-            float steeringAngle,
-            float radius)
+            float steeringAngle)
         {
             if (visual == null || anchor == null)
             {
                 return;
             }
 
-            Vector3 center = contact.Grounded
+            Vector3 targetCenter = contact.Grounded
                 ? contact.CenterPosition
                 : anchor.position;
+            float sharpness = contact.Grounded
+                ? visualPositionSharpness
+                : airborneVisualReturnSharpness;
+            float blend = 1f - Mathf.Exp(-sharpness * Time.deltaTime);
+            Vector3 center = Vector3.Lerp(
+                visual.position,
+                targetCenter,
+                blend);
+
             Quaternion steering = Quaternion.AngleAxis(
                 steeringAngle,
                 Vector3.up);
@@ -511,7 +548,7 @@ namespace Hanger51.Aircraft
             }
 
             aircraftBody.centerOfMass = tunedCenterOfMass;
-            aircraftBody.maxDepenetrationVelocity = 8f;
+            aircraftBody.maxDepenetrationVelocity = 4f;
             aircraftBody.constraints = RigidbodyConstraints.None;
         }
 
@@ -552,14 +589,20 @@ namespace Hanger51.Aircraft
             maximumTailwheelSteerAngle = Mathf.Clamp(maximumTailwheelSteerAngle, 0f, 35f);
             steeringFadeSpeedMetersPerSecond = Mathf.Max(1f, steeringFadeSpeedMetersPerSecond);
             rollingResistanceCoefficient = Mathf.Clamp(rollingResistanceCoefficient, 0f, 0.1f);
+            minimumSupportingForce = Mathf.Max(0f, minimumSupportingForce);
+            releaseWhileClimbingSpeed = Mathf.Max(0f, releaseWhileClimbingSpeed);
+            visualPositionSharpness = Mathf.Max(1f, visualPositionSharpness);
+            airborneVisualReturnSharpness = Mathf.Max(1f, airborneVisualReturnSharpness);
         }
 
         private struct WheelContact
         {
             public bool Grounded;
+            public bool Loaded;
             public Vector3 CenterPosition;
             public Vector3 SurfaceNormal;
             public float ForwardSpeed;
+            public float SuspensionForce;
         }
     }
 }
