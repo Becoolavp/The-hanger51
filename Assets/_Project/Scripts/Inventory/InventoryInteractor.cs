@@ -126,7 +126,7 @@ namespace Hanger51.Inventory
                 ray,
                 interactionDistance,
                 interactionLayers,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
 
             if (hits.Length == 0)
             {
@@ -180,6 +180,8 @@ namespace Hanger51.Inventory
             // A loose pickup directly under the crosshair should remain easy to
             // collect, but small plug and bolt targets take priority over the
             // large cover/stand colliders when they occupy the same view line.
+            // Trigger targets are included because cover condition inspection
+            // and reversible maintenance intentionally share the same collider.
             if (nearestPickup != null
                 && (bestAssemblyTarget == null
                     || nearestPickupDistance + 0.05f < bestTargetDistance))
