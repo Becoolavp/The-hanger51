@@ -12,23 +12,23 @@ namespace Hanger51.Commerce
         {
             [SerializeField] private Transform crateAnchor;
             [SerializeField] private Transform contentAnchor;
-            [NonSerialized] private ShipmentCrateController activeCrate;
+            [NonSerialized] private UnityEngine.Object activeOccupant;
 
             public Transform CrateAnchor => crateAnchor;
             public Transform ContentAnchor => contentAnchor;
-            public ShipmentCrateController ActiveCrate => activeCrate;
-            public bool IsAvailable => crateAnchor != null && activeCrate == null;
+            public UnityEngine.Object ActiveOccupant => activeOccupant;
+            public bool IsAvailable => crateAnchor != null && activeOccupant == null;
 
             public void Configure(Transform configuredCrateAnchor, Transform configuredContentAnchor)
             {
                 crateAnchor = configuredCrateAnchor;
                 contentAnchor = configuredContentAnchor;
-                activeCrate = null;
+                activeOccupant = null;
             }
 
-            public void SetActiveCrate(ShipmentCrateController crate)
+            public void SetActiveOccupant(UnityEngine.Object occupant)
             {
-                activeCrate = crate;
+                activeOccupant = occupant;
             }
         }
 
@@ -89,7 +89,7 @@ namespace Hanger51.Commerce
             int availableIndex = FindAvailableSlotIndex();
             if (availableIndex < 0)
             {
-                reason = "All shipment bays are occupied. Unbox an existing delivery first.";
+                reason = "All shipment bays are occupied. Collect or move an existing delivery first.";
                 return false;
             }
 
@@ -109,7 +109,7 @@ namespace Hanger51.Commerce
                 return false;
             }
 
-            slot.SetActiveCrate(crateController);
+            slot.SetActiveOccupant(crateController);
             crateController.Configure(
                 product,
                 this,
@@ -122,20 +122,40 @@ namespace Hanger51.Commerce
             return true;
         }
 
-        public void ReleaseSlot(int slotIndex, ShipmentCrateController crate)
+        public bool TransferSlot(
+            int slotIndex,
+            UnityEngine.Object currentOccupant,
+            UnityEngine.Object newOccupant)
         {
-            if (shipmentSlots == null
-                || slotIndex < 0
-                || slotIndex >= shipmentSlots.Count)
+            ShipmentSlot slot = GetSlot(slotIndex);
+            if (slot == null
+                || (slot.ActiveOccupant != null
+                    && slot.ActiveOccupant != currentOccupant))
             {
-                return;
+                return false;
             }
 
-            ShipmentSlot slot = shipmentSlots[slotIndex];
-            if (slot != null && (slot.ActiveCrate == null || slot.ActiveCrate == crate))
+            slot.SetActiveOccupant(newOccupant);
+            return true;
+        }
+
+        public void ReleaseSlot(int slotIndex, UnityEngine.Object occupant)
+        {
+            ShipmentSlot slot = GetSlot(slotIndex);
+            if (slot != null
+                && (slot.ActiveOccupant == null || slot.ActiveOccupant == occupant))
             {
-                slot.SetActiveCrate(null);
+                slot.SetActiveOccupant(null);
             }
+        }
+
+        private ShipmentSlot GetSlot(int slotIndex)
+        {
+            return shipmentSlots != null
+                && slotIndex >= 0
+                && slotIndex < shipmentSlots.Count
+                    ? shipmentSlots[slotIndex]
+                    : null;
         }
 
         private int FindAvailableSlotIndex()
@@ -166,7 +186,7 @@ namespace Hanger51.Commerce
 
             for (int index = 0; index < shipmentSlots.Count; index++)
             {
-                shipmentSlots[index]?.SetActiveCrate(null);
+                shipmentSlots[index]?.SetActiveOccupant(null);
             }
         }
 
