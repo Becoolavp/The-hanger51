@@ -50,7 +50,11 @@ namespace Hanger51.EngineAssembly
         [SerializeField] private bool[] previousPlugInstalled = new bool[24];
         [SerializeField] private bool[] previousCoverInstalled = new bool[2];
 
-        private readonly MaterialPropertyBlock propertyBlock = new MaterialPropertyBlock();
+        // MaterialPropertyBlock is a managed wrapper around a native Unity
+        // object. Creating it in a readonly field initializer is unreliable
+        // when an Editor setup adds and configures a component immediately.
+        // Create it lazily at the exact point it is needed instead.
+        private MaterialPropertyBlock propertyBlock;
         private float nextVisualRefreshTime;
 
         public float OilCapacityLiters => oilCapacityLiters;
@@ -522,6 +526,7 @@ namespace Hanger51.EngineAssembly
         private void RefreshConditionVisuals(bool forceParticleRefresh)
         {
             EnsureStateArrays();
+            EnsurePropertyBlock();
 
             for (int index = 0; index < blockDamageStages.Length; index++)
             {
@@ -568,6 +573,8 @@ namespace Hanger51.EngineAssembly
                     new Color(0.10f, 0.07f, 0.04f, 1f),
                     new Color(0.92f, 0.90f, 0.78f, 1f),
                     health);
+
+                propertyBlock.Clear();
                 renderer.GetPropertyBlock(propertyBlock);
                 if (renderer.sharedMaterial != null
                     && renderer.sharedMaterial.HasProperty("_BaseColor"))
@@ -580,6 +587,14 @@ namespace Hanger51.EngineAssembly
                     propertyBlock.SetColor("_Color", color);
                 }
                 renderer.SetPropertyBlock(propertyBlock);
+            }
+        }
+
+        private void EnsurePropertyBlock()
+        {
+            if (propertyBlock == null)
+            {
+                propertyBlock = new MaterialPropertyBlock();
             }
         }
 
