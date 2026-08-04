@@ -98,16 +98,72 @@ namespace Hanger51.EngineAssembly
                 case EngineAssemblyInteractionKind.CoverBolt:
                     return IsTrue(covers, groupIndex)
                         && IsTrue(bolts, targetIndex)
-                        && !HasInstalledSparkPlugOnBank(groupIndex, plugs);
+                        && CountInstalledSparkPlugsOnBank(groupIndex, plugs) == 0;
 
                 case EngineAssemblyInteractionKind.CoverPlacement:
                     return IsTrue(covers, groupIndex)
-                        && !HasInstalledSparkPlugOnBank(groupIndex, plugs)
+                        && CountInstalledSparkPlugsOnBank(groupIndex, plugs) == 0
                         && AreAllBoltsLooseForBank(groupIndex, bolts);
 
                 default:
                     return false;
             }
+        }
+
+        public string GetRemovalBlockerText(
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex)
+        {
+            if (kind != EngineAssemblyInteractionKind.CoverPlacement)
+            {
+                return string.Empty;
+            }
+
+            if (!TryGetState(
+                    out bool engineInstalled,
+                    out List<bool> covers,
+                    out List<bool> bolts,
+                    out List<bool> plugs))
+            {
+                return "Cover removal state is not ready. Re-run the latest cover-removal repair step.";
+            }
+
+            if (!engineInstalled || !IsTrue(covers, groupIndex))
+            {
+                return string.Empty;
+            }
+
+            int installedPlugs = CountInstalledSparkPlugsOnBank(groupIndex, plugs);
+            int tightenedBolts = CountTightenedBoltsOnBank(groupIndex, bolts, out bool foundBolts);
+            string bankName = groupIndex == 0 ? "left" : "right";
+
+            if (!foundBolts)
+            {
+                return $"The {bankName} cover has no configured bolt targets. Run Merlin Condition Step 20.";
+            }
+
+            if (installedPlugs <= 0 && tightenedBolts <= 0)
+            {
+                return string.Empty;
+            }
+
+            string plugText = installedPlugs > 0
+                ? $"remove {installedPlugs} remaining spark plug{(installedPlugs == 1 ? string.Empty : "s")}" 
+                : string.Empty;
+            string boltText = tightenedBolts > 0
+                ? $"loosen {tightenedBolts} remaining cover bolt{(tightenedBolts == 1 ? string.Empty : "s")}" 
+                : string.Empty;
+
+            if (!string.IsNullOrWhiteSpace(plugText)
+                && !string.IsNullOrWhiteSpace(boltText))
+            {
+                return $"To remove the {bankName} cover: {plugText} and {boltText}.";
+            }
+
+            return $"To remove the {bankName} cover: "
+                + (!string.IsNullOrWhiteSpace(plugText) ? plugText : boltText)
+                + ".";
         }
 
         public string GetRemovalInteractionText(
@@ -145,8 +201,13 @@ namespace Hanger51.EngineAssembly
         {
             resultMessage = "That engine part cannot be removed yet.";
 
-            if (inventory == null || !CanRemoveTarget(kind, groupIndex, targetIndex))
+            if (!CanRemoveTarget(kind, groupIndex, targetIndex))
             {
+                string blocker = GetRemovalBlockerText(kind, groupIndex, targetIndex);
+                if (!string.IsNullOrWhiteSpace(blocker))
+                {
+                    resultMessage = blocker;
+                }
                 return false;
             }
 
@@ -165,14 +226,22 @@ namespace Hanger51.EngineAssembly
                 case EngineAssemblyInteractionKind.SparkPlug:
                 {
                     InventoryItemDefinition item = GetItem(sparkPlugItemField);
-                    if (!TryReturnItem(inventory, item))
+                    if (!TryReturnOrDropItem(
+                            inventory,
+                            item,
+                            kind,
+                            groupIndex,
+                            targetIndex,
+                            out bool dropped))
                     {
-                        resultMessage = "Inventory is full. Make room before removing the spark plug.";
+                        resultMessage = "The spark plug could not be returned or placed beside the engine.";
                         return false;
                     }
 
                     plugs[targetIndex] = false;
-                    resultMessage = $"Removed spark plug {targetIndex + 1} and returned it to inventory.";
+                    resultMessage = dropped
+                        ? $"Removed spark plug {targetIndex + 1} and dropped it beside the engine because inventory was full."
+                        : $"Removed spark plug {targetIndex + 1} and returned it to inventory.";
                     break;
                 }
 
@@ -184,14 +253,23 @@ namespace Hanger51.EngineAssembly
                 case EngineAssemblyInteractionKind.CoverPlacement:
                 {
                     InventoryItemDefinition item = GetItem(cylinderCoverItemField);
-                    if (!TryReturnItem(inventory, item))
+                    if (!TryReturnOrDropItem(
+                            inventory,
+                            item,
+                            kind,
+                            groupIndex,
+                            targetIndex,
+                            out bool dropped))
                     {
-                        resultMessage = "Inventory is full. Make room before removing the cylinder cover.";
+                        resultMessage = "The cylinder cover could not be returned or placed beside the engine.";
                         return false;
                     }
 
                     covers[groupIndex] = false;
-                    resultMessage = $"Removed the {(groupIndex == 0 ? "left" : "right")} cylinder cover and returned it to inventory.";
+                    string side = groupIndex == 0 ? "left" : "right";
+                    resultMessage = dropped
+                        ? $"Removed the {side} cylinder cover and dropped it beside the engine because inventory was full. The bank target still records its condition for inspection."
+                        : $"Removed the {side} cylinder cover and returned it to inventory. The bank target still records its condition for inspection.";
                     break;
                 }
 
@@ -211,7 +289,7 @@ namespace Hanger51.EngineAssembly
         {
             resultMessage = string.Empty;
 
-            if (!CanRemoveEngineBlock || inventory == null)
+            if (!CanRemoveEngineBlock)
             {
                 CancelEngineRemovalHold();
                 return false;
@@ -233,9 +311,15 @@ namespace Hanger51.EngineAssembly
             }
 
             InventoryItemDefinition engineItem = GetItem(engineBlockItemField);
-            if (!TryReturnItem(inventory, engineItem))
+            if (!TryReturnOrDropItem(
+                    inventory,
+                    engineItem,
+                    EngineAssemblyInteractionKind.CoverPlacement,
+                    0,
+                    0,
+                    out bool dropped))
             {
-                resultMessage = "Inventory is full. Make room before removing the engine block.";
+                resultMessage = "The engine block could not be returned or placed beside the stand.";
                 engineRemovalProgress = 0f;
                 return false;
             }
@@ -250,7 +334,9 @@ namespace Hanger51.EngineAssembly
             engineBlockInstalledField.SetValue(station, false);
             engineRemovalProgress = 0f;
             RefreshStationVisuals();
-            resultMessage = "Removed the V-1650 engine block and returned it to inventory.";
+            resultMessage = dropped
+                ? "Removed the V-1650 engine block and dropped it beside the stand because inventory was full."
+                : "Removed the V-1650 engine block and returned it to inventory.";
             return true;
         }
 
@@ -389,13 +475,14 @@ namespace Hanger51.EngineAssembly
                 : null;
         }
 
-        private bool HasInstalledSparkPlugOnBank(int bankIndex, List<bool> plugs)
+        private int CountInstalledSparkPlugsOnBank(int bankIndex, List<bool> plugs)
         {
             if (station == null)
             {
-                return false;
+                return 0;
             }
 
+            int count = 0;
             EngineAssemblyInteractionTarget[] targets =
                 station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
 
@@ -407,21 +494,25 @@ namespace Hanger51.EngineAssembly
                     && target.GroupIndex == bankIndex
                     && IsTrue(plugs, target.TargetIndex))
                 {
-                    return true;
+                    count++;
                 }
             }
 
-            return false;
+            return count;
         }
 
-        private bool AreAllBoltsLooseForBank(int bankIndex, List<bool> bolts)
+        private int CountTightenedBoltsOnBank(
+            int bankIndex,
+            List<bool> bolts,
+            out bool foundBolt)
         {
+            foundBolt = false;
             if (station == null)
             {
-                return false;
+                return 0;
             }
 
-            bool foundBolt = false;
+            int count = 0;
             EngineAssemblyInteractionTarget[] targets =
                 station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
 
@@ -438,18 +529,224 @@ namespace Hanger51.EngineAssembly
                 foundBolt = true;
                 if (IsTrue(bolts, target.TargetIndex))
                 {
-                    return false;
+                    count++;
                 }
             }
 
-            return foundBolt;
+            return count;
         }
 
-        private static bool TryReturnItem(
+        private bool AreAllBoltsLooseForBank(int bankIndex, List<bool> bolts)
+        {
+            int tightened = CountTightenedBoltsOnBank(
+                bankIndex,
+                bolts,
+                out bool foundBolt);
+            return foundBolt && tightened == 0;
+        }
+
+        private bool TryReturnOrDropItem(
             PlayerInventory inventory,
+            InventoryItemDefinition item,
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex,
+            out bool dropped)
+        {
+            dropped = false;
+            if (item == null)
+            {
+                return false;
+            }
+
+            if (inventory != null && inventory.AddItem(item, 1) == 0)
+            {
+                return true;
+            }
+
+            dropped = CreateDroppedPickup(item, kind, groupIndex, targetIndex);
+            return dropped;
+        }
+
+        private bool CreateDroppedPickup(
+            InventoryItemDefinition item,
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex)
+        {
+            if (item == null || station == null)
+            {
+                return false;
+            }
+
+            Vector3 groundPosition = FindDropGroundPosition(kind, groupIndex, targetIndex);
+            GameObject pickupObject;
+            if (item.WorldPrefab != null)
+            {
+                pickupObject = Instantiate(item.WorldPrefab);
+                pickupObject.transform.localScale = item.WorldScale;
+            }
+            else
+            {
+                pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pickupObject.transform.localScale = Vector3.one * 0.42f;
+                ApplyFallbackMaterial(pickupObject, item);
+            }
+
+            if (pickupObject == null)
+            {
+                return false;
+            }
+
+            pickupObject.SetActive(true);
+            pickupObject.transform.position = groundPosition + Vector3.up * 0.08f;
+            pickupObject.transform.rotation = Quaternion.Euler(
+                0f,
+                station.transform.eulerAngles.y,
+                0f);
+
+            InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
+            if (pickup == null)
+            {
+                pickup = pickupObject.AddComponent<InventoryPickup>();
+            }
+            pickup.Configure(item, 1);
+            EnsurePickupCollider(pickupObject);
+            AlignBottomToGround(pickupObject, groundPosition.y);
+            return true;
+        }
+
+        private Vector3 FindDropGroundPosition(
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex)
+        {
+            Transform matchingTarget = FindTarget(kind, groupIndex, targetIndex);
+            Vector3 basePosition = matchingTarget != null
+                ? matchingTarget.position
+                : station.transform.position;
+
+            float sideDirection = groupIndex == 0 ? -1f : 1f;
+            Vector3 candidate = basePosition
+                + station.transform.right * sideDirection * 1.6f
+                + station.transform.forward * 0.35f;
+
+            RaycastHit[] hits = Physics.RaycastAll(
+                candidate + Vector3.up * 3f,
+                Vector3.down,
+                7f,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+
+            for (int index = 0; index < hits.Length; index++)
+            {
+                Collider collider = hits[index].collider;
+                if (collider == null || collider.transform.IsChildOf(station.transform))
+                {
+                    continue;
+                }
+
+                return hits[index].point;
+            }
+
+            return candidate;
+        }
+
+        private Transform FindTarget(
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex)
+        {
+            EngineAssemblyInteractionTarget[] targets =
+                station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
+            for (int index = 0; index < targets.Length; index++)
+            {
+                EngineAssemblyInteractionTarget target = targets[index];
+                if (target != null
+                    && target.InteractionKind == kind
+                    && target.GroupIndex == groupIndex
+                    && target.TargetIndex == targetIndex)
+                {
+                    return target.transform;
+                }
+            }
+
+            return null;
+        }
+
+        private static void EnsurePickupCollider(GameObject pickupObject)
+        {
+            Collider[] colliders = pickupObject.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
+            {
+                if (colliders[index] != null && colliders[index].enabled)
+                {
+                    return;
+                }
+            }
+
+            BoxCollider collider = pickupObject.AddComponent<BoxCollider>();
+            collider.size = Vector3.one;
+        }
+
+        private static void AlignBottomToGround(GameObject pickupObject, float groundY)
+        {
+            Renderer[] renderers = pickupObject.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                pickupObject.transform.position = new Vector3(
+                    pickupObject.transform.position.x,
+                    groundY + 0.04f,
+                    pickupObject.transform.position.z);
+                return;
+            }
+
+            Bounds combined = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null)
+                {
+                    combined.Encapsulate(renderers[index].bounds);
+                }
+            }
+
+            pickupObject.transform.position += Vector3.up
+                * (groundY - combined.min.y + 0.02f);
+        }
+
+        private static void ApplyFallbackMaterial(
+            GameObject pickupObject,
             InventoryItemDefinition item)
         {
-            return item != null && inventory.AddItem(item, 1) == 0;
+            Renderer renderer = pickupObject.GetComponent<Renderer>();
+            if (renderer == null)
+            {
+                return;
+            }
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit");
+            if (shader == null)
+            {
+                shader = Shader.Find("Standard");
+            }
+            if (shader == null)
+            {
+                return;
+            }
+
+            Material material = new Material(shader)
+            {
+                name = $"Dropped {item.DisplayName} Material"
+            };
+            Color color = item.PlaceholderColor;
+            color.a = 1f;
+            material.color = color;
+            if (material.HasProperty("_BaseColor"))
+            {
+                material.SetColor("_BaseColor", color);
+            }
+            renderer.material = material;
         }
 
         private static bool IsTrue(List<bool> values, int index)
