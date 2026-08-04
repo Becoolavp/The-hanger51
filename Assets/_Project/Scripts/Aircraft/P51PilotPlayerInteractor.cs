@@ -34,6 +34,7 @@ namespace Hanger51.Aircraft
 
         private P51PilotSeat aimedSeat;
         private P51PilotSeat occupiedSeat;
+        private P51ThirdPersonCamera thirdPersonCamera;
         private Transform originalCameraParent;
         private Vector3 originalCameraLocalPosition;
         private Quaternion originalCameraLocalRotation;
@@ -84,6 +85,12 @@ namespace Hanger51.Aircraft
             inventoryInteractor = configuredInventoryInteractor;
             inventoryUI = configuredInventoryUI;
             ResolveReferences();
+        }
+
+        public void ResetCockpitLook()
+        {
+            cockpitLookYaw = 0f;
+            cockpitLookPitch = 0f;
         }
 
         private void HandleEntryInteraction()
@@ -137,7 +144,11 @@ namespace Hanger51.Aircraft
             }
 
             Mouse mouse = Mouse.current;
-            if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
+            bool externalViewOwnsMouse = thirdPersonCamera != null
+                && thirdPersonCamera.ThirdPersonActive;
+            if (!externalViewOwnsMouse
+                && mouse != null
+                && Cursor.lockState == CursorLockMode.Locked)
             {
                 Vector2 mouseDelta = mouse.delta.ReadValue() * cockpitMouseSensitivity;
                 cockpitLookYaw = Mathf.Clamp(
@@ -252,8 +263,7 @@ namespace Hanger51.Aircraft
             playerCamera.transform.localPosition = Vector3.zero;
             playerCamera.transform.localRotation = Quaternion.identity;
             playerCamera.fieldOfView = 72f;
-            cockpitLookYaw = 0f;
-            cockpitLookPitch = 0f;
+            ResetCockpitLook();
             SetCursorLocked(true);
         }
 
@@ -373,6 +383,11 @@ namespace Hanger51.Aircraft
             if (equippedItemView == null && playerCamera != null)
             {
                 equippedItemView = playerCamera.GetComponentInChildren<EquippedItemView>(true);
+            }
+
+            if (thirdPersonCamera == null)
+            {
+                thirdPersonCamera = GetComponent<P51ThirdPersonCamera>();
             }
         }
 
