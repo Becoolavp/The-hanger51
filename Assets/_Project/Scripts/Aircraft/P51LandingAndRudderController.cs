@@ -36,6 +36,7 @@ namespace Hanger51.Aircraft
         private Rigidbody aircraftBody;
         private int previousGroundedWheelCount;
         private float rudderInput;
+        private GUIStyle rudderStyle;
 
         public float RudderInput => rudderInput;
         public float RudderTorque => rudderTorque;
@@ -181,11 +182,13 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            Vector3 velocity = aircraftBody.linearVelocity;
-            float speed = velocity.magnitude;
+            Vector3 horizontalVelocity = Vector3.ProjectOnPlane(
+                aircraftBody.linearVelocity,
+                Vector3.up);
+            float speed = horizontalVelocity.magnitude;
             if (speed < approachDragFadesMetersPerSecond
                 || speed > approachDragBeginsMetersPerSecond
-                || velocity.sqrMagnitude < 0.25f)
+                || horizontalVelocity.sqrMagnitude < 0.25f)
             {
                 return;
             }
@@ -203,7 +206,7 @@ namespace Hanger51.Aircraft
                 * lowPowerFactor;
 
             aircraftBody.AddForce(
-                -velocity.normalized * acceleration,
+                -horizontalVelocity.normalized * acceleration,
                 ForceMode.Acceleration);
         }
 
@@ -298,16 +301,20 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            GUIStyle style = new GUIStyle(GUI.skin.box)
+            if (rudderStyle == null)
             {
-                alignment = TextAnchor.MiddleCenter,
-                fontSize = 14
-            };
-            style.normal.textColor = Color.white;
+                rudderStyle = new GUIStyle(GUI.skin.box)
+                {
+                    alignment = TextAnchor.MiddleCenter,
+                    fontSize = 14
+                };
+                rudderStyle.normal.textColor = Color.white;
+            }
+
             GUI.Box(
                 new Rect(18f, 228f, 355f, 34f),
                 "LEFT / RIGHT ARROWS: RUDDER",
-                style);
+                rudderStyle);
         }
 
         private void OnValidate()
@@ -324,12 +331,12 @@ namespace Hanger51.Aircraft
                 lowPowerThrottleThreshold,
                 0.05f,
                 0.8f);
-            approachDragBeginsMetersPerSecond = Mathf.Max(
-                approachDragFadesMetersPerSecond + 1f,
-                approachDragBeginsMetersPerSecond);
             approachDragFadesMetersPerSecond = Mathf.Max(
                 1f,
                 approachDragFadesMetersPerSecond);
+            approachDragBeginsMetersPerSecond = Mathf.Max(
+                approachDragFadesMetersPerSecond + 1f,
+                approachDragBeginsMetersPerSecond);
             maximumApproachDragAcceleration = Mathf.Max(
                 0f,
                 maximumApproachDragAcceleration);
