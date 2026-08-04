@@ -25,6 +25,7 @@ namespace Hanger51.EngineAssembly
 
         private Collider interactionCollider;
         private EngineAssemblyRemovalController removalController;
+        private EngineConditionInspectionTarget conditionInspectionTarget;
         private float holdProgress;
         private bool isHolding;
         private bool isRemoving;
@@ -35,9 +36,12 @@ namespace Hanger51.EngineAssembly
         public float HoldProgress => holdProgress;
         public bool IsInteractable => station != null
             && station.IsTargetAvailable(interactionKind, groupIndex, targetIndex);
+        public bool IsComplete => station != null
+            && station.IsTargetComplete(interactionKind, groupIndex, targetIndex);
         public bool CanRemove => removalController != null
             && removalController.CanRemoveTarget(interactionKind, groupIndex, targetIndex);
         public bool CanInteract => IsInteractable || CanRemove;
+        public bool HasConditionInspection => conditionInspectionTarget != null;
 
         public Vector3 FinalWorldPosition => transform.position;
         public Quaternion FinalWorldRotation => transform.rotation;
@@ -71,6 +75,7 @@ namespace Hanger51.EngineAssembly
         {
             interactionCollider = GetComponent<Collider>();
             ResolveRemovalController();
+            ResolveConditionInspectionTarget();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -98,6 +103,7 @@ namespace Hanger51.EngineAssembly
 
             interactionCollider = GetComponent<Collider>();
             ResolveRemovalController();
+            ResolveConditionInspectionTarget();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -192,14 +198,17 @@ namespace Hanger51.EngineAssembly
             }
 
             ResolveRemovalController();
+            ResolveConditionInspectionTarget();
             DisableVisualColliders();
 
-            bool completed = station != null
-                && station.IsTargetComplete(interactionKind, groupIndex, targetIndex);
+            bool completed = IsComplete;
 
             if (interactionCollider != null)
             {
-                interactionCollider.enabled = CanInteract;
+                // Inspection must remain possible after a plug or cover has
+                // been removed. Keep only the existing small service target
+                // enabled; no broad inspection collider is needed.
+                interactionCollider.enabled = CanInteract || HasConditionInspection;
             }
 
             if (highlightRoot != null)
@@ -283,6 +292,15 @@ namespace Hanger51.EngineAssembly
             }
         }
 
+        private void ResolveConditionInspectionTarget()
+        {
+            if (conditionInspectionTarget == null)
+            {
+                conditionInspectionTarget =
+                    GetComponent<EngineConditionInspectionTarget>();
+            }
+        }
+
         private void DisableVisualColliders()
         {
             Collider[] colliders = GetComponentsInChildren<Collider>(true);
@@ -310,6 +328,7 @@ namespace Hanger51.EngineAssembly
             holdDuration = Mathf.Max(0.1f, holdDuration);
             animationLift = Mathf.Max(0f, animationLift);
             rotationTurns = Mathf.Max(0f, rotationTurns);
+            ResolveConditionInspectionTarget();
         }
     }
 }
