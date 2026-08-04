@@ -226,7 +226,7 @@ namespace Hanger51.EngineAssembly
                 ray,
                 interactionDistance,
                 interactionLayers,
-                QueryTriggerInteraction.Ignore);
+                QueryTriggerInteraction.Collide);
             Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
             return hits;
         }
