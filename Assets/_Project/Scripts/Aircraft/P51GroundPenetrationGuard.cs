@@ -148,6 +148,8 @@ namespace Hanger51.Aircraft
                 RaycastHit hit = hits[index];
                 Collider collider = hit.collider;
                 if (collider == null
+                    || collider.attachedRigidbody == aircraftBody
+                    || collider.transform == transform
                     || collider.transform.IsChildOf(transform)
                     || hit.normal.y < minimumGroundNormalUpDot)
                 {
