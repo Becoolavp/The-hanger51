@@ -7,13 +7,19 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Rigidbody))]
     public sealed class P51TurnPerformanceAssist : MonoBehaviour
     {
-        [Header("Turn Support")]
+        [Header("Turn Coordination")]
         [SerializeField, Min(1f)] private float minimumAssistSpeedMetersPerSecond = 20f;
         [SerializeField, Min(1f)] private float fullAssistSpeedMetersPerSecond = 34f;
-        [SerializeField, Range(0f, 1f)] private float bankLiftSupport = 0.62f;
-        [SerializeField, Min(0f)] private float maximumExtraLoadG = 0.85f;
-        [SerializeField, Min(0f)] private float coordinatedYawTorque = 18000f;
-        [SerializeField, Range(20f, 85f)] private float maximumAssistedBankDegrees = 70f;
+        [SerializeField, Min(0f)] private float coordinatedYawTorque = 15000f;
+        [SerializeField, Range(20f, 85f)] private float maximumAssistedBankDegrees = 75f;
+
+        [Header("Easy-Flight Lateral Damping")]
+        [SerializeField, Min(0f)] private float lateralSlipDamping = 2.8f;
+        [SerializeField, Min(0f)] private float maximumLateralCorrectionAcceleration = 18f;
+
+        [Header("Deprecated Lift Support")]
+        [SerializeField, Range(0f, 1f)] private float bankLiftSupport;
+        [SerializeField, Min(0f)] private float maximumExtraLoadG;
 
         private P51FlightController flightController;
         private Rigidbody aircraftBody;
@@ -23,6 +29,9 @@ namespace Hanger51.Aircraft
         public float BankLiftSupport => bankLiftSupport;
         public float MaximumExtraLoadG => maximumExtraLoadG;
         public float CoordinatedYawTorque => coordinatedYawTorque;
+        public float LateralSlipDamping => lateralSlipDamping;
+        public float MaximumLateralCorrectionAcceleration =>
+            maximumLateralCorrectionAcceleration;
 
         private void Awake()
         {
@@ -46,13 +55,30 @@ namespace Hanger51.Aircraft
             fullAssistSpeedMetersPerSecond = Mathf.Max(
                 minimumAssistSpeedMetersPerSecond + 1f,
                 configuredFullAssistSpeed);
-            bankLiftSupport = Mathf.Clamp01(configuredBankLiftSupport);
-            maximumExtraLoadG = Mathf.Max(0f, configuredMaximumExtraLoadG);
+
+            // The old implementation added extra lift every time the airplane
+            // banked. That could make a nose-down airplane climb. Keep these
+            // serialized fields for scene compatibility, but disable the lift
+            // bonus permanently. Steep-bank protection is handled separately
+            // by a descent-only limiter.
+            bankLiftSupport = 0f;
+            maximumExtraLoadG = 0f;
+
             coordinatedYawTorque = Mathf.Max(0f, configuredCoordinatedYawTorque);
             maximumAssistedBankDegrees = Mathf.Clamp(
                 configuredMaximumAssistedBankDegrees,
                 20f,
                 85f);
+        }
+
+        public void ConfigureEasyHandling(
+            float configuredLateralSlipDamping,
+            float configuredMaximumCorrectionAcceleration)
+        {
+            lateralSlipDamping = Mathf.Max(0f, configuredLateralSlipDamping);
+            maximumLateralCorrectionAcceleration = Mathf.Max(
+                0f,
+                configuredMaximumCorrectionAcceleration);
         }
 
         private void FixedUpdate()
@@ -84,46 +110,30 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            // Remove the sideways velocity that makes the aircraft feel as if
+            // it is sliding on ice. This is linear damping rather than a sudden
+            // velocity snap, so turns remain smooth and player-controlled.
+            float lateralAcceleration = Mathf.Clamp(
+                -localVelocity.x * lateralSlipDamping * speedFactor,
+                -maximumLateralCorrectionAcceleration,
+                maximumLateralCorrectionAcceleration);
+            aircraftBody.AddForce(
+                transform.right * lateralAcceleration,
+                ForceMode.Acceleration);
+
             float maximumBankSine = Mathf.Sin(
                 maximumAssistedBankDegrees * Mathf.Deg2Rad);
             float bankSine = Mathf.Clamp(
                 Vector3.Dot(transform.right, Vector3.up),
                 -maximumBankSine,
                 maximumBankSine);
-            float bankMagnitude = Mathf.Abs(bankSine);
-            if (bankMagnitude < 0.08f)
+            if (Mathf.Abs(bankSine) < 0.08f)
             {
                 return;
             }
 
-            float bankCosine = Mathf.Sqrt(
-                Mathf.Max(0.04f, 1f - bankSine * bankSine));
-            float requiredAdditionalLoadG = Mathf.Clamp(
-                1f / bankCosine - 1f,
-                0f,
-                maximumExtraLoadG);
-            float supportedLoadG = requiredAdditionalLoadG
-                * bankLiftSupport
-                * speedFactor;
-
-            Vector3 liftDirection = Vector3.ProjectOnPlane(
-                transform.up,
-                velocity.normalized);
-            if (liftDirection.sqrMagnitude > 0.001f)
-            {
-                liftDirection.Normalize();
-                aircraftBody.AddForce(
-                    liftDirection
-                    * aircraftBody.mass
-                    * Physics.gravity.magnitude
-                    * supportedLoadG,
-                    ForceMode.Force);
-            }
-
-            // A banked airplane needs a small yaw response to keep the nose
-            // following the turn. This reduces the large sideslip and energy
-            // loss produced by roll-only keyboard controls while preserving
-            // the player's responsibility to manage pitch and throttle.
+            // Roll-only keyboard input needs a mild yaw response so the nose
+            // follows the turn. No lift or altitude force is applied here.
             float yawTorque = -bankSine
                 * coordinatedYawTorque
                 * speedFactor;
@@ -153,13 +163,17 @@ namespace Hanger51.Aircraft
             fullAssistSpeedMetersPerSecond = Mathf.Max(
                 minimumAssistSpeedMetersPerSecond + 1f,
                 fullAssistSpeedMetersPerSecond);
-            bankLiftSupport = Mathf.Clamp01(bankLiftSupport);
-            maximumExtraLoadG = Mathf.Max(0f, maximumExtraLoadG);
+            bankLiftSupport = 0f;
+            maximumExtraLoadG = 0f;
             coordinatedYawTorque = Mathf.Max(0f, coordinatedYawTorque);
             maximumAssistedBankDegrees = Mathf.Clamp(
                 maximumAssistedBankDegrees,
                 20f,
                 85f);
+            lateralSlipDamping = Mathf.Max(0f, lateralSlipDamping);
+            maximumLateralCorrectionAcceleration = Mathf.Max(
+                0f,
+                maximumLateralCorrectionAcceleration);
         }
     }
 }
