@@ -177,9 +177,14 @@ namespace Hanger51.Commerce
                 yield return null;
             }
 
-            bool spawned = productKind == ShopProductKind.InventoryItem
+            GameObject deliveredContent = productKind == ShopProductKind.InventoryItem
                 ? SpawnInventoryDelivery()
                 : SpawnAssemblyDelivery();
+            bool spawned = deliveredContent != null;
+            if (spawned)
+            {
+                TransferSlotToDeliveredContent(deliveredContent);
+            }
 
             opening = false;
             opened = true;
@@ -192,20 +197,23 @@ namespace Hanger51.Commerce
 
             pendingStatusMessage = spawned
                 ? productKind == ShopProductKind.InventoryItem
-                    ? $"Unboxed {productName}. Pick up the delivered item from the shipment bay."
-                    : $"Unboxed {productName}. The complete assembly is ready for maintenance."
+                    ? $"Unboxed {productName}. Pick up the delivered item to clear this shipment bay."
+                    : $"Unboxed {productName}. The complete assembly is ready for maintenance; move it clear before reusing this bay."
                 : $"The {productName} shipment opened, but its contents could not be created.";
 
             yield return new WaitForSeconds(3f);
-            ReleaseShipmentSlot();
+            if (!spawned)
+            {
+                ReleaseShipmentSlot();
+            }
             Destroy(gameObject);
         }
 
-        private bool SpawnInventoryDelivery()
+        private GameObject SpawnInventoryDelivery()
         {
             if (inventoryItem == null)
             {
-                return false;
+                return null;
             }
 
             GameObject pickupObject;
@@ -240,14 +248,14 @@ namespace Hanger51.Commerce
             }
 
             AlignBottomToGround(pickupObject, contentWorldPosition.y);
-            return true;
+            return pickupObject;
         }
 
-        private bool SpawnAssemblyDelivery()
+        private GameObject SpawnAssemblyDelivery()
         {
             if (assemblyTemplate == null)
             {
-                return false;
+                return null;
             }
 
             GameObject assembly = Instantiate(assemblyTemplate);
@@ -262,14 +270,41 @@ namespace Hanger51.Commerce
             if (station == null)
             {
                 Destroy(assembly);
-                return false;
+                return null;
             }
 
-            station.SetAssemblyComplete();
+            if (!station.SetAssemblyComplete())
+            {
+                Destroy(assembly);
+                return null;
+            }
+
             EngineAssemblyTransportController transport =
                 station.GetComponent<EngineAssemblyTransportController>();
             transport?.SnapToStand();
-            return true;
+            return assembly;
+        }
+
+        private void TransferSlotToDeliveredContent(GameObject deliveredContent)
+        {
+            ShipmentDeliveryOccupancy occupancy =
+                deliveredContent.GetComponent<ShipmentDeliveryOccupancy>();
+            if (occupancy == null)
+            {
+                occupancy = deliveredContent.AddComponent<ShipmentDeliveryOccupancy>();
+            }
+
+            occupancy.Configure(
+                shipmentArea,
+                shipmentSlotIndex,
+                deliveredContent.transform.position,
+                3.5f);
+
+            if (shipmentArea != null
+                && shipmentArea.TransferSlot(shipmentSlotIndex, this, occupancy))
+            {
+                slotReleased = true;
+            }
         }
 
         private void UpdateShippingLabel()
