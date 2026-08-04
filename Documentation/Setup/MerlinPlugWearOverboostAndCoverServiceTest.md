@@ -31,6 +31,7 @@ Do not rerun Merlin Condition Steps 1, 5, or 7 afterward. If one of those older 
 - A cover is considered cracked at 35% condition.
 - An installed cracked cover automatically activates the existing power loss, rough running, visible crack, fire, and oil-leak behavior.
 - Removing a cracked cover stops its installed-engine fire and oil leak, but its recorded condition remains inspectable until a replacement is installed.
+- Engine-block inspection reports the exact accumulated 95%+ exposure beside the normal oil, block, and available-power values.
 
 ## Test normal plug wear
 
@@ -55,7 +56,7 @@ Purchase a new complete engine after running Step 9 so the repaired inactive tem
 2. Aim at either installed cover.
 3. Confirm its prompt includes `X` inspection.
 4. Press `X` and confirm the cover reports approximately 100% and `installed`.
-5. Remove both spark plugs associated with the bank being serviced.
+5. Remove every spark plug installed on the bank being serviced. Each bank has six cylinders and two plugs per cylinder, so this normally means twelve plugs.
 6. Loosen every bolt assigned to that cover by holding `R` on each bolt.
 7. Aim at the cover-placement/removal target.
 8. Confirm it shows both the `R` removal instruction and the `X` inspection instruction.
@@ -73,12 +74,13 @@ Purchase a new complete engine after running Step 9 so the repaired inactive tem
 2. Install it in the P-51.
 3. Start the engine.
 4. Hold at least 95% throttle continuously.
-5. Confirm no immediate cover failure occurs during the grace period.
-6. Continue high-power operation.
-7. Confirm one cover begins losing condition first.
-8. Continue until that cover reaches 35% or less.
-9. Confirm visible cracking, fire while running, oil leakage, rough running, and significant power loss.
-10. Reduce below approximately 92% throttle and confirm further exposure begins cooling rather than continuing to accumulate.
+5. Inspect the engine block with `X` and confirm the 95%+ exposure count is increasing.
+6. Confirm no immediate cover failure occurs during the grace period.
+7. Continue high-power operation.
+8. Confirm one cover begins losing condition first.
+9. Continue until that cover reaches 35% or less.
+10. Confirm visible cracking, fire while running, oil leakage, rough running, and significant power loss.
+11. Reduce below approximately 92% throttle and confirm the exposure count decreases instead of continuing to accumulate.
 
 A natural test can take several minutes because the failure is designed to result from sustained abuse rather than momentary full power.
 
