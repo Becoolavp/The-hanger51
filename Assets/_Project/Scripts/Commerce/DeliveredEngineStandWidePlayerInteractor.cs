@@ -103,15 +103,22 @@ namespace Hanger51.Commerce
                     continue;
                 }
 
+                // Ignore the station's broad invisible root collider. Visible
+                // child colliders on the actual rails, posts, braces, saddles,
+                // and casters remain selectable.
+                if (hitCollider.transform == target.transform)
+                {
+                    continue;
+                }
+
                 EngineAssemblyTransportController transport = target.EngineTransport;
                 Transform portableEngineRoot = transport != null
                     ? transport.TransportRoot
                     : null;
 
-                // A target on the station root makes every visible stand rail,
-                // post, brace, saddle, and caster selectable. Engine geometry is
-                // deliberately ignored so normal maintenance interactions win
-                // when the Player is aiming at the Merlin itself.
+                // Engine geometry is deliberately ignored so normal spark-plug,
+                // cover, block, and hoist interactions win when the Player is
+                // aiming at the Merlin rather than its holder.
                 if (portableEngineRoot != null
                     && hitCollider.transform.IsChildOf(portableEngineRoot))
                 {
