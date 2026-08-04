@@ -198,7 +198,7 @@ namespace Hanger51.Commerce
             pendingStatusMessage = spawned
                 ? productKind == ShopProductKind.InventoryItem
                     ? $"Unboxed {productName}. Pick up the delivered item to clear this shipment bay."
-                    : $"Unboxed {productName}. The complete assembly is ready for maintenance; move it clear before reusing this bay."
+                    : $"Unboxed {productName}. The stand was removed with the crate; the complete Merlin is ready on the floor."
                 : $"The {productName} shipment opened, but its contents could not be created.";
 
             yield return new WaitForSeconds(3f);
@@ -267,13 +267,7 @@ namespace Hanger51.Commerce
 
             EngineAssemblyStation station =
                 assembly.GetComponentInChildren<EngineAssemblyStation>(true);
-            if (station == null)
-            {
-                Destroy(assembly);
-                return null;
-            }
-
-            if (!station.SetAssemblyComplete())
+            if (station == null || !station.SetAssemblyComplete())
             {
                 Destroy(assembly);
                 return null;
@@ -281,8 +275,79 @@ namespace Hanger51.Commerce
 
             EngineAssemblyTransportController transport =
                 station.GetComponent<EngineAssemblyTransportController>();
-            transport?.SnapToStand();
-            return assembly;
+            if (transport == null
+                || transport.TransportRoot == null
+                || transport.GroundContactPoint == null)
+            {
+                Destroy(assembly);
+                return null;
+            }
+
+            HideDeliveredStand(station.transform, transport.TransportRoot);
+
+            Quaternion floorRotation = Quaternion.Euler(
+                0f,
+                contentWorldRotation.eulerAngles.y,
+                0f);
+            Vector3 rootPosition = transport.CalculateRootPositionForGroundContact(
+                contentWorldPosition + Vector3.up * 0.035f,
+                floorRotation);
+            transport.SetWorldPose(rootPosition, floorRotation);
+            transport.CompletePlacement(false);
+            transport.RefreshMaintenanceTargets();
+
+            // Shipment occupancy follows the actual portable engine rather than
+            // the invisible station owner. Moving the Merlin with the hoist will
+            // therefore free the receiving bay normally.
+            return transport.TransportRoot.gameObject;
+        }
+
+        private static void HideDeliveredStand(
+            Transform stationRoot,
+            Transform portableEngineRoot)
+        {
+            if (stationRoot == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = stationRoot.GetComponentsInChildren<Renderer>(true);
+            for (int index = 0; index < renderers.Length; index++)
+            {
+                Renderer renderer = renderers[index];
+                if (renderer == null
+                    || (portableEngineRoot != null
+                        && renderer.transform.IsChildOf(portableEngineRoot)))
+                {
+                    continue;
+                }
+
+                renderer.enabled = false;
+            }
+
+            Collider[] colliders = stationRoot.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
+            {
+                Collider collider = colliders[index];
+                if (collider == null
+                    || (portableEngineRoot != null
+                        && collider.transform.IsChildOf(portableEngineRoot)))
+                {
+                    continue;
+                }
+
+                collider.enabled = false;
+            }
+
+            DeliveredEngineStandDisposalTarget[] oldTargets =
+                stationRoot.GetComponentsInChildren<DeliveredEngineStandDisposalTarget>(true);
+            for (int index = 0; index < oldTargets.Length; index++)
+            {
+                if (oldTargets[index] != null)
+                {
+                    oldTargets[index].enabled = false;
+                }
+            }
         }
 
         private void TransferSlotToDeliveredContent(GameObject deliveredContent)
