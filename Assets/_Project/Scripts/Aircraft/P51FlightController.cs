@@ -209,23 +209,6 @@ namespace Hanger51.Aircraft
         public bool CanExitCockpit(out string reason)
         {
             reason = string.Empty;
-            if (!pilotPresent)
-            {
-                return true;
-            }
-
-            if (!grounded)
-            {
-                reason = "Land the aircraft before leaving the cockpit.";
-                return false;
-            }
-
-            if (GroundSpeedMetersPerSecond > 3.5f)
-            {
-                reason = "Slow below walking speed before leaving the cockpit.";
-                return false;
-            }
-
             return true;
         }
 
@@ -534,7 +517,7 @@ namespace Hanger51.Aircraft
                 + $"State: {flightState}\n\n"
                 + "T Start/Stop | Q Throttle + | Z Throttle -\n"
                 + "W Pitch Down | S Pitch Up | A/D Roll\n"
-                + "Space Wheel Brakes | E Exit when stopped";
+                + "Space Wheel Brakes | E Exit cockpit";
 
             GUI.Box(new Rect(18f, 18f, 355f, 205f), hud, hudStyle);
 
