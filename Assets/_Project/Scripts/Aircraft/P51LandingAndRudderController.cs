@@ -312,7 +312,7 @@ namespace Hanger51.Aircraft
             }
 
             GUI.Box(
-                new Rect(18f, 228f, 355f, 34f),
+                new Rect(18f, Screen.height - 54f, 300f, 34f),
                 "LEFT / RIGHT ARROWS: RUDDER",
                 rudderStyle);
         }
