@@ -22,21 +22,57 @@ namespace Hanger51.EngineAssembly
             inspectionCollider = configuredCollider;
             localPositionOffset = configuredLocalPositionOffset;
             localRotationOffset = configuredLocalRotationOffset;
+            SanitizeCollider();
             Snap();
         }
 
         private void Awake()
         {
-            if (inspectionCollider == null)
-            {
-                inspectionCollider = GetComponent<Collider>();
-            }
+            ResolveCollider();
+            SanitizeCollider();
+            Snap();
+        }
+
+        private void OnEnable()
+        {
+            ResolveCollider();
+            SanitizeCollider();
             Snap();
         }
 
         private void LateUpdate()
         {
             Snap();
+        }
+
+        private void ResolveCollider()
+        {
+            if (inspectionCollider == null)
+            {
+                inspectionCollider = GetComponent<Collider>();
+            }
+        }
+
+        private void SanitizeCollider()
+        {
+            ResolveCollider();
+            if (inspectionCollider == null)
+            {
+                return;
+            }
+
+            // Inspection volumes are raycast targets only. They must never be
+            // solid geometry that can block the Player, engine hoist, cowling,
+            // or maintenance tools.
+            inspectionCollider.isTrigger = true;
+
+            if (inspectionCollider is BoxCollider box)
+            {
+                box.size = new Vector3(
+                    Mathf.Clamp(box.size.x, 0.15f, 0.50f),
+                    Mathf.Clamp(box.size.y, 0.15f, 0.50f),
+                    Mathf.Clamp(box.size.z, 0.15f, 0.50f));
+            }
         }
 
         private void Snap()
@@ -57,6 +93,11 @@ namespace Hanger51.EngineAssembly
             {
                 inspectionCollider.enabled = visualToFollow.gameObject.activeInHierarchy;
             }
+        }
+
+        private void OnValidate()
+        {
+            SanitizeCollider();
         }
     }
 }
