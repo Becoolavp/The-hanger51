@@ -31,7 +31,7 @@ namespace Hanger51.EngineAssembly
                     case EngineConditionInspectionKind.EngineBlock:
                         return "X: inspect engine block condition";
                     case EngineConditionInspectionKind.CylinderCover:
-                        return $"X: inspect {(partIndex == 0 ? "left" : "right")} cylinder cover";
+                        return $"X: inspect {(partIndex == 0 ? "left" : "right")} cylinder cover condition";
                     case EngineConditionInspectionKind.SparkPlug:
                         return $"X: inspect cylinder {partIndex / 2 + 1} spark plug";
                     case EngineConditionInspectionKind.OilFiller:
@@ -63,12 +63,38 @@ namespace Hanger51.EngineAssembly
             {
                 case EngineConditionInspectionKind.EngineBlock:
                     return condition.GetBlockInspectionText();
+
                 case EngineConditionInspectionKind.CylinderCover:
-                    return condition.GetCoverInspectionText(partIndex);
+                {
+                    float health = condition.GetCoverHealth(partIndex);
+                    bool cracked = health <= 35f;
+                    EngineAssemblyInteractionTarget assemblyTarget =
+                        GetComponent<EngineAssemblyInteractionTarget>();
+                    string installation = assemblyTarget != null
+                        ? assemblyTarget.IsComplete ? "installed" : "removed"
+                        : "condition recorded";
+                    string side = partIndex == 0 ? "Left" : "Right";
+                    return $"{side} cylinder cover: {health:F1}% — "
+                        + $"{(cracked ? "CRACKED" : "intact")} — {installation}.";
+                }
+
                 case EngineConditionInspectionKind.SparkPlug:
-                    return condition.GetSparkPlugInspectionText(partIndex);
+                {
+                    float health = condition.GetSparkPlugHealth(partIndex);
+                    EngineAssemblyInteractionTarget assemblyTarget =
+                        GetComponent<EngineAssemblyInteractionTarget>();
+                    string installation = assemblyTarget != null
+                        ? assemblyTarget.IsComplete ? "installed" : "removed"
+                        : "condition recorded";
+                    int cylinder = partIndex / 2 + 1;
+                    string position = partIndex % 2 == 0 ? "A" : "B";
+                    return $"Cylinder {cylinder} plug {position}: "
+                        + $"{health:F2}% — {installation}.";
+                }
+
                 case EngineConditionInspectionKind.OilFiller:
                     return condition.GetOilReadingText();
+
                 default:
                     return string.Empty;
             }
@@ -76,25 +102,26 @@ namespace Hanger51.EngineAssembly
 
         private void Awake()
         {
-            if (condition == null)
+            ResolveCondition();
+        }
+
+        private void ResolveCondition()
+        {
+            if (condition != null)
             {
-                EngineConditionLink link = GetComponentInParent<EngineConditionLink>();
-                condition = link != null
-                    ? link.Condition
-                    : GetComponentInParent<EngineConditionController>();
+                return;
             }
+
+            EngineConditionLink link = GetComponentInParent<EngineConditionLink>();
+            condition = link != null
+                ? link.Condition
+                : GetComponentInParent<EngineConditionController>();
         }
 
         private void OnValidate()
         {
             partIndex = Mathf.Max(0, partIndex);
-            if (condition == null)
-            {
-                EngineConditionLink link = GetComponentInParent<EngineConditionLink>();
-                condition = link != null
-                    ? link.Condition
-                    : GetComponentInParent<EngineConditionController>();
-            }
+            ResolveCondition();
         }
     }
 }
