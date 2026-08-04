@@ -61,7 +61,6 @@ namespace Hanger51.EditorTools
                 }
 
                 Undo.RecordObject(text.transform, "Repair commerce label orientation");
-                Undo.RecordObject(text.GetComponent<Renderer>(), "Repair commerce label material");
 
                 if (text.name == "Shipment Receiving Sign"
                     || text.name == "Shipping Label Text")
@@ -72,6 +71,7 @@ namespace Hanger51.EditorTools
                 Renderer renderer = text.GetComponent<Renderer>();
                 if (renderer != null)
                 {
+                    Undo.RecordObject(renderer, "Repair commerce label material");
                     renderer.sharedMaterial = worldTextMaterial;
                     renderer.shadowCastingMode = ShadowCastingMode.Off;
                     renderer.receiveShadows = false;
