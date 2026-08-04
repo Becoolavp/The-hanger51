@@ -25,7 +25,8 @@ namespace Hanger51.Aircraft
         [Header("Touchdown Energy Absorption")]
         [SerializeField, Range(0.1f, 1f)] private float touchdownVerticalVelocityRetention = 0.42f;
         [SerializeField, Min(0f)] private float upwardReboundDamping = 10f;
-        [SerializeField, Min(0f)] private float rolloutAdhesionAcceleration = 3.4f;
+        [SerializeField, Min(0.05f)] private float touchdownDampingWindowSeconds = 0.65f;
+        [SerializeField, Min(0f)] private float rolloutAdhesionAcceleration = 0f;
         [SerializeField, Min(1f)] private float rolloutAdhesionFullSpeedMetersPerSecond = 42f;
         [SerializeField, Min(0f)] private float groundedPitchDamping = 24000f;
         [SerializeField, Min(0f)] private float groundedRollDamping = 15000f;
@@ -34,7 +35,8 @@ namespace Hanger51.Aircraft
         private P51FlightController flightController;
         private P51RaycastLandingGear landingGear;
         private Rigidbody aircraftBody;
-        private int previousGroundedWheelCount;
+        private int previousLoadedWheelCount;
+        private float lastTouchdownTime = float.NegativeInfinity;
         private float rudderInput;
         private GUIStyle rudderStyle;
 
@@ -52,8 +54,8 @@ namespace Hanger51.Aircraft
         private void OnEnable()
         {
             ResolveReferences();
-            previousGroundedWheelCount = landingGear != null
-                ? landingGear.GroundedWheelCount
+            previousLoadedWheelCount = landingGear != null
+                ? landingGear.LoadedWheelCount
                 : 0;
         }
 
@@ -74,7 +76,9 @@ namespace Hanger51.Aircraft
                 0.1f,
                 1f);
             upwardReboundDamping = Mathf.Max(0f, configuredReboundDamping);
-            rolloutAdhesionAcceleration = Mathf.Max(0f, configuredRolloutAdhesion);
+            // Kept for backward-compatible setup calls, but continuous
+            // downward adhesion is intentionally disabled.
+            rolloutAdhesionAcceleration = 0f;
             maximumDepenetrationVelocity = Mathf.Max(
                 0.5f,
                 configuredMaximumDepenetrationVelocity);
@@ -89,9 +93,6 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // The raycast gear applies its own body tuning earlier in the
-            // physics step. Reassert the lower value afterward so collider
-            // penetration correction cannot launch the airplane upward.
             aircraftBody.maxDepenetrationVelocity = maximumDepenetrationVelocity;
 
             if (flightController == null
@@ -100,8 +101,8 @@ namespace Hanger51.Aircraft
                 || !flightController.PilotPresent)
             {
                 rudderInput = 0f;
-                previousGroundedWheelCount = landingGear != null
-                    ? landingGear.GroundedWheelCount
+                previousLoadedWheelCount = landingGear != null
+                    ? landingGear.LoadedWheelCount
                     : 0;
                 return;
             }
@@ -110,7 +111,7 @@ namespace Hanger51.Aircraft
             ApplyRudderForces();
             ApplyLowPowerApproachDrag();
             ApplyTouchdownAndRolloutControl();
-            previousGroundedWheelCount = landingGear.GroundedWheelCount;
+            previousLoadedWheelCount = landingGear.LoadedWheelCount;
         }
 
         private void ReadRudderInput()
@@ -154,7 +155,7 @@ namespace Hanger51.Aircraft
                 Vector3.up * rudderInput * rudderTorque * authority,
                 ForceMode.Force);
 
-            if (!landingGear.AnyWheelGrounded)
+            if (!landingGear.AnyWheelLoaded)
             {
                 return;
             }
@@ -176,7 +177,7 @@ namespace Hanger51.Aircraft
 
         private void ApplyLowPowerApproachDrag()
         {
-            if (landingGear.AnyWheelGrounded
+            if (landingGear.AnyWheelLoaded
                 || flightController.Throttle >= lowPowerThrottleThreshold)
             {
                 return;
@@ -212,8 +213,8 @@ namespace Hanger51.Aircraft
 
         private void ApplyTouchdownAndRolloutControl()
         {
-            int groundedWheelCount = landingGear.GroundedWheelCount;
-            if (groundedWheelCount <= 0)
+            int loadedWheelCount = landingGear.LoadedWheelCount;
+            if (loadedWheelCount <= 0)
             {
                 return;
             }
@@ -221,10 +222,7 @@ namespace Hanger51.Aircraft
             Vector3 velocity = aircraftBody.linearVelocity;
             float verticalVelocity = Vector3.Dot(velocity, Vector3.up);
 
-            // Remove a controlled portion of the first downward impact energy.
-            // This represents tire and oleo compression and prevents the spring
-            // model from returning nearly all of that energy as a bounce.
-            if (previousGroundedWheelCount == 0 && verticalVelocity < -0.35f)
+            if (previousLoadedWheelCount == 0 && verticalVelocity < -0.35f)
             {
                 Vector3 horizontalVelocity = Vector3.ProjectOnPlane(
                     velocity,
@@ -233,40 +231,24 @@ namespace Hanger51.Aircraft
                     + Vector3.up
                     * verticalVelocity
                     * touchdownVerticalVelocityRetention;
+                lastTouchdownTime = Time.fixedTime;
                 velocity = aircraftBody.linearVelocity;
                 verticalVelocity = Vector3.Dot(velocity, Vector3.up);
             }
 
-            if (verticalVelocity > 0f)
+            bool insideTouchdownWindow =
+                Time.fixedTime - lastTouchdownTime <= touchdownDampingWindowSeconds;
+            if (insideTouchdownWindow
+                && verticalVelocity > 0f
+                && flightController.Throttle < 0.65f)
             {
                 aircraftBody.AddForce(
                     Vector3.down * verticalVelocity * upwardReboundDamping,
                     ForceMode.Acceleration);
             }
 
-            if (groundedWheelCount >= 2)
+            if (loadedWheelCount >= 2)
             {
-                float horizontalSpeed = Vector3.ProjectOnPlane(
-                    aircraftBody.linearVelocity,
-                    Vector3.up).magnitude;
-                float speedFactor = Mathf.InverseLerp(
-                    5f,
-                    rolloutAdhesionFullSpeedMetersPerSecond,
-                    horizontalSpeed);
-                float lowPowerFactor = 1f - Mathf.InverseLerp(
-                    0.20f,
-                    0.72f,
-                    flightController.Throttle);
-                float contactFactor = groundedWheelCount >= 3 ? 1f : 0.78f;
-
-                aircraftBody.AddForce(
-                    Vector3.down
-                    * rolloutAdhesionAcceleration
-                    * speedFactor
-                    * lowPowerFactor
-                    * contactFactor,
-                    ForceMode.Acceleration);
-
                 Vector3 localAngularVelocity = transform.InverseTransformDirection(
                     aircraftBody.angularVelocity);
                 aircraftBody.AddRelativeTorque(
@@ -345,9 +327,10 @@ namespace Hanger51.Aircraft
                 0.1f,
                 1f);
             upwardReboundDamping = Mathf.Max(0f, upwardReboundDamping);
-            rolloutAdhesionAcceleration = Mathf.Max(
-                0f,
-                rolloutAdhesionAcceleration);
+            touchdownDampingWindowSeconds = Mathf.Max(
+                0.05f,
+                touchdownDampingWindowSeconds);
+            rolloutAdhesionAcceleration = 0f;
             rolloutAdhesionFullSpeedMetersPerSecond = Mathf.Max(
                 1f,
                 rolloutAdhesionFullSpeedMetersPerSecond);
