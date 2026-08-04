@@ -9,12 +9,17 @@ namespace Hanger51.Aircraft
     public sealed class P51ExtremeBankLiftReserve : MonoBehaviour
     {
         [Header("Steep-Bank Envelope")]
-        [SerializeField, Range(35f, 80f)] private float supportBeginsDegrees = 58f;
-        [SerializeField, Range(60f, 89f)] private float fullSupportDegrees = 84f;
+        [SerializeField, Range(35f, 80f)] private float supportBeginsDegrees = 62f;
+        [SerializeField, Range(60f, 89f)] private float fullSupportDegrees = 86f;
         [SerializeField, Min(1f)] private float minimumSupportSpeedMetersPerSecond = 27f;
         [SerializeField, Min(1f)] private float fullSupportSpeedMetersPerSecond = 40f;
-        [SerializeField, Range(0f, 1f)] private float maximumVerticalGravitySupport = 0.70f;
-        [SerializeField, Min(0f)] private float extremeBankRollDamping = 9000f;
+        [SerializeField, Range(0f, 1f)] private float maximumVerticalGravitySupport = 0.48f;
+        [SerializeField, Min(0f)] private float extremeBankRollDamping = 11000f;
+
+        [Header("Descent-Only Protection")]
+        [SerializeField, Min(1f)] private float maximumAssistedDescentRateMetersPerSecond = 8.5f;
+        [SerializeField, Range(0.05f, 1f)] private float descentCorrectionFraction = 0.82f;
+        [SerializeField, Range(0f, 1f)] private float noseDownSupportMultiplier = 0.20f;
 
         private P51FlightController flightController;
         private Rigidbody aircraftBody;
@@ -22,6 +27,8 @@ namespace Hanger51.Aircraft
         public float SupportBeginsDegrees => supportBeginsDegrees;
         public float FullSupportDegrees => fullSupportDegrees;
         public float MaximumVerticalGravitySupport => maximumVerticalGravitySupport;
+        public float MaximumAssistedDescentRateMetersPerSecond =>
+            maximumAssistedDescentRateMetersPerSecond;
 
         private void Awake()
         {
@@ -54,6 +61,22 @@ namespace Hanger51.Aircraft
             extremeBankRollDamping = Mathf.Max(0f, configuredRollDamping);
         }
 
+        public void ConfigureDescentProtection(
+            float configuredMaximumDescentRate,
+            float configuredCorrectionFraction,
+            float configuredNoseDownSupportMultiplier)
+        {
+            maximumAssistedDescentRateMetersPerSecond = Mathf.Max(
+                1f,
+                configuredMaximumDescentRate);
+            descentCorrectionFraction = Mathf.Clamp(
+                configuredCorrectionFraction,
+                0.05f,
+                1f);
+            noseDownSupportMultiplier = Mathf.Clamp01(
+                configuredNoseDownSupportMultiplier);
+        }
+
         private void FixedUpdate()
         {
             ResolveReferences();
@@ -66,8 +89,8 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            Vector3 localVelocity = transform.InverseTransformDirection(
-                aircraftBody.linearVelocity);
+            Vector3 velocity = aircraftBody.linearVelocity;
+            Vector3 localVelocity = transform.InverseTransformDirection(velocity);
             float forwardSpeed = Mathf.Max(0f, localVelocity.z);
             float speedFactor = Mathf.InverseLerp(
                 minimumSupportSpeedMetersPerSecond,
@@ -93,17 +116,6 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // This is deliberately less than one gravity. A very steep bank
-            // still descends and loses energy, but it no longer loses every
-            // bit of vertical support in a single physics step.
-            float supportAcceleration = Physics.gravity.magnitude
-                * maximumVerticalGravitySupport
-                * bankFactor
-                * speedFactor;
-            aircraftBody.AddForce(
-                Vector3.up * supportAcceleration,
-                ForceMode.Acceleration);
-
             Vector3 localAngularVelocity = transform.InverseTransformDirection(
                 aircraftBody.angularVelocity);
             aircraftBody.AddRelativeTorque(
@@ -112,6 +124,43 @@ namespace Hanger51.Aircraft
                 * extremeBankRollDamping
                 * bankFactor,
                 ForceMode.Force);
+
+            float verticalSpeed = Vector3.Dot(velocity, Vector3.up);
+            float targetMinimumVerticalSpeed =
+                -maximumAssistedDescentRateMetersPerSecond;
+
+            // Never add altitude during a level or climbing turn. Assistance
+            // begins only after the airplane is already descending faster than
+            // the configured easy-flight limit.
+            if (verticalSpeed >= targetMinimumVerticalSpeed)
+            {
+                return;
+            }
+
+            float requiredAcceleration =
+                (targetMinimumVerticalSpeed - verticalSpeed)
+                / Mathf.Max(0.001f, Time.fixedDeltaTime)
+                * descentCorrectionFraction;
+
+            float noseVertical = Vector3.Dot(transform.forward, Vector3.up);
+            float pitchFactor = Mathf.Lerp(
+                noseDownSupportMultiplier,
+                1f,
+                Mathf.InverseLerp(-0.30f, 0.05f, noseVertical));
+
+            float maximumSupportAcceleration = Physics.gravity.magnitude
+                * maximumVerticalGravitySupport
+                * bankFactor
+                * speedFactor
+                * pitchFactor;
+            float appliedAcceleration = Mathf.Clamp(
+                requiredAcceleration,
+                0f,
+                maximumSupportAcceleration);
+
+            aircraftBody.AddForce(
+                Vector3.up * appliedAcceleration,
+                ForceMode.Acceleration);
         }
 
         private void ResolveReferences()
@@ -142,6 +191,15 @@ namespace Hanger51.Aircraft
             maximumVerticalGravitySupport = Mathf.Clamp01(
                 maximumVerticalGravitySupport);
             extremeBankRollDamping = Mathf.Max(0f, extremeBankRollDamping);
+            maximumAssistedDescentRateMetersPerSecond = Mathf.Max(
+                1f,
+                maximumAssistedDescentRateMetersPerSecond);
+            descentCorrectionFraction = Mathf.Clamp(
+                descentCorrectionFraction,
+                0.05f,
+                1f);
+            noseDownSupportMultiplier = Mathf.Clamp01(
+                noseDownSupportMultiplier);
         }
     }
 }
