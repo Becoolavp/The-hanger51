@@ -76,6 +76,7 @@ namespace Hanger51.Aircraft
                 Collider collider = hit.collider;
                 if (collider == null
                     || collider.transform.IsChildOf(transform)
+                    || collider.transform.IsChildOf(playerInteractor.transform)
                     || hit.normal.y < 0.45f
                     || hit.distance >= nearestDistance)
                 {
