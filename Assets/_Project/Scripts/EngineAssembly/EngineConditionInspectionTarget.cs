@@ -62,7 +62,18 @@ namespace Hanger51.EngineAssembly
             switch (inspectionKind)
             {
                 case EngineConditionInspectionKind.EngineBlock:
-                    return condition.GetBlockInspectionText();
+                {
+                    string result = condition.GetBlockInspectionText();
+                    EngineWearAndOverboostController wear =
+                        condition.GetComponent<EngineWearAndOverboostController>();
+                    if (wear != null)
+                    {
+                        result += $" | 95%+ exposure: "
+                            + $"{wear.OverboostExposureSeconds:F0}/"
+                            + $"{wear.OverboostGraceSeconds:F0} s";
+                    }
+                    return result;
+                }
 
                 case EngineConditionInspectionKind.CylinderCover:
                 {
