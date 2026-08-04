@@ -6,6 +6,7 @@ namespace Hanger51.EngineAssembly
     {
         EngineBlock,
         CylinderCover,
+        SparkPlug,
         OilFiller
     }
 
@@ -31,6 +32,8 @@ namespace Hanger51.EngineAssembly
                         return "X: inspect engine block condition";
                     case EngineConditionInspectionKind.CylinderCover:
                         return $"X: inspect {(partIndex == 0 ? "left" : "right")} cylinder cover";
+                    case EngineConditionInspectionKind.SparkPlug:
+                        return $"X: inspect cylinder {partIndex / 2 + 1} spark plug";
                     case EngineConditionInspectionKind.OilFiller:
                         return "Oil filler neck";
                     default:
@@ -62,6 +65,8 @@ namespace Hanger51.EngineAssembly
                     return condition.GetBlockInspectionText();
                 case EngineConditionInspectionKind.CylinderCover:
                     return condition.GetCoverInspectionText(partIndex);
+                case EngineConditionInspectionKind.SparkPlug:
+                    return condition.GetSparkPlugInspectionText(partIndex);
                 case EngineConditionInspectionKind.OilFiller:
                     return condition.GetOilReadingText();
                 default:
@@ -73,7 +78,10 @@ namespace Hanger51.EngineAssembly
         {
             if (condition == null)
             {
-                condition = GetComponentInParent<EngineConditionController>();
+                EngineConditionLink link = GetComponentInParent<EngineConditionLink>();
+                condition = link != null
+                    ? link.Condition
+                    : GetComponentInParent<EngineConditionController>();
             }
         }
 
@@ -82,7 +90,10 @@ namespace Hanger51.EngineAssembly
             partIndex = Mathf.Max(0, partIndex);
             if (condition == null)
             {
-                condition = GetComponentInParent<EngineConditionController>();
+                EngineConditionLink link = GetComponentInParent<EngineConditionLink>();
+                condition = link != null
+                    ? link.Condition
+                    : GetComponentInParent<EngineConditionController>();
             }
         }
     }
