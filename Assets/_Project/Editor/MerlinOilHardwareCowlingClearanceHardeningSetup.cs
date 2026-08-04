@@ -8,6 +8,11 @@ namespace Hanger51.EditorTools
 {
     public static class MerlinOilHardwareCowlingClearanceHardeningSetup
     {
+        private static readonly Vector3 DipstickColliderSize =
+            new Vector3(0.16f, 0.30f, 0.16f);
+        private static readonly Vector3 FillerColliderSize =
+            new Vector3(0.18f, 0.16f, 0.18f);
+
         [MenuItem("Hanger 51/Merlin Condition/14 - Force Final Oil Hardware Cowling Clearance")]
         public static void ForceFinalOilHardwareCowlingClearance()
         {
@@ -39,13 +44,15 @@ namespace Hanger51.EditorTools
             for (int index = 0; index < conditions.Length; index++)
             {
                 EngineConditionController condition = conditions[index];
-                if (condition != null && AdjustCondition(condition))
+                if (condition == null || !AdjustCondition(condition))
                 {
-                    adjusted++;
-                    if (selected == null && condition.gameObject.activeInHierarchy)
-                    {
-                        selected = condition.gameObject;
-                    }
+                    continue;
+                }
+
+                adjusted++;
+                if (selected == null && condition.gameObject.activeInHierarchy)
+                {
+                    selected = condition.gameObject;
                 }
             }
 
@@ -87,7 +94,6 @@ namespace Hanger51.EditorTools
                 Object.FindObjectsByType<EngineConditionController>(
                     FindObjectsInactive.Include,
                     FindObjectsSortMode.None);
-
             if (conditions.Length == 0)
             {
                 Debug.LogError("Merlin Condition Step 15 failed: no engine condition systems exist.");
@@ -96,10 +102,9 @@ namespace Hanger51.EditorTools
 
             for (int index = 0; index < conditions.Length; index++)
             {
-                EngineConditionController condition = conditions[index];
-                if (condition != null)
+                if (conditions[index] != null)
                 {
-                    ValidateCondition(condition, ref passed);
+                    ValidateCondition(conditions[index], ref passed);
                 }
             }
 
@@ -118,28 +123,16 @@ namespace Hanger51.EditorTools
 
         private static bool AdjustCondition(EngineConditionController condition)
         {
-            EngineAssemblyStation station = condition.GetComponent<EngineAssemblyStation>();
-            EngineAssemblyTransportController transport =
-                condition.GetComponent<EngineAssemblyTransportController>();
-            if (station == null || transport == null || transport.TransportRoot == null)
+            if (!TryGetHardware(
+                    condition,
+                    out EngineAssemblyStation station,
+                    out EngineAssemblyTransportController transport,
+                    out GameObject engineCore,
+                    out EngineDipstickController dipstick,
+                    out EngineConditionInspectionTarget filler))
             {
                 Debug.LogWarning(
-                    $"Skipped '{condition.name}' because its station or portable root is incomplete.",
-                    condition);
-                return false;
-            }
-
-            SerializedObject serializedStation = new SerializedObject(station);
-            GameObject engineCore = GetObject<GameObject>(
-                serializedStation,
-                "engineCoreVisual");
-            EngineDipstickController dipstick =
-                transport.TransportRoot.GetComponentInChildren<EngineDipstickController>(true);
-            EngineConditionInspectionTarget filler = FindOilFiller(transport.TransportRoot);
-            if (engineCore == null || dipstick == null || filler == null)
-            {
-                Debug.LogWarning(
-                    $"Skipped '{condition.name}' because its engine block, dipstick, or oil filler is missing.",
+                    $"Skipped '{condition.name}' because its station, engine block, dipstick, or oil filler is incomplete.",
                     condition);
                 return false;
             }
@@ -154,15 +147,15 @@ namespace Hanger51.EditorTools
                 -bounds.extents.x * 0.72f,
                 bounds.extents.y * 0.40f,
                 -bounds.extents.z * 0.18f);
-            dipstick.transform.position = engineCore.transform.TransformPoint(dipstickLocal);
-            dipstick.transform.rotation = engineCore.transform.rotation;
-
-            SetPartTransform(
+            dipstick.transform.SetPositionAndRotation(
+                engineCore.transform.TransformPoint(dipstickLocal),
+                engineCore.transform.rotation);
+            SetPart(
                 dipstick.transform,
                 "Yellow Dipstick Handle",
                 new Vector3(0f, 0.025f, 0f),
                 new Vector3(0.052f, 0.013f, 0.052f));
-            SetPartTransform(
+            SetPart(
                 dipstick.transform,
                 "Dipstick Handle Center",
                 new Vector3(0f, 0.025f, 0f),
@@ -170,31 +163,31 @@ namespace Hanger51.EditorTools
             EnsureSingleBoxTrigger(
                 dipstick.gameObject,
                 new Vector3(0f, -0.065f, 0f),
-                new Vector3(0.16f, 0.30f, 0.16f));
+                DipstickColliderSize);
 
             Vector3 fillerLocal = bounds.center + new Vector3(
                 bounds.extents.x * 0.62f,
                 bounds.extents.y * 0.38f,
                 -bounds.extents.z * 0.10f);
-            filler.transform.position = engineCore.transform.TransformPoint(fillerLocal);
-            filler.transform.rotation = engineCore.transform.rotation;
-
-            SetPartTransform(
+            filler.transform.SetPositionAndRotation(
+                engineCore.transform.TransformPoint(fillerLocal),
+                engineCore.transform.rotation);
+            SetPart(
                 filler.transform,
                 "Oil Filler Neck",
                 Vector3.zero,
                 new Vector3(0.048f, 0.048f, 0.048f));
-            SetPartTransform(
+            SetPart(
                 filler.transform,
                 "Yellow Oil Filler Cap",
                 new Vector3(0f, 0.042f, 0f),
                 new Vector3(0.062f, 0.018f, 0.062f));
-            SetPartTransform(
+            SetPart(
                 filler.transform,
                 "Oil Cap Grip Bar 1",
                 new Vector3(0f, 0.067f, 0f),
                 new Vector3(0.080f, 0.014f, 0.022f));
-            SetPartTransform(
+            SetPart(
                 filler.transform,
                 "Oil Cap Grip Bar 2",
                 new Vector3(0f, 0.067f, 0f),
@@ -202,7 +195,7 @@ namespace Hanger51.EditorTools
             EnsureSingleBoxTrigger(
                 filler.gameObject,
                 new Vector3(0f, 0.005f, 0f),
-                new Vector3(0.18f, 0.16f, 0.18f));
+                FillerColliderSize);
 
             EditorUtility.SetDirty(dipstick);
             EditorUtility.SetDirty(filler);
@@ -217,29 +210,25 @@ namespace Hanger51.EditorTools
             Vector3 center,
             Vector3 size)
         {
-            Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
+            // Add the required replacement first. EngineConditionInspectionTarget
+            // requires a Collider, so deleting an unexpected old collider before
+            // the replacement exists can be rejected by Unity.
             BoxCollider rootBox = root.GetComponent<BoxCollider>();
+            if (rootBox == null)
+            {
+                rootBox = Undo.AddComponent<BoxCollider>(root);
+            }
 
+            Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
             for (int index = colliders.Length - 1; index >= 0; index--)
             {
                 Collider collider = colliders[index];
-                if (collider == null)
-                {
-                    continue;
-                }
-
-                if (collider.gameObject == root
-                    && collider == rootBox)
+                if (collider == null || collider == rootBox)
                 {
                     continue;
                 }
 
                 Undo.DestroyObjectImmediate(collider);
-            }
-
-            if (rootBox == null)
-            {
-                rootBox = Undo.AddComponent<BoxCollider>(root);
             }
 
             rootBox.isTrigger = true;
@@ -253,29 +242,16 @@ namespace Hanger51.EditorTools
             EngineConditionController condition,
             ref bool passed)
         {
-            EngineAssemblyStation station = condition.GetComponent<EngineAssemblyStation>();
-            EngineAssemblyTransportController transport =
-                condition.GetComponent<EngineAssemblyTransportController>();
-            if (station == null || transport == null || transport.TransportRoot == null)
+            if (!TryGetHardware(
+                    condition,
+                    out _,
+                    out _,
+                    out GameObject engineCore,
+                    out EngineDipstickController dipstick,
+                    out EngineConditionInspectionTarget filler))
             {
                 Debug.LogError(
-                    $"Merlin Condition Step 15 failed: '{condition.name}' has no valid station or portable root.",
-                    condition);
-                passed = false;
-                return;
-            }
-
-            SerializedObject serializedStation = new SerializedObject(station);
-            GameObject engineCore = GetObject<GameObject>(
-                serializedStation,
-                "engineCoreVisual");
-            EngineDipstickController dipstick =
-                transport.TransportRoot.GetComponentInChildren<EngineDipstickController>(true);
-            EngineConditionInspectionTarget filler = FindOilFiller(transport.TransportRoot);
-            if (engineCore == null || dipstick == null || filler == null)
-            {
-                Debug.LogError(
-                    $"Merlin Condition Step 15 failed: '{condition.name}' is missing its engine block, dipstick, or oil filler.",
+                    $"Merlin Condition Step 15 failed: '{condition.name}' is missing its station, engine block, dipstick, or oil filler.",
                     condition);
                 passed = false;
                 return;
@@ -286,7 +262,8 @@ namespace Hanger51.EditorTools
                 engineCore.GetComponentsInChildren<Renderer>(true),
                 dipstick.transform,
                 filler.transform);
-            float allowedVisualTop = coreBounds.center.y + coreBounds.extents.y * 0.72f;
+            float allowedVisualTop =
+                coreBounds.center.y + coreBounds.extents.y * 0.72f;
             float dipstickVisualTop = CalculateRenderedLocalTop(
                 engineCore.transform,
                 dipstick.transform.GetComponentsInChildren<Renderer>(true));
@@ -309,37 +286,72 @@ namespace Hanger51.EditorTools
             bool capValid = cap != null
                 && Mathf.Abs(cap.localScale.x) <= 0.065f
                 && Mathf.Abs(cap.localScale.z) <= 0.065f;
-            bool dipstickHeightValid = dipstickVisualTop <= allowedVisualTop + 0.001f;
-            bool fillerHeightValid = fillerVisualTop <= allowedVisualTop + 0.001f;
-            bool dipstickColliderValid = ValidateExactTrigger(
+            bool dipstickHeightValid =
+                dipstickVisualTop <= allowedVisualTop + 0.001f;
+            bool fillerHeightValid =
+                fillerVisualTop <= allowedVisualTop + 0.001f;
+            bool dipstickTriggerValid = ValidateExactTrigger(
                 dipstickCollider,
-                new Vector3(0.16f, 0.30f, 0.16f));
-            bool fillerColliderValid = ValidateExactTrigger(
+                DipstickColliderSize);
+            bool fillerTriggerValid = ValidateExactTrigger(
                 fillerCollider,
-                new Vector3(0.18f, 0.16f, 0.18f));
-            bool noDipstickChildColliders = HasOnlyRootCollider(dipstick.transform);
-            bool noFillerChildColliders = HasOnlyRootCollider(filler.transform);
+                FillerColliderSize);
+            bool dipstickColliderTreeValid = HasOnlyRootTrigger(dipstick.transform);
+            bool fillerColliderTreeValid = HasOnlyRootTrigger(filler.transform);
 
             if (handleValid
                 && capValid
                 && dipstickHeightValid
                 && fillerHeightValid
-                && dipstickColliderValid
-                && fillerColliderValid
-                && noDipstickChildColliders
-                && noFillerChildColliders)
+                && dipstickTriggerValid
+                && fillerTriggerValid
+                && dipstickColliderTreeValid
+                && fillerColliderTreeValid)
             {
                 return;
             }
 
             Debug.LogError(
                 $"Merlin Condition Step 15 failed for '{condition.name}'. "
-                + $"Handle valid={handleValid}; cap valid={capValid}; "
-                + $"dipstick visual top={dipstickVisualTop:F4}, filler visual top={fillerVisualTop:F4}, allowed top={allowedVisualTop:F4}; "
-                + $"dipstick trigger valid={dipstickColliderValid}, filler trigger valid={fillerColliderValid}; "
-                + $"dipstick child colliders clear={noDipstickChildColliders}, filler child colliders clear={noFillerChildColliders}.",
+                + $"handle={handleValid}; cap={capValid}; "
+                + $"dipstickTop={dipstickVisualTop:F4}; fillerTop={fillerVisualTop:F4}; allowedTop={allowedVisualTop:F4}; "
+                + $"dipstickTrigger={dipstickTriggerValid}; fillerTrigger={fillerTriggerValid}; "
+                + $"dipstickColliderTree={dipstickColliderTreeValid}; fillerColliderTree={fillerColliderTreeValid}.",
                 condition);
             passed = false;
+        }
+
+        private static bool TryGetHardware(
+            EngineConditionController condition,
+            out EngineAssemblyStation station,
+            out EngineAssemblyTransportController transport,
+            out GameObject engineCore,
+            out EngineDipstickController dipstick,
+            out EngineConditionInspectionTarget filler)
+        {
+            station = condition != null
+                ? condition.GetComponent<EngineAssemblyStation>()
+                : null;
+            transport = condition != null
+                ? condition.GetComponent<EngineAssemblyTransportController>()
+                : null;
+            engineCore = null;
+            dipstick = null;
+            filler = null;
+
+            if (station == null || transport == null || transport.TransportRoot == null)
+            {
+                return false;
+            }
+
+            SerializedObject serializedStation = new SerializedObject(station);
+            engineCore = GetObject<GameObject>(
+                serializedStation,
+                "engineCoreVisual");
+            dipstick = transport.TransportRoot
+                .GetComponentInChildren<EngineDipstickController>(true);
+            filler = FindOilFiller(transport.TransportRoot);
+            return engineCore != null && dipstick != null && filler != null;
         }
 
         private static bool ValidateExactTrigger(
@@ -354,12 +366,13 @@ namespace Hanger51.EditorTools
                 && Approximately(collider.size.z, expectedSize.z);
         }
 
-        private static bool HasOnlyRootCollider(Transform root)
+        private static bool HasOnlyRootTrigger(Transform root)
         {
             Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
             return colliders.Length == 1
                 && colliders[0] != null
                 && colliders[0].transform == root
+                && colliders[0].enabled
                 && colliders[0].isTrigger;
         }
 
@@ -385,7 +398,7 @@ namespace Hanger51.EditorTools
             return null;
         }
 
-        private static void SetPartTransform(
+        private static void SetPart(
             Transform root,
             string name,
             Vector3 localPosition,
@@ -434,7 +447,11 @@ namespace Hanger51.EditorTools
                     continue;
                 }
 
-                EncapsulateRendererBounds(engineCore, renderer, ref result, ref initialized);
+                EncapsulateRendererBounds(
+                    engineCore,
+                    renderer,
+                    ref result,
+                    ref initialized);
             }
 
             if (!initialized || result.size.sqrMagnitude < 0.01f)
@@ -458,8 +475,6 @@ namespace Hanger51.EditorTools
                 }
 
                 Bounds world = renderer.bounds;
-                Vector3 min = world.min;
-                Vector3 max = world.max;
                 for (int x = 0; x <= 1; x++)
                 {
                     for (int y = 0; y <= 1; y++)
@@ -467,17 +482,16 @@ namespace Hanger51.EditorTools
                         for (int z = 0; z <= 1; z++)
                         {
                             Vector3 local = engineCore.InverseTransformPoint(
-                                new Vector3(
-                                    x == 0 ? min.x : max.x,
-                                    y == 0 ? min.y : max.y,
-                                    z == 0 ? min.z : max.z));
+                                SelectCorner(world, x, y, z));
                             top = Mathf.Max(top, local.y);
                         }
                     }
                 }
             }
 
-            return float.IsNegativeInfinity(top) ? float.PositiveInfinity : top;
+            return float.IsNegativeInfinity(top)
+                ? float.PositiveInfinity
+                : top;
         }
 
         private static void EncapsulateRendererBounds(
@@ -487,8 +501,6 @@ namespace Hanger51.EditorTools
             ref bool initialized)
         {
             Bounds world = renderer.bounds;
-            Vector3 min = world.min;
-            Vector3 max = world.max;
             for (int x = 0; x <= 1; x++)
             {
                 for (int y = 0; y <= 1; y++)
@@ -496,10 +508,7 @@ namespace Hanger51.EditorTools
                     for (int z = 0; z <= 1; z++)
                     {
                         Vector3 local = root.InverseTransformPoint(
-                            new Vector3(
-                                x == 0 ? min.x : max.x,
-                                y == 0 ? min.y : max.y,
-                                z == 0 ? min.z : max.z));
+                            SelectCorner(world, x, y, z));
                         if (!initialized)
                         {
                             result = new Bounds(local, Vector3.zero);
@@ -512,6 +521,14 @@ namespace Hanger51.EditorTools
                     }
                 }
             }
+        }
+
+        private static Vector3 SelectCorner(Bounds bounds, int x, int y, int z)
+        {
+            return new Vector3(
+                x == 0 ? bounds.min.x : bounds.max.x,
+                y == 0 ? bounds.min.y : bounds.max.y,
+                z == 0 ? bounds.min.z : bounds.max.z);
         }
 
         private static T GetObject<T>(
