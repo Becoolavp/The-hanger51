@@ -159,41 +159,24 @@ namespace Hanger51.EngineAssembly
                     collider.GetComponentInParent<EngineConditionInspectionTarget>();
                 if (inspection != null)
                 {
-                    string prompt = inspection.InspectionKind
+                    string inspectPrompt = inspection.InspectionKind
                         == EngineConditionInspectionKind.OilFiller
                             ? "X: inspect oil quantity | Carry an open oil can here to refill"
                             : inspection.InspectionPrompt;
-                    SetPrompt(prompt);
+
+                    EngineAssemblyInteractionTarget maintenanceTarget =
+                        collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
+                    string maintenancePrompt = maintenanceTarget != null
+                        ? maintenanceTarget.InteractionText
+                        : string.Empty;
+                    SetPrompt(string.IsNullOrWhiteSpace(maintenancePrompt)
+                        ? inspectPrompt
+                        : $"{maintenancePrompt} | {inspectPrompt}");
+
                     if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
                     {
                         inventoryUI.ShowStatusMessage(
                             inspection.GetInspectionText(),
-                            5f);
-                    }
-                    return;
-                }
-
-                EngineAssemblyInteractionTarget engineTarget =
-                    collider.GetComponentInParent<EngineAssemblyInteractionTarget>();
-                if (engineTarget != null
-                    && engineTarget.InteractionKind == EngineAssemblyInteractionKind.SparkPlug)
-                {
-                    EngineConditionController condition =
-                        engineTarget.GetComponentInParent<EngineConditionController>();
-                    if (condition == null)
-                    {
-                        continue;
-                    }
-
-                    string existing = engineTarget.InteractionText;
-                    string inspect = $"X: inspect cylinder {engineTarget.TargetIndex / 2 + 1} spark plug";
-                    SetPrompt(string.IsNullOrWhiteSpace(existing)
-                        ? inspect
-                        : $"{existing} | {inspect}");
-                    if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
-                    {
-                        inventoryUI.ShowStatusMessage(
-                            condition.GetSparkPlugInspectionText(engineTarget.TargetIndex),
                             5f);
                     }
                     return;
