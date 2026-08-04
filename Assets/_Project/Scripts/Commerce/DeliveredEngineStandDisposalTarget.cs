@@ -200,6 +200,16 @@ namespace Hanger51.Commerce
                 collider.enabled = false;
             }
 
+            ShipmentDeliveryOccupancy occupancy =
+                stationRoot.GetComponent<ShipmentDeliveryOccupancy>();
+            if (occupancy != null)
+            {
+                // Removing the holder is the point at which this delivered
+                // assembly has been cleared from receiving. Destroying the
+                // occupancy component releases its reserved shipment bay.
+                Destroy(occupancy);
+            }
+
             // Keep the invisible station/controller root alive because the
             // portable engine's assembly state still belongs to it. Moving the
             // saved stand pose far below the world prevents the hoist from
