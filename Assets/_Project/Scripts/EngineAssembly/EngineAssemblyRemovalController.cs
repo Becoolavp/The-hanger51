@@ -15,6 +15,8 @@ namespace Hanger51.EngineAssembly
             BindingFlags.Instance | BindingFlags.NonPublic;
 
         private EngineAssemblyStation station;
+        private EngineAssemblyTransportController transport;
+
         private FieldInfo engineBlockItemField;
         private FieldInfo cylinderCoverItemField;
         private FieldInfo sparkPlugItemField;
@@ -22,6 +24,9 @@ namespace Hanger51.EngineAssembly
         private FieldInfo coverPlacedField;
         private FieldInfo coverBoltsTightenedField;
         private FieldInfo sparkPlugInstalledField;
+        private FieldInfo coverPlacementTargetsField;
+        private FieldInfo coverBoltTargetsField;
+        private FieldInfo sparkPlugTargetsField;
         private MethodInfo ensureStateListsMethod;
         private MethodInfo refreshVisualsMethod;
 
@@ -30,11 +35,16 @@ namespace Hanger51.EngineAssembly
 
         public bool IsReady { get; private set; }
         public float EngineRemovalProgress => engineRemovalProgress;
+
         public bool CanRemoveEngineBlock
         {
             get
             {
-                if (!TryGetState(out bool engineInstalled, out List<bool> covers, out _, out _))
+                if (!TryGetState(
+                        out bool engineInstalled,
+                        out List<bool> covers,
+                        out _,
+                        out _))
                 {
                     return false;
                 }
@@ -73,6 +83,24 @@ namespace Hanger51.EngineAssembly
         {
             ResolveReflection(false);
             return IsReady;
+        }
+
+        public bool TryGetConfiguredTargetCounts(
+            out int coverCount,
+            out int boltCount,
+            out int plugCount)
+        {
+            ResolveComponents();
+            coverCount = GetRegisteredTargets(
+                coverPlacementTargetsField,
+                EngineAssemblyInteractionKind.CoverPlacement).Count;
+            boltCount = GetRegisteredTargets(
+                coverBoltTargetsField,
+                EngineAssemblyInteractionKind.CoverBolt).Count;
+            plugCount = GetRegisteredTargets(
+                sparkPlugTargetsField,
+                EngineAssemblyInteractionKind.SparkPlug).Count;
+            return coverCount > 0 || boltCount > 0 || plugCount > 0;
         }
 
         public bool CanRemoveTarget(
@@ -126,7 +154,7 @@ namespace Hanger51.EngineAssembly
                     out List<bool> bolts,
                     out List<bool> plugs))
             {
-                return "Cover removal state is not ready. Re-run the latest cover-removal repair step.";
+                return "Cover removal state is not ready. Re-run the latest mounted-engine cover repair.";
             }
 
             if (!engineInstalled || !IsTrue(covers, groupIndex))
@@ -135,12 +163,15 @@ namespace Hanger51.EngineAssembly
             }
 
             int installedPlugs = CountInstalledSparkPlugsOnBank(groupIndex, plugs);
-            int tightenedBolts = CountTightenedBoltsOnBank(groupIndex, bolts, out bool foundBolts);
+            int tightenedBolts = CountTightenedBoltsOnBank(
+                groupIndex,
+                bolts,
+                out bool foundBolts);
             string bankName = groupIndex == 0 ? "left" : "right";
 
             if (!foundBolts)
             {
-                return $"The {bankName} cover has no configured bolt targets. Run Merlin Condition Step 20.";
+                return $"The {bankName} cover target registry is incomplete. Run Merlin Condition Step 22 outside Play mode.";
             }
 
             if (installedPlugs <= 0 && tightenedBolts <= 0)
@@ -149,10 +180,10 @@ namespace Hanger51.EngineAssembly
             }
 
             string plugText = installedPlugs > 0
-                ? $"remove {installedPlugs} remaining spark plug{(installedPlugs == 1 ? string.Empty : "s")}" 
+                ? $"remove {installedPlugs} remaining spark plug{(installedPlugs == 1 ? string.Empty : "s")}"
                 : string.Empty;
             string boltText = tightenedBolts > 0
-                ? $"loosen {tightenedBolts} remaining cover bolt{(tightenedBolts == 1 ? string.Empty : "s")}" 
+                ? $"loosen {tightenedBolts} remaining cover bolt{(tightenedBolts == 1 ? string.Empty : "s")}"
                 : string.Empty;
 
             if (!string.IsNullOrWhiteSpace(plugText)
@@ -268,7 +299,7 @@ namespace Hanger51.EngineAssembly
                     covers[groupIndex] = false;
                     string side = groupIndex == 0 ? "left" : "right";
                     resultMessage = dropped
-                        ? $"Removed the {side} cylinder cover and dropped it beside the engine because inventory was full. The bank target still records its condition for inspection."
+                        ? $"Removed the {side} cylinder cover and dropped it beside the mounted engine because inventory was full. The bank target still records its condition for inspection."
                         : $"Removed the {side} cylinder cover and returned it to inventory. The bank target still records its condition for inspection.";
                     break;
                 }
@@ -278,6 +309,7 @@ namespace Hanger51.EngineAssembly
             }
 
             RefreshStationVisuals();
+            transport?.RefreshMaintenanceTargets();
             return true;
         }
 
@@ -319,7 +351,7 @@ namespace Hanger51.EngineAssembly
                     0,
                     out bool dropped))
             {
-                resultMessage = "The engine block could not be returned or placed beside the stand.";
+                resultMessage = "The engine block could not be returned or placed beside the engine.";
                 engineRemovalProgress = 0f;
                 return false;
             }
@@ -334,8 +366,9 @@ namespace Hanger51.EngineAssembly
             engineBlockInstalledField.SetValue(station, false);
             engineRemovalProgress = 0f;
             RefreshStationVisuals();
+            transport?.RefreshMaintenanceTargets();
             resultMessage = dropped
-                ? "Removed the V-1650 engine block and dropped it beside the stand because inventory was full."
+                ? "Removed the V-1650 engine block and dropped it beside the engine because inventory was full."
                 : "Removed the V-1650 engine block and returned it to inventory.";
             return true;
         }
@@ -345,9 +378,22 @@ namespace Hanger51.EngineAssembly
             engineRemovalProgress = 0f;
         }
 
+        private void ResolveComponents()
+        {
+            if (station == null)
+            {
+                station = GetComponent<EngineAssemblyStation>();
+            }
+
+            if (transport == null)
+            {
+                transport = GetComponent<EngineAssemblyTransportController>();
+            }
+        }
+
         private void ResolveReflection(bool logFailure)
         {
-            station = GetComponent<EngineAssemblyStation>();
+            ResolveComponents();
             Type stationType = typeof(EngineAssemblyStation);
 
             engineBlockItemField = stationType.GetField("engineBlockItem", PrivateInstance);
@@ -357,6 +403,9 @@ namespace Hanger51.EngineAssembly
             coverPlacedField = stationType.GetField("coverPlaced", PrivateInstance);
             coverBoltsTightenedField = stationType.GetField("coverBoltsTightened", PrivateInstance);
             sparkPlugInstalledField = stationType.GetField("sparkPlugInstalled", PrivateInstance);
+            coverPlacementTargetsField = stationType.GetField("coverPlacementTargets", PrivateInstance);
+            coverBoltTargetsField = stationType.GetField("coverBoltTargets", PrivateInstance);
+            sparkPlugTargetsField = stationType.GetField("sparkPlugTargets", PrivateInstance);
             ensureStateListsMethod = stationType.GetMethod("EnsureStateLists", PrivateInstance);
             refreshVisualsMethod = stationType.GetMethod("RefreshVisuals", PrivateInstance);
 
@@ -368,6 +417,9 @@ namespace Hanger51.EngineAssembly
                 && coverPlacedField != null
                 && coverBoltsTightenedField != null
                 && sparkPlugInstalledField != null
+                && coverPlacementTargetsField != null
+                && coverBoltTargetsField != null
+                && sparkPlugTargetsField != null
                 && ensureStateListsMethod != null
                 && refreshVisualsMethod != null;
 
@@ -454,10 +506,8 @@ namespace Hanger51.EngineAssembly
                 return;
             }
 
-            // The station's ClampState method was written for forward-only
-            // assembly and clears installed plugs whenever any bolt is loose.
-            // Disassembly intentionally preserves the opposite bank, so only
-            // refresh visual state here.
+            // Avoid ClampState here. It was written for forward-only assembly
+            // and can clear the opposite bank's installed plug state.
             refreshVisualsMethod.Invoke(station, null);
         }
 
@@ -475,29 +525,77 @@ namespace Hanger51.EngineAssembly
                 : null;
         }
 
-        private int CountInstalledSparkPlugsOnBank(int bankIndex, List<bool> plugs)
+        private List<EngineAssemblyInteractionTarget> GetRegisteredTargets(
+            FieldInfo field,
+            EngineAssemblyInteractionKind expectedKind)
         {
-            if (station == null)
+            ResolveComponents();
+            List<EngineAssemblyInteractionTarget> result =
+                new List<EngineAssemblyInteractionTarget>();
+
+            if (field != null && station != null)
             {
-                return 0;
+                List<EngineAssemblyInteractionTarget> registered =
+                    field.GetValue(station) as List<EngineAssemblyInteractionTarget>;
+                if (registered != null)
+                {
+                    for (int index = 0; index < registered.Count; index++)
+                    {
+                        AddTargetIfValid(result, registered[index], expectedKind);
+                    }
+                }
             }
 
-            int count = 0;
-            EngineAssemblyInteractionTarget[] targets =
-                station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
+            if (result.Count > 0)
+            {
+                return result;
+            }
 
-            for (int index = 0; index < targets.Length; index++)
+            Transform portableRoot = transport != null ? transport.TransportRoot : null;
+            EngineAssemblyInteractionTarget[] fallback = portableRoot != null
+                ? portableRoot.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true)
+                : station != null
+                    ? station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true)
+                    : Array.Empty<EngineAssemblyInteractionTarget>();
+
+            for (int index = 0; index < fallback.Length; index++)
+            {
+                AddTargetIfValid(result, fallback[index], expectedKind);
+            }
+
+            return result;
+        }
+
+        private static void AddTargetIfValid(
+            List<EngineAssemblyInteractionTarget> targets,
+            EngineAssemblyInteractionTarget candidate,
+            EngineAssemblyInteractionKind expectedKind)
+        {
+            if (candidate != null
+                && candidate.InteractionKind == expectedKind
+                && !targets.Contains(candidate))
+            {
+                targets.Add(candidate);
+            }
+        }
+
+        private int CountInstalledSparkPlugsOnBank(
+            int bankIndex,
+            List<bool> plugs)
+        {
+            List<EngineAssemblyInteractionTarget> targets = GetRegisteredTargets(
+                sparkPlugTargetsField,
+                EngineAssemblyInteractionKind.SparkPlug);
+            int count = 0;
+            for (int index = 0; index < targets.Count; index++)
             {
                 EngineAssemblyInteractionTarget target = targets[index];
-                if (target != null
-                    && target.InteractionKind == EngineAssemblyInteractionKind.SparkPlug
-                    && target.GroupIndex == bankIndex
+                if (target.GroupIndex == bankIndex
                     && IsTrue(plugs, target.TargetIndex))
                 {
                     count++;
                 }
             }
-
             return count;
         }
 
@@ -506,22 +604,16 @@ namespace Hanger51.EngineAssembly
             List<bool> bolts,
             out bool foundBolt)
         {
-            foundBolt = false;
-            if (station == null)
-            {
-                return 0;
-            }
-
+            List<EngineAssemblyInteractionTarget> targets = GetRegisteredTargets(
+                coverBoltTargetsField,
+                EngineAssemblyInteractionKind.CoverBolt);
             int count = 0;
-            EngineAssemblyInteractionTarget[] targets =
-                station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
+            foundBolt = false;
 
-            for (int index = 0; index < targets.Length; index++)
+            for (int index = 0; index < targets.Count; index++)
             {
                 EngineAssemblyInteractionTarget target = targets[index];
-                if (target == null
-                    || target.InteractionKind != EngineAssemblyInteractionKind.CoverBolt
-                    || target.GroupIndex != bankIndex)
+                if (target.GroupIndex != bankIndex)
                 {
                     continue;
                 }
@@ -532,7 +624,6 @@ namespace Hanger51.EngineAssembly
                     count++;
                 }
             }
-
             return count;
         }
 
@@ -543,6 +634,29 @@ namespace Hanger51.EngineAssembly
                 bolts,
                 out bool foundBolt);
             return foundBolt && tightened == 0;
+        }
+
+        private Transform FindTarget(
+            EngineAssemblyInteractionKind kind,
+            int groupIndex,
+            int targetIndex)
+        {
+            FieldInfo field = kind == EngineAssemblyInteractionKind.CoverPlacement
+                ? coverPlacementTargetsField
+                : kind == EngineAssemblyInteractionKind.CoverBolt
+                    ? coverBoltTargetsField
+                    : sparkPlugTargetsField;
+            List<EngineAssemblyInteractionTarget> targets = GetRegisteredTargets(field, kind);
+            for (int index = 0; index < targets.Count; index++)
+            {
+                EngineAssemblyInteractionTarget target = targets[index];
+                if (target.GroupIndex == groupIndex
+                    && target.TargetIndex == targetIndex)
+                {
+                    return target.transform;
+                }
+            }
+            return null;
         }
 
         private bool TryReturnOrDropItem(
@@ -574,12 +688,16 @@ namespace Hanger51.EngineAssembly
             int groupIndex,
             int targetIndex)
         {
+            ResolveComponents();
             if (item == null || station == null)
             {
                 return false;
             }
 
-            Vector3 groundPosition = FindDropGroundPosition(kind, groupIndex, targetIndex);
+            Vector3 groundPosition = FindDropGroundPosition(
+                kind,
+                groupIndex,
+                targetIndex);
             GameObject pickupObject;
             if (item.WorldPrefab != null)
             {
@@ -598,11 +716,12 @@ namespace Hanger51.EngineAssembly
                 return false;
             }
 
+            Transform reference = GetPortableReference();
             pickupObject.SetActive(true);
             pickupObject.transform.position = groundPosition + Vector3.up * 0.08f;
             pickupObject.transform.rotation = Quaternion.Euler(
                 0f,
-                station.transform.eulerAngles.y,
+                reference.eulerAngles.y,
                 0f);
 
             InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
@@ -621,15 +740,16 @@ namespace Hanger51.EngineAssembly
             int groupIndex,
             int targetIndex)
         {
+            Transform reference = GetPortableReference();
             Transform matchingTarget = FindTarget(kind, groupIndex, targetIndex);
             Vector3 basePosition = matchingTarget != null
                 ? matchingTarget.position
-                : station.transform.position;
+                : reference.position;
 
             float sideDirection = groupIndex == 0 ? -1f : 1f;
             Vector3 candidate = basePosition
-                + station.transform.right * sideDirection * 1.6f
-                + station.transform.forward * 0.35f;
+                + reference.right * sideDirection * 1.6f
+                + reference.forward * 0.35f;
 
             RaycastHit[] hits = Physics.RaycastAll(
                 candidate + Vector3.up * 3f,
@@ -639,10 +759,20 @@ namespace Hanger51.EngineAssembly
                 QueryTriggerInteraction.Ignore);
             Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
 
+            Transform portableRoot = transport != null ? transport.TransportRoot : null;
             for (int index = 0; index < hits.Length; index++)
             {
                 Collider collider = hits[index].collider;
-                if (collider == null || collider.transform.IsChildOf(station.transform))
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                bool belongsToPortableEngine = portableRoot != null
+                    && collider.transform.IsChildOf(portableRoot);
+                bool belongsToStation = station != null
+                    && collider.transform.IsChildOf(station.transform);
+                if (belongsToPortableEngine || belongsToStation)
                 {
                     continue;
                 }
@@ -653,26 +783,14 @@ namespace Hanger51.EngineAssembly
             return candidate;
         }
 
-        private Transform FindTarget(
-            EngineAssemblyInteractionKind kind,
-            int groupIndex,
-            int targetIndex)
+        private Transform GetPortableReference()
         {
-            EngineAssemblyInteractionTarget[] targets =
-                station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
-            for (int index = 0; index < targets.Length; index++)
-            {
-                EngineAssemblyInteractionTarget target = targets[index];
-                if (target != null
-                    && target.InteractionKind == kind
-                    && target.GroupIndex == groupIndex
-                    && target.TargetIndex == targetIndex)
-                {
-                    return target.transform;
-                }
-            }
-
-            return null;
+            ResolveComponents();
+            return transport != null && transport.TransportRoot != null
+                ? transport.TransportRoot
+                : station != null
+                    ? station.transform
+                    : transform;
         }
 
         private static void EnsurePickupCollider(GameObject pickupObject)
@@ -772,7 +890,6 @@ namespace Hanger51.EngineAssembly
                     count++;
                 }
             }
-
             return count;
         }
 
