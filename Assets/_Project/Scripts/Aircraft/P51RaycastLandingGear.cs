@@ -330,12 +330,23 @@ namespace Hanger51.Aircraft
                 0f,
                 suspensionTravel);
 
-            // A surface inside the fully extended ray is not automatically a
-            // load-bearing contact. During takeoff, discard an unloaded ray hit
-            // as soon as the aircraft is moving upward so the wheel cannot act
-            // like a ground magnet.
             if (compression <= 0.001f
                 && suspensionVelocity > releaseWhileClimbingSpeed)
+            {
+                return contact;
+            }
+
+            contact.Grounded = true;
+            contact.SurfaceNormal = groundHit.normal.sqrMagnitude > 0.001f
+                ? groundHit.normal.normalized
+                : suspensionUp;
+            contact.CenterPosition = groundHit.point
+                + contact.SurfaceNormal * wheelRadius;
+
+            // The damper cannot create force before the strut has physically
+            // compressed. This prevents a descending but still airborne wheel
+            // from being pulled onto the runway by a velocity-only damping term.
+            if (compression <= 0.001f)
             {
                 return contact;
             }
@@ -347,15 +358,8 @@ namespace Hanger51.Aircraft
             suspensionForce = Mathf.Min(
                 suspensionForce,
                 springStrength * suspensionTravel * 1.45f);
-
-            contact.Grounded = true;
             contact.Loaded = suspensionForce >= minimumSupportingForce;
             contact.SuspensionForce = suspensionForce;
-            contact.SurfaceNormal = groundHit.normal.sqrMagnitude > 0.001f
-                ? groundHit.normal.normalized
-                : suspensionUp;
-            contact.CenterPosition = groundHit.point
-                + contact.SurfaceNormal * wheelRadius;
 
             Vector3 wheelForward = Vector3.ProjectOnPlane(
                 transform.forward,
@@ -380,7 +384,7 @@ namespace Hanger51.Aircraft
             contact.ForwardSpeed = Vector3.Dot(pointVelocity, wheelForward);
             float lateralSpeed = Vector3.Dot(pointVelocity, wheelRight);
 
-            if (!applyForces || aircraftBody == null || suspensionForce <= 0f)
+            if (!applyForces || aircraftBody == null || !contact.Loaded)
             {
                 return contact;
             }
@@ -502,10 +506,10 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            Vector3 targetCenter = contact.Grounded
+            Vector3 targetCenter = contact.Loaded
                 ? contact.CenterPosition
                 : anchor.position;
-            float sharpness = contact.Grounded
+            float sharpness = contact.Loaded
                 ? visualPositionSharpness
                 : airborneVisualReturnSharpness;
             float blend = 1f - Mathf.Exp(-sharpness * Time.deltaTime);
