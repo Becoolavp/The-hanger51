@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 using System.Reflection;
 using Hanger51.Inventory;
@@ -25,6 +26,7 @@ namespace Hanger51.EngineAssembly
         private MethodInfo refreshVisualsMethod;
 
         private float engineRemovalProgress;
+        private bool bindingErrorLogged;
 
         public bool IsReady { get; private set; }
         public float EngineRemovalProgress => engineRemovalProgress;
@@ -59,12 +61,18 @@ namespace Hanger51.EngineAssembly
 
         private void Awake()
         {
-            ResolveReflection();
+            ResolveReflection(true);
         }
 
         private void OnEnable()
         {
-            ResolveReflection();
+            ResolveReflection(true);
+        }
+
+        public bool InitializeBindings()
+        {
+            ResolveReflection(false);
+            return IsReady;
         }
 
         public bool CanRemoveTarget(
@@ -142,10 +150,15 @@ namespace Hanger51.EngineAssembly
                 return false;
             }
 
-            EnsureStationState();
-            List<bool> covers = GetBoolList(coverPlacedField);
-            List<bool> bolts = GetBoolList(coverBoltsTightenedField);
-            List<bool> plugs = GetBoolList(sparkPlugInstalledField);
+            if (!TryGetState(
+                    out _,
+                    out List<bool> covers,
+                    out List<bool> bolts,
+                    out List<bool> plugs))
+            {
+                resultMessage = "The engine maintenance state is not ready.";
+                return false;
+            }
 
             switch (kind)
             {
@@ -227,6 +240,13 @@ namespace Hanger51.EngineAssembly
                 return false;
             }
 
+            if (station == null || engineBlockInstalledField == null)
+            {
+                resultMessage = "The engine maintenance state is not ready.";
+                engineRemovalProgress = 0f;
+                return false;
+            }
+
             engineBlockInstalledField.SetValue(station, false);
             engineRemovalProgress = 0f;
             RefreshStationVisuals();
@@ -239,10 +259,10 @@ namespace Hanger51.EngineAssembly
             engineRemovalProgress = 0f;
         }
 
-        private void ResolveReflection()
+        private void ResolveReflection(bool logFailure)
         {
             station = GetComponent<EngineAssemblyStation>();
-            System.Type stationType = typeof(EngineAssemblyStation);
+            Type stationType = typeof(EngineAssemblyStation);
 
             engineBlockItemField = stationType.GetField("engineBlockItem", PrivateInstance);
             cylinderCoverItemField = stationType.GetField("cylinderCoverItem", PrivateInstance);
@@ -265,8 +285,15 @@ namespace Hanger51.EngineAssembly
                 && ensureStateListsMethod != null
                 && refreshVisualsMethod != null;
 
-            if (!IsReady)
+            if (IsReady)
             {
+                bindingErrorLogged = false;
+                return;
+            }
+
+            if (logFailure && !bindingErrorLogged)
+            {
+                bindingErrorLogged = true;
                 Debug.LogError(
                     "EngineAssemblyRemovalController could not bind to the current EngineAssemblyStation state. Re-run the latest setup after compiling.",
                     this);
@@ -284,57 +311,99 @@ namespace Hanger51.EngineAssembly
             bolts = null;
             plugs = null;
 
-            if (!IsReady)
+            if (station == null || !IsReady)
             {
-                ResolveReflection();
+                ResolveReflection(false);
             }
 
-            if (!IsReady)
+            if (!IsReady
+                || station == null
+                || engineBlockInstalledField == null
+                || coverPlacedField == null
+                || coverBoltsTightenedField == null
+                || sparkPlugInstalledField == null
+                || ensureStateListsMethod == null)
             {
                 return false;
             }
 
-            EnsureStationState();
-            engineInstalled = (bool)engineBlockInstalledField.GetValue(station);
-            covers = GetBoolList(coverPlacedField);
-            bolts = GetBoolList(coverBoltsTightenedField);
-            plugs = GetBoolList(sparkPlugInstalledField);
-            return covers != null && bolts != null && plugs != null;
-        }
+            try
+            {
+                ensureStateListsMethod.Invoke(station, null);
+                object installedValue = engineBlockInstalledField.GetValue(station);
+                if (!(installedValue is bool))
+                {
+                    IsReady = false;
+                    return false;
+                }
 
-        private void EnsureStationState()
-        {
-            ensureStateListsMethod?.Invoke(station, null);
+                engineInstalled = (bool)installedValue;
+                covers = GetBoolList(coverPlacedField);
+                bolts = GetBoolList(coverBoltsTightenedField);
+                plugs = GetBoolList(sparkPlugInstalledField);
+                return covers != null && bolts != null && plugs != null;
+            }
+            catch (Exception exception)
+            {
+                IsReady = false;
+                if (Application.isPlaying)
+                {
+                    Debug.LogError(
+                        $"Engine removal state could not be read: {exception.Message}",
+                        this);
+                }
+                return false;
+            }
         }
 
         private void RefreshStationVisuals()
         {
+            if (station == null || refreshVisualsMethod == null)
+            {
+                ResolveReflection(false);
+            }
+
+            if (station == null || refreshVisualsMethod == null)
+            {
+                return;
+            }
+
             // The station's ClampState method was written for forward-only
             // assembly and clears installed plugs whenever any bolt is loose.
             // Disassembly intentionally preserves the opposite bank, so only
             // refresh visual state here.
-            refreshVisualsMethod?.Invoke(station, null);
+            refreshVisualsMethod.Invoke(station, null);
         }
 
         private InventoryItemDefinition GetItem(FieldInfo field)
         {
-            return field?.GetValue(station) as InventoryItemDefinition;
+            return field != null && station != null
+                ? field.GetValue(station) as InventoryItemDefinition
+                : null;
         }
 
         private List<bool> GetBoolList(FieldInfo field)
         {
-            return field?.GetValue(station) as List<bool>;
+            return field != null && station != null
+                ? field.GetValue(station) as List<bool>
+                : null;
         }
 
         private bool HasInstalledSparkPlugOnBank(int bankIndex, List<bool> plugs)
         {
+            if (station == null)
+            {
+                return false;
+            }
+
             EngineAssemblyInteractionTarget[] targets =
                 station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
 
             for (int index = 0; index < targets.Length; index++)
             {
                 EngineAssemblyInteractionTarget target = targets[index];
-                if (target.InteractionKind == EngineAssemblyInteractionKind.SparkPlug
+                if (target != null
+                    && target.InteractionKind == EngineAssemblyInteractionKind.SparkPlug
                     && target.GroupIndex == bankIndex
                     && IsTrue(plugs, target.TargetIndex))
                 {
@@ -347,6 +416,11 @@ namespace Hanger51.EngineAssembly
 
         private bool AreAllBoltsLooseForBank(int bankIndex, List<bool> bolts)
         {
+            if (station == null)
+            {
+                return false;
+            }
+
             bool foundBolt = false;
             EngineAssemblyInteractionTarget[] targets =
                 station.GetComponentsInChildren<EngineAssemblyInteractionTarget>(true);
@@ -354,7 +428,8 @@ namespace Hanger51.EngineAssembly
             for (int index = 0; index < targets.Length; index++)
             {
                 EngineAssemblyInteractionTarget target = targets[index];
-                if (target.InteractionKind != EngineAssemblyInteractionKind.CoverBolt
+                if (target == null
+                    || target.InteractionKind != EngineAssemblyInteractionKind.CoverBolt
                     || target.GroupIndex != bankIndex)
                 {
                     continue;
@@ -412,6 +487,7 @@ namespace Hanger51.EngineAssembly
         private void OnValidate()
         {
             engineRemovalHoldDuration = Mathf.Max(0.2f, engineRemovalHoldDuration);
+            ResolveReflection(false);
         }
     }
 }
