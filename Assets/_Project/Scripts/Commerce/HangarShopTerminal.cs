@@ -67,11 +67,18 @@ namespace Hanger51.Commerce
                 return false;
             }
 
-            if (shipmentArea == null
-                || !shipmentArea.TryCreateShipment(
+            if (shipmentArea == null)
+            {
+                resultMessage = "The shipment area is unavailable.";
+                return false;
+            }
+
+            ShipmentCrateController createdCrate;
+            string shipmentReason;
+            if (!shipmentArea.TryCreateShipment(
                     product,
-                    out ShipmentCrateController createdCrate,
-                    out string shipmentReason))
+                    out createdCrate,
+                    out shipmentReason))
             {
                 resultMessage = shipmentReason;
                 return false;
