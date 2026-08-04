@@ -40,7 +40,16 @@ namespace Hanger51.EngineAssembly
             && station.IsTargetComplete(interactionKind, groupIndex, targetIndex);
         public bool CanRemove => removalController != null
             && removalController.CanRemoveTarget(interactionKind, groupIndex, targetIndex);
-        public bool CanInteract => IsInteractable || CanRemove;
+        public bool HasRemovalGuidance => removalController != null
+            && interactionKind == EngineAssemblyInteractionKind.CoverPlacement
+            && IsComplete
+            && !CanRemove
+            && !string.IsNullOrWhiteSpace(
+                removalController.GetRemovalBlockerText(
+                    interactionKind,
+                    groupIndex,
+                    targetIndex));
+        public bool CanInteract => IsInteractable || CanRemove || HasRemovalGuidance;
         public bool HasConditionInspection => conditionInspectionTarget != null;
 
         public Vector3 FinalWorldPosition => transform.position;
@@ -61,12 +70,20 @@ namespace Hanger51.EngineAssembly
                         holdProgress);
                 }
 
-                return CanRemove
-                    ? removalController.GetRemovalInteractionText(
+                if (CanRemove)
+                {
+                    return removalController.GetRemovalInteractionText(
                         interactionKind,
                         groupIndex,
                         targetIndex,
-                        holdProgress)
+                        holdProgress);
+                }
+
+                return HasRemovalGuidance
+                    ? removalController.GetRemovalBlockerText(
+                        interactionKind,
+                        groupIndex,
+                        targetIndex)
                     : string.Empty;
             }
         }
