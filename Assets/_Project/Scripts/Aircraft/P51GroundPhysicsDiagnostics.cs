@@ -58,20 +58,26 @@ namespace Hanger51.Aircraft
 
             Vector3 localVelocity = transform.InverseTransformDirection(
                 aircraftBody.linearVelocity);
-            string wheelState =
+            string detectedState =
                 $"{(landingGear.LeftMainGrounded ? "L" : "-")}"
                 + $"{(landingGear.RightMainGrounded ? "R" : "-")}"
                 + $"{(landingGear.TailwheelGrounded ? "T" : "-")}";
+            string loadedState =
+                $"{(landingGear.LeftMainLoaded ? "L" : "-")}"
+                + $"{(landingGear.RightMainLoaded ? "R" : "-")}"
+                + $"{(landingGear.TailwheelLoaded ? "T" : "-")}";
             string diagnostics =
                 $"GROUND PHYSICS\n"
-                + $"Gear contacts: {landingGear.GroundedWheelCount}/3 ({wheelState})\n"
+                + $"Detected: {landingGear.GroundedWheelCount}/3 ({detectedState})\n"
+                + $"Loaded: {landingGear.LoadedWheelCount}/3 ({loadedState})\n"
                 + $"Forward speed: {localVelocity.z:F1} m/s\n"
+                + $"Vertical speed: {localVelocity.y:F1} m/s\n"
                 + $"Body dynamic: {!aircraftBody.isKinematic}\n"
                 + $"Engine running: {flightController.EngineRunning}\n"
                 + $"Throttle command: {flightController.Throttle * 100f:F0}%";
 
             GUI.Box(
-                new Rect(18f, 232f, 300f, 132f),
+                new Rect(18f, 232f, 300f, 168f),
                 diagnostics,
                 diagnosticStyle);
         }
