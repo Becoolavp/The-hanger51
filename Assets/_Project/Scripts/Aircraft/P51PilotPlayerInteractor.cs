@@ -21,6 +21,7 @@ namespace Hanger51.Aircraft
         [SerializeField] private InventoryUI inventoryUI;
         [SerializeField] private AircraftServicePlayerInteractor aircraftServiceInteractor;
         [SerializeField] private EngineHoistPlayerInteractor engineHoistInteractor;
+        [SerializeField] private EngineConditionPlayerInteractor engineConditionInteractor;
         [SerializeField] private EquippedItemView equippedItemView;
 
         [Header("Cockpit Interaction")]
@@ -237,6 +238,7 @@ namespace Hanger51.Aircraft
             DisableForCockpit(inventoryInteractor);
             DisableForCockpit(aircraftServiceInteractor);
             DisableForCockpit(engineHoistInteractor);
+            DisableForCockpit(engineConditionInteractor);
             DisableForCockpit(equippedItemView);
 
             EngineAssemblyStation[] engineStations = FindObjectsByType<EngineAssemblyStation>(
@@ -378,6 +380,11 @@ namespace Hanger51.Aircraft
             if (engineHoistInteractor == null)
             {
                 engineHoistInteractor = GetComponent<EngineHoistPlayerInteractor>();
+            }
+
+            if (engineConditionInteractor == null)
+            {
+                engineConditionInteractor = GetComponent<EngineConditionPlayerInteractor>();
             }
 
             if (equippedItemView == null && playerCamera != null)
