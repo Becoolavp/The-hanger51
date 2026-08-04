@@ -1,4 +1,3 @@
-using System.Reflection;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -9,33 +8,21 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(P51PilotPlayerInteractor))]
     public sealed class P51ThirdPersonCamera : MonoBehaviour
     {
-        private const BindingFlags PrivateInstance =
-            BindingFlags.Instance | BindingFlags.NonPublic;
-
-        private static readonly FieldInfo CockpitLookYawField =
-            typeof(P51PilotPlayerInteractor).GetField(
-                "cockpitLookYaw",
-                PrivateInstance);
-        private static readonly FieldInfo CockpitLookPitchField =
-            typeof(P51PilotPlayerInteractor).GetField(
-                "cockpitLookPitch",
-                PrivateInstance);
-
         [Header("References")]
         [SerializeField] private P51PilotPlayerInteractor pilotInteractor;
         [SerializeField] private Camera playerCamera;
 
-        [Header("External View")]
-        [SerializeField, Min(3f)] private float chaseDistance = 13.5f;
-        [SerializeField, Min(0f)] private float focusForwardOffset = 1.2f;
-        [SerializeField, Min(0f)] private float focusUpOffset = 0.65f;
+        [Header("External Orbit View")]
+        [SerializeField, Min(3f)] private float orbitDistance = 13.5f;
+        [SerializeField, Min(0f)] private float focusForwardOffset = 0.9f;
+        [SerializeField, Min(0f)] private float focusUpOffset = 0.45f;
         [SerializeField, Range(5f, 40f)] private float startingPitch = 14f;
-        [SerializeField, Range(-160f, 160f)] private float maximumOrbitYaw = 150f;
-        [SerializeField, Range(5f, 75f)] private float minimumOrbitPitch = 7f;
-        [SerializeField, Range(10f, 85f)] private float maximumOrbitPitch = 55f;
-        [SerializeField, Min(0.01f)] private float orbitMouseSensitivity = 0.09f;
-        [SerializeField, Min(1f)] private float cameraSharpness = 11f;
-        [SerializeField, Min(0.05f)] private float obstaclePadding = 0.35f;
+        [SerializeField, Range(45f, 180f)] private float maximumOrbitYaw = 180f;
+        [SerializeField, Range(2f, 75f)] private float minimumOrbitPitch = 5f;
+        [SerializeField, Range(10f, 85f)] private float maximumOrbitPitch = 65f;
+        [SerializeField, Min(0.01f)] private float orbitMouseSensitivity = 0.10f;
+        [SerializeField, Min(1f)] private float cameraSharpness = 12f;
+        [SerializeField, Min(0.05f)] private float obstaclePadding = 0.40f;
         [SerializeField, Range(45f, 100f)] private float externalFieldOfView = 80f;
         [SerializeField] private LayerMask cameraCollisionLayers = ~0;
 
@@ -89,18 +76,18 @@ namespace Hanger51.Aircraft
             Mouse mouse = Mouse.current;
             if (mouse != null && Cursor.lockState == CursorLockMode.Locked)
             {
-                Vector2 delta = mouse.delta.ReadValue() * orbitMouseSensitivity;
+                Vector2 mouseDelta = mouse.delta.ReadValue() * orbitMouseSensitivity;
                 orbitYaw = Mathf.Clamp(
-                    orbitYaw + delta.x,
+                    orbitYaw + mouseDelta.x,
                     -maximumOrbitYaw,
                     maximumOrbitYaw);
                 orbitPitch = Mathf.Clamp(
-                    orbitPitch - delta.y,
+                    orbitPitch - mouseDelta.y,
                     minimumOrbitPitch,
                     maximumOrbitPitch);
             }
 
-            ResetCockpitLookAccumulator();
+            pilotInteractor.ResetCockpitLook();
         }
 
         private void LateUpdate()
@@ -113,57 +100,7 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            P51PilotSeat seat = pilotInteractor.OccupiedSeat;
-            P51FlightController flightController = seat != null
-                ? seat.FlightController
-                : null;
-            if (seat == null
-                || seat.CameraAnchor == null
-                || flightController == null)
-            {
-                return;
-            }
-
-            Transform aircraft = flightController.transform;
-            Vector3 focusPoint = seat.CameraAnchor.position
-                + aircraft.forward * focusForwardOffset
-                + aircraft.up * focusUpOffset;
-
-            Quaternion orbitRotation = Quaternion.Euler(
-                orbitPitch,
-                orbitYaw,
-                0f);
-            Vector3 localOffset = orbitRotation
-                * new Vector3(0f, 0f, -chaseDistance);
-            Vector3 desiredPosition = focusPoint
-                + aircraft.TransformDirection(localOffset);
-            desiredPosition = ResolveCameraCollision(
-                focusPoint,
-                desiredPosition,
-                aircraft);
-
-            float blend = 1f - Mathf.Exp(-cameraSharpness * Time.deltaTime);
-            playerCamera.transform.position = Vector3.Lerp(
-                playerCamera.transform.position,
-                desiredPosition,
-                blend);
-
-            Vector3 lookDirection = focusPoint - playerCamera.transform.position;
-            if (lookDirection.sqrMagnitude > 0.001f)
-            {
-                Quaternion desiredRotation = Quaternion.LookRotation(
-                    lookDirection.normalized,
-                    Vector3.up);
-                playerCamera.transform.rotation = Quaternion.Slerp(
-                    playerCamera.transform.rotation,
-                    desiredRotation,
-                    blend);
-            }
-
-            playerCamera.fieldOfView = Mathf.Lerp(
-                playerCamera.fieldOfView,
-                externalFieldOfView,
-                blend);
+            UpdateExternalCamera(false);
         }
 
         private void SetThirdPersonActive(bool active)
@@ -180,17 +117,103 @@ namespace Hanger51.Aircraft
             {
                 orbitYaw = 0f;
                 orbitPitch = startingPitch;
+                pilotInteractor.ResetCockpitLook();
+
+                // The external camera must not inherit the aircraft's roll and
+                // pitch from the cockpit anchor. Detaching it gives the mouse a
+                // true world-up orbit around the airplane.
+                if (playerCamera != null)
+                {
+                    playerCamera.transform.SetParent(null, true);
+                }
+
+                UpdateExternalCamera(true);
                 seat?.FlightController?.ShowCockpitMessage(
-                    "Third-person aircraft view. Move the mouse to orbit; press V for cockpit view.",
+                    "External view: move the mouse to orbit around the P-51. Press V for cockpit view.",
                     3f);
-                ResetCockpitLookAccumulator();
                 return;
             }
 
             RestoreCockpitCamera(seat);
             seat?.FlightController?.ShowCockpitMessage(
-                "Cockpit view restored. Press V for third-person view.",
+                "Cockpit view restored. Press V for external view.",
                 2.5f);
+        }
+
+        private void UpdateExternalCamera(bool snapImmediately)
+        {
+            P51PilotSeat seat = pilotInteractor != null
+                ? pilotInteractor.OccupiedSeat
+                : null;
+            P51FlightController flightController = seat != null
+                ? seat.FlightController
+                : null;
+            if (seat == null
+                || seat.CameraAnchor == null
+                || flightController == null
+                || playerCamera == null)
+            {
+                return;
+            }
+
+            Transform aircraft = flightController.transform;
+            Vector3 horizontalForward = Vector3.ProjectOnPlane(
+                aircraft.forward,
+                Vector3.up);
+            if (horizontalForward.sqrMagnitude < 0.001f)
+            {
+                horizontalForward = Vector3.forward;
+            }
+            else
+            {
+                horizontalForward.Normalize();
+            }
+
+            Vector3 focusPoint = seat.CameraAnchor.position
+                + horizontalForward * focusForwardOffset
+                + Vector3.up * focusUpOffset;
+
+            float aircraftHeading = Mathf.Atan2(
+                horizontalForward.x,
+                horizontalForward.z) * Mathf.Rad2Deg;
+            Quaternion orbitRotation = Quaternion.Euler(
+                orbitPitch,
+                aircraftHeading + orbitYaw,
+                0f);
+            Vector3 desiredPosition = focusPoint
+                + orbitRotation * (Vector3.back * orbitDistance);
+            desiredPosition = ResolveCameraCollision(
+                focusPoint,
+                desiredPosition,
+                aircraft);
+
+            Vector3 lookDirection = focusPoint - desiredPosition;
+            Quaternion desiredRotation = lookDirection.sqrMagnitude > 0.001f
+                ? Quaternion.LookRotation(lookDirection.normalized, Vector3.up)
+                : playerCamera.transform.rotation;
+
+            if (snapImmediately)
+            {
+                playerCamera.transform.SetPositionAndRotation(
+                    desiredPosition,
+                    desiredRotation);
+                playerCamera.fieldOfView = externalFieldOfView;
+                return;
+            }
+
+            float blend = 1f - Mathf.Exp(-cameraSharpness * Time.deltaTime);
+            playerCamera.transform.position = Vector3.Lerp(
+                playerCamera.transform.position,
+                desiredPosition,
+                blend);
+            playerCamera.transform.rotation = Quaternion.Slerp(
+                playerCamera.transform.rotation,
+                desiredRotation,
+                blend);
+            playerCamera.fieldOfView = Mathf.Lerp(
+                playerCamera.fieldOfView,
+                externalFieldOfView,
+                blend);
         }
 
         private void RestoreCockpitCamera(P51PilotSeat seat)
@@ -204,7 +227,7 @@ namespace Hanger51.Aircraft
             playerCamera.transform.localPosition = Vector3.zero;
             playerCamera.transform.localRotation = Quaternion.identity;
             playerCamera.fieldOfView = 72f;
-            ResetCockpitLookAccumulator();
+            pilotInteractor?.ResetCockpitLook();
         }
 
         private Vector3 ResolveCameraCollision(
@@ -220,8 +243,9 @@ namespace Hanger51.Aircraft
             }
 
             direction /= distance;
-            RaycastHit[] hits = Physics.RaycastAll(
+            RaycastHit[] hits = Physics.SphereCastAll(
                 focusPoint,
+                0.22f,
                 direction,
                 distance,
                 cameraCollisionLayers,
@@ -252,20 +276,9 @@ namespace Hanger51.Aircraft
             }
 
             float safeDistance = Mathf.Max(
-                0.8f,
+                0.9f,
                 nearestDistance - obstaclePadding);
             return focusPoint + direction * safeDistance;
-        }
-
-        private void ResetCockpitLookAccumulator()
-        {
-            if (pilotInteractor == null)
-            {
-                return;
-            }
-
-            CockpitLookYawField?.SetValue(pilotInteractor, 0f);
-            CockpitLookPitchField?.SetValue(pilotInteractor, 0f);
         }
 
         private void ResolveReferences()
@@ -300,10 +313,10 @@ namespace Hanger51.Aircraft
             }
 
             string label = thirdPersonActive
-                ? "VIEW: EXTERNAL   [V]"
+                ? "VIEW: EXTERNAL ORBIT   [V]"
                 : "VIEW: COCKPIT   [V]";
             GUI.Box(
-                new Rect(Screen.width - 218f, 18f, 200f, 38f),
+                new Rect(Screen.width - 258f, 18f, 240f, 38f),
                 label,
                 viewStyle);
         }
@@ -321,13 +334,14 @@ namespace Hanger51.Aircraft
 
         private void OnValidate()
         {
-            chaseDistance = Mathf.Max(3f, chaseDistance);
+            orbitDistance = Mathf.Max(3f, orbitDistance);
             focusForwardOffset = Mathf.Max(0f, focusForwardOffset);
             focusUpOffset = Mathf.Max(0f, focusUpOffset);
             orbitMouseSensitivity = Mathf.Max(0.01f, orbitMouseSensitivity);
             cameraSharpness = Mathf.Max(1f, cameraSharpness);
             obstaclePadding = Mathf.Max(0.05f, obstaclePadding);
-            minimumOrbitPitch = Mathf.Clamp(minimumOrbitPitch, 5f, 75f);
+            maximumOrbitYaw = Mathf.Clamp(maximumOrbitYaw, 45f, 180f);
+            minimumOrbitPitch = Mathf.Clamp(minimumOrbitPitch, 2f, 75f);
             maximumOrbitPitch = Mathf.Clamp(
                 maximumOrbitPitch,
                 minimumOrbitPitch + 1f,
