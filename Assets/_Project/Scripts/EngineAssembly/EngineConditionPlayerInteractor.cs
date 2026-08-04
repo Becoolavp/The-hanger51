@@ -18,6 +18,9 @@ namespace Hanger51.EngineAssembly
         private EngineOilCanController carriedOilCan;
         private bool promptOwned;
 
+        public bool IsCarryingOilCan => carriedOilCan != null
+            && carriedOilCan.IsCarried;
+
         private void Awake()
         {
             ResolveReferences();
@@ -55,6 +58,17 @@ namespace Hanger51.EngineAssembly
             playerCamera = configuredCamera;
             inventoryUI = configuredInventoryUI;
             ResolveReferences();
+        }
+
+        public void SetDownCarriedOilCan()
+        {
+            if (carriedOilCan == null || !carriedOilCan.IsCarried)
+            {
+                carriedOilCan = null;
+                return;
+            }
+
+            DropCarriedOilCan(false);
         }
 
         private void HandleCarriedOilCan()
@@ -109,7 +123,7 @@ namespace Hanger51.EngineAssembly
             SetPrompt($"{carriedOilCan.InteractionText} | E: set down");
             if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
             {
-                DropCarriedOilCan();
+                DropCarriedOilCan(true);
             }
         }
 
@@ -217,15 +231,18 @@ namespace Hanger51.EngineAssembly
             return hits;
         }
 
-        private void DropCarriedOilCan()
+        private void DropCarriedOilCan(bool showMessage)
         {
             if (carriedOilCan == null)
             {
                 return;
             }
 
+            Transform reference = playerCamera != null
+                ? playerCamera.transform
+                : transform;
             Vector3 forward = Vector3.ProjectOnPlane(
-                playerCamera.transform.forward,
+                reference.forward,
                 Vector3.up);
             if (forward.sqrMagnitude < 0.001f)
             {
@@ -233,7 +250,9 @@ namespace Hanger51.EngineAssembly
             }
             forward.Normalize();
 
-            Vector3 desired = transform.position + forward * dropDistance + Vector3.up * 0.6f;
+            Vector3 desired = transform.position
+                + forward * dropDistance
+                + Vector3.up * 0.6f;
             if (Physics.Raycast(
                     desired + Vector3.up * 1.5f,
                     Vector3.down,
@@ -250,7 +269,10 @@ namespace Hanger51.EngineAssembly
             can.Drop(
                 desired,
                 Quaternion.Euler(0f, transform.eulerAngles.y, 0f));
-            inventoryUI.ShowStatusMessage("Set down the oil can.", 2f);
+            if (showMessage && inventoryUI != null)
+            {
+                inventoryUI.ShowStatusMessage("Set down the oil can.", 2f);
+            }
         }
 
         private void ResolveReferences()
@@ -287,6 +309,7 @@ namespace Hanger51.EngineAssembly
         private void OnDisable()
         {
             carriedOilCan?.StopPouring();
+            SetDownCarriedOilCan();
             ClearPrompt();
         }
 
