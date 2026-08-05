@@ -12,6 +12,7 @@ namespace Hanger51.Inventory
         private Material runtimeMaterial;
         private InventoryItemDefinition displayedItem;
         private GameObject displayedPrefabModel;
+        private string displayedConditionSignature = string.Empty;
 
         private void Awake()
         {
@@ -60,14 +61,22 @@ namespace Hanger51.Inventory
             InventoryItemDefinition equippedItem = inventory != null
                 ? inventory.EquippedItem
                 : null;
+            EnginePartConditionData equippedCondition = inventory != null
+                ? inventory.EquippedCondition
+                : null;
+            string conditionSignature = equippedCondition != null
+                ? equippedCondition.Signature
+                : string.Empty;
 
-            if (equippedItem == displayedItem)
+            if (equippedItem == displayedItem
+                && conditionSignature == displayedConditionSignature)
             {
                 SetCurrentVisibility(equippedItem != null);
                 return;
             }
 
             displayedItem = equippedItem;
+            displayedConditionSignature = conditionSignature;
             DestroyDisplayedPrefabModel();
 
             if (equippedItem == null)
@@ -78,7 +87,7 @@ namespace Hanger51.Inventory
 
             if (equippedItem.WorldPrefab != null)
             {
-                CreatePrefabView(equippedItem.WorldPrefab);
+                CreatePrefabView(equippedItem.WorldPrefab, equippedCondition);
                 if (visualRoot != null)
                 {
                     visualRoot.SetActive(false);
@@ -88,10 +97,12 @@ namespace Hanger51.Inventory
             }
 
             SetCurrentVisibility(true);
-            ApplyFallbackColor(equippedItem);
+            ApplyFallbackColor(equippedItem, equippedCondition);
         }
 
-        private void CreatePrefabView(GameObject prefab)
+        private void CreatePrefabView(
+            GameObject prefab,
+            EnginePartConditionData equippedCondition)
         {
             displayedPrefabModel = Instantiate(prefab, transform);
             displayedPrefabModel.name = $"Equipped {displayedItem.DisplayName} Model";
@@ -105,6 +116,13 @@ namespace Hanger51.Inventory
                 colliders[index].enabled = false;
             }
 
+            InventoryPickup[] pickups =
+                displayedPrefabModel.GetComponentsInChildren<InventoryPickup>(true);
+            for (int index = 0; index < pickups.Length; index++)
+            {
+                pickups[index].enabled = false;
+            }
+
             Renderer[] renderers = displayedPrefabModel.GetComponentsInChildren<Renderer>(true);
             for (int index = 0; index < renderers.Length; index++)
             {
@@ -113,6 +131,14 @@ namespace Hanger51.Inventory
             }
 
             ScalePrefabForFirstPersonView(renderers);
+
+            EnginePartConditionVisual conditionVisual =
+                displayedPrefabModel.GetComponent<EnginePartConditionVisual>();
+            if (conditionVisual == null && equippedCondition != null)
+            {
+                conditionVisual = displayedPrefabModel.AddComponent<EnginePartConditionVisual>();
+            }
+            conditionVisual?.Configure(equippedCondition);
         }
 
         private void ScalePrefabForFirstPersonView(Renderer[] renderers)
@@ -138,7 +164,9 @@ namespace Hanger51.Inventory
             displayedPrefabModel.transform.localScale = Vector3.one * scale;
         }
 
-        private void ApplyFallbackColor(InventoryItemDefinition equippedItem)
+        private void ApplyFallbackColor(
+            InventoryItemDefinition equippedItem,
+            EnginePartConditionData equippedCondition)
         {
             if (itemRenderer == null)
             {
@@ -149,6 +177,16 @@ namespace Hanger51.Inventory
 
             Color equippedColor = equippedItem.PlaceholderColor;
             equippedColor.a = 1f;
+            if (equippedCondition != null)
+            {
+                Color damaged = equippedCondition.Kind == EnginePartConditionKind.SparkPlug
+                    ? new Color(0.12f, 0.075f, 0.035f, 1f)
+                    : new Color(0.16f, 0.09f, 0.05f, 1f);
+                equippedColor = Color.Lerp(
+                    damaged,
+                    equippedColor,
+                    equippedCondition.Health / 100f);
+            }
 
             if (runtimeMaterial == null)
             {
