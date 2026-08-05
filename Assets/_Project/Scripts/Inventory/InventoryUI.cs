@@ -281,11 +281,21 @@ namespace Hanger51.Inventory
                 return;
             }
 
+            InventorySlotData selectedSlot = inventory != null
+                ? inventory.GetSlot(selectedSlotIndex)
+                : null;
+            EnginePartConditionData savedCondition = selectedSlot != null
+                ? selectedSlot.PeekCondition()
+                : null;
+
             if (activeAssemblyStation.TryInstall(
                     inventory,
                     selectedSlotIndex,
                     out string resultMessage))
             {
+                EnginePartConditionPersistenceController persistence =
+                    activeAssemblyStation.GetComponent<EnginePartConditionPersistenceController>();
+                persistence?.ApplyInstalledEngineBlock(savedCondition);
                 SelectFirstAvailableSlotWhenNeeded();
             }
 
@@ -346,9 +356,20 @@ namespace Hanger51.Inventory
 
             if (selectedItemDescriptionText != null)
             {
-                selectedItemDescriptionText.text = hasSelection
-                    ? $"{selectedSlot.Item.Description}\n\nQuantity: {selectedSlot.Quantity}"
-                    : "Click an occupied slot, then Equip, Drop One, or Install.";
+                if (hasSelection)
+                {
+                    string conditionSummary = selectedSlot.GetConditionSummary();
+                    string conditionLine = string.IsNullOrWhiteSpace(conditionSummary)
+                        ? string.Empty
+                        : $"\nCondition: {conditionSummary}";
+                    selectedItemDescriptionText.text =
+                        $"{selectedSlot.Item.Description}\n\nQuantity: {selectedSlot.Quantity}{conditionLine}";
+                }
+                else
+                {
+                    selectedItemDescriptionText.text =
+                        "Click an occupied slot, then Equip, Drop One, or Install.";
+                }
             }
 
             if (equippedItemText != null)
