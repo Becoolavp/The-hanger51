@@ -26,6 +26,7 @@ namespace Hanger51.EngineAssembly
         private Collider interactionCollider;
         private EngineAssemblyRemovalController removalController;
         private EngineConditionInspectionTarget conditionInspectionTarget;
+        private EnginePartConditionPersistenceController conditionPersistence;
         private float holdProgress;
         private bool isHolding;
         private bool isRemoving;
@@ -93,6 +94,7 @@ namespace Hanger51.EngineAssembly
             interactionCollider = GetComponent<Collider>();
             ResolveRemovalController();
             ResolveConditionInspectionTarget();
+            ResolveConditionPersistence();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -121,6 +123,7 @@ namespace Hanger51.EngineAssembly
             interactionCollider = GetComponent<Collider>();
             ResolveRemovalController();
             ResolveConditionInspectionTarget();
+            ResolveConditionPersistence();
             DisableVisualColliders();
             RefreshFromStation();
         }
@@ -173,19 +176,65 @@ namespace Hanger51.EngineAssembly
                 return false;
             }
 
-            bool completed = isRemoving
-                ? removalController.TryRemoveTarget(
-                    interactionKind,
-                    groupIndex,
-                    targetIndex,
-                    inventory,
-                    out resultMessage)
-                : station.TryCompleteTarget(
+            ResolveConditionPersistence();
+            bool completed;
+            if (isRemoving)
+            {
+                bool transfersCondition = interactionKind
+                    == EngineAssemblyInteractionKind.CoverPlacement
+                    || interactionKind == EngineAssemblyInteractionKind.SparkPlug;
+                EnginePartConditionData removedCondition = transfersCondition
+                    && conditionPersistence != null
+                        ? conditionPersistence.CapturePart(
+                            interactionKind,
+                            GetConditionPartIndex())
+                        : null;
+
+                if (transfersCondition)
+                {
+                    EnginePartConditionTransferContext.Begin(removedCondition);
+                }
+
+                try
+                {
+                    completed = removalController.TryRemoveTarget(
+                        interactionKind,
+                        groupIndex,
+                        targetIndex,
+                        inventory,
+                        out resultMessage);
+                }
+                finally
+                {
+                    if (transfersCondition)
+                    {
+                        EnginePartConditionTransferContext.End();
+                    }
+                }
+            }
+            else
+            {
+                EnginePartConditionData installedCondition = inventory != null
+                    ? inventory.EquippedCondition
+                    : null;
+                completed = station.TryCompleteTarget(
                     interactionKind,
                     groupIndex,
                     targetIndex,
                     inventory,
                     out resultMessage);
+
+                if (completed
+                    && conditionPersistence != null
+                    && (interactionKind == EngineAssemblyInteractionKind.CoverPlacement
+                        || interactionKind == EngineAssemblyInteractionKind.SparkPlug))
+                {
+                    conditionPersistence.ApplyInstalledPart(
+                        interactionKind,
+                        GetConditionPartIndex(),
+                        installedCondition);
+                }
+            }
 
             holdProgress = 0f;
             isHolding = false;
@@ -216,23 +265,18 @@ namespace Hanger51.EngineAssembly
 
             ResolveRemovalController();
             ResolveConditionInspectionTarget();
+            ResolveConditionPersistence();
             DisableVisualColliders();
 
             bool completed = IsComplete;
 
             if (interactionCollider != null)
             {
-                // Inspection must remain possible after a plug or cover has
-                // been removed. Keep only the existing small service target
-                // enabled; no broad inspection collider is needed.
                 interactionCollider.enabled = CanInteract || HasConditionInspection;
             }
 
             if (highlightRoot != null)
             {
-                // Installation locations remain highlighted. Installed parts
-                // stay visually clean and are removed by aiming at the physical
-                // hardware and holding R.
                 highlightRoot.SetActive(IsInteractable && !completed);
             }
 
@@ -252,6 +296,13 @@ namespace Hanger51.EngineAssembly
 
             SetAnimatedWorldPose(FinalWorldPosition, FinalWorldRotation);
             animatedVisual.SetActive(completed);
+        }
+
+        private int GetConditionPartIndex()
+        {
+            return interactionKind == EngineAssemblyInteractionKind.CoverPlacement
+                ? groupIndex
+                : targetIndex;
         }
 
         private void ApplyAnimatedPose(float normalizedProgress, bool removing)
@@ -309,6 +360,20 @@ namespace Hanger51.EngineAssembly
             }
         }
 
+        private void ResolveConditionPersistence()
+        {
+            if (station == null)
+            {
+                station = GetComponentInParent<EngineAssemblyStation>();
+            }
+
+            if (conditionPersistence == null && station != null)
+            {
+                conditionPersistence =
+                    station.GetComponent<EnginePartConditionPersistenceController>();
+            }
+        }
+
         private void ResolveConditionInspectionTarget()
         {
             if (conditionInspectionTarget == null)
@@ -346,6 +411,7 @@ namespace Hanger51.EngineAssembly
             animationLift = Mathf.Max(0f, animationLift);
             rotationTurns = Mathf.Max(0f, rotationTurns);
             ResolveConditionInspectionTarget();
+            ResolveConditionPersistence();
         }
     }
 }
