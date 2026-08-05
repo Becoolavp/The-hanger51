@@ -151,11 +151,17 @@ namespace Hanger51.EditorTools
 
                 EnginePartConditionPersistenceController persistence =
                     condition.GetComponent<EnginePartConditionPersistenceController>();
-                if (persistence == null
-                    || !persistence.ValidateConfiguration(out string details))
+                if (persistence == null)
                 {
                     Debug.LogError(
-                        $"Merlin Condition Step 27 failed for '{condition.name}': {(persistence == null ? "persistence controller is missing" : details)}.",
+                        $"Merlin Condition Step 27 failed for '{condition.name}': persistence controller is missing.",
+                        condition);
+                    passed = false;
+                }
+                else if (!persistence.ValidateConfiguration(out string details))
+                {
+                    Debug.LogError(
+                        $"Merlin Condition Step 27 failed for '{condition.name}': {details}.",
                         condition);
                     passed = false;
                 }
