@@ -203,16 +203,19 @@ namespace Hanger51.Inventory
         private Bounds CalculateLocalRendererBounds()
         {
             Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            Transform generatedCrackRoot = transform.Find(CrackRootName);
             bool initialized = false;
             Bounds result = new Bounds(Vector3.zero, Vector3.zero);
 
             for (int index = 0; index < renderers.Length; index++)
             {
                 Renderer renderer = renderers[index];
+                bool belongsToGeneratedCracks = generatedCrackRoot != null
+                    && renderer != null
+                    && renderer.transform.IsChildOf(generatedCrackRoot);
                 if (renderer == null
                     || renderer is LineRenderer
-                    || renderer.transform.IsChildOf(
-                        transform.Find(CrackRootName)))
+                    || belongsToGeneratedCracks)
                 {
                     continue;
                 }
