@@ -78,16 +78,36 @@ namespace Hanger51.Inventory
             {
                 EngineAssemblyRemovalController removalController =
                     currentAssemblyStation.GetComponent<EngineAssemblyRemovalController>();
+                EnginePartConditionPersistenceController persistence =
+                    currentAssemblyStation.GetComponent<EnginePartConditionPersistenceController>();
                 bool holdingR = keyboard != null && keyboard.rKey.isPressed;
+                bool transferBlockCondition = removalController != null
+                    && removalController.CanRemoveEngineBlock;
 
-                if (removalController != null
-                    && removalController.ProcessEngineRemovalHold(
-                        inventory,
-                        holdingR,
-                        Time.deltaTime,
-                        out string removalMessage))
+                if (transferBlockCondition)
                 {
-                    inventoryUI.ShowStatusMessage(removalMessage, 2f);
+                    EnginePartConditionTransferContext.Begin(
+                        persistence != null ? persistence.CaptureEngineBlock() : null);
+                }
+
+                try
+                {
+                    if (removalController != null
+                        && removalController.ProcessEngineRemovalHold(
+                            inventory,
+                            holdingR,
+                            Time.deltaTime,
+                            out string removalMessage))
+                    {
+                        inventoryUI.ShowStatusMessage(removalMessage, 2f);
+                    }
+                }
+                finally
+                {
+                    if (transferBlockCondition)
+                    {
+                        EnginePartConditionTransferContext.End();
+                    }
                 }
 
                 string stationPrompt = removalController != null
@@ -177,11 +197,6 @@ namespace Hanger51.Inventory
                 }
             }
 
-            // A loose pickup directly under the crosshair should remain easy to
-            // collect, but small plug and bolt targets take priority over the
-            // large cover/stand colliders when they occupy the same view line.
-            // Trigger targets are included because cover condition inspection
-            // and reversible maintenance intentionally share the same collider.
             if (nearestPickup != null
                 && (bestAssemblyTarget == null
                     || nearestPickupDistance + 0.05f < bestTargetDistance))
@@ -276,6 +291,7 @@ namespace Hanger51.Inventory
         private void OnDisable()
         {
             CancelCurrentAssemblyHold();
+            EnginePartConditionTransferContext.Clear();
 
             if (inventoryUI != null)
             {
