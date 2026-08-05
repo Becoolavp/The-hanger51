@@ -1,3 +1,4 @@
+using System.Collections.Generic;
 using UnityEngine;
 
 namespace Hanger51.Inventory
@@ -29,15 +30,24 @@ namespace Hanger51.Inventory
                     slotIndex,
                     1,
                     out InventoryItemDefinition removedItem,
-                    out int removedQuantity))
+                    out int removedQuantity,
+                    out List<EnginePartConditionData> removedConditions))
             {
                 return false;
             }
 
             Vector3 groundPosition = FindDropGroundPosition();
-            CreateDroppedPickup(removedItem, removedQuantity, groundPosition);
+            CreateDroppedPickup(
+                removedItem,
+                removedQuantity,
+                removedConditions,
+                groundPosition);
 
-            resultMessage = $"Dropped {removedItem.DisplayName}.";
+            string conditionText = removedConditions.Count > 0
+                && removedConditions[0] != null
+                    ? $" ({removedConditions[0].GetConditionSummary()})"
+                    : string.Empty;
+            resultMessage = $"Dropped {removedItem.DisplayName}{conditionText}.";
             return true;
         }
 
@@ -71,6 +81,7 @@ namespace Hanger51.Inventory
         private void CreateDroppedPickup(
             InventoryItemDefinition item,
             int quantity,
+            IReadOnlyList<EnginePartConditionData> conditions,
             Vector3 groundPosition)
         {
             GameObject pickupObject;
@@ -98,7 +109,15 @@ namespace Hanger51.Inventory
                 pickup = pickupObject.AddComponent<InventoryPickup>();
             }
 
-            pickup.Configure(item, quantity);
+            if (EnginePartConditionData.IsTrackedItem(item))
+            {
+                pickup.Configure(item, conditions);
+            }
+            else
+            {
+                pickup.Configure(item, quantity);
+            }
+
             EnsurePickupCollider(pickupObject);
             AlignBottomToGround(pickupObject, groundPosition.y);
         }
