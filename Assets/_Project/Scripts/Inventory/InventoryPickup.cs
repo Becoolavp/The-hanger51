@@ -39,10 +39,15 @@ namespace Hanger51.Inventory
             conditionInstances.Clear();
             if (EnginePartConditionData.IsTrackedItem(item))
             {
+                EnginePartConditionData transferred = quantity == 1
+                    ? EnginePartConditionTransferContext.PeekForItem(item)
+                    : null;
                 for (int index = 0; index < quantity; index++)
                 {
                     conditionInstances.Add(
-                        EnginePartConditionData.CreateDefaultForItem(item));
+                        transferred != null && index == 0
+                            ? transferred.Clone()
+                            : EnginePartConditionData.CreateDefaultForItem(item));
                 }
             }
             FinalizeConfiguration();
