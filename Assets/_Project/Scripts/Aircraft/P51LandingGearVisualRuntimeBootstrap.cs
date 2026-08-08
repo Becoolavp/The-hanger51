@@ -1,9 +1,13 @@
+using System.Reflection;
 using UnityEngine;
 
 namespace Hanger51.Aircraft
 {
     public static class P51LandingGearVisualRuntimeBootstrap
     {
+        private const BindingFlags PrivateInstance =
+            BindingFlags.Instance | BindingFlags.NonPublic;
+
         [RuntimeInitializeOnLoadMethod(RuntimeInitializeLoadType.AfterSceneLoad)]
         private static void ConfigureGeneratedLandingGearVisuals()
         {
@@ -39,11 +43,14 @@ namespace Hanger51.Aircraft
                     FindDescendant(gearRoot, "Right Main Tire and Valve Service Target"),
                     FindDescendant(gearRoot, "Tailwheel Tire and Valve Service Target")
                 };
+
+                P51RaycastLandingGear physics =
+                    maintenance.GetComponent<P51RaycastLandingGear>();
                 Transform[] proxies =
                 {
-                    FindDescendant(aircraft, "Wheel Physics Visual Proxy 1"),
-                    FindDescendant(aircraft, "Wheel Physics Visual Proxy 2"),
-                    FindDescendant(aircraft, "Wheel Physics Visual Proxy 3")
+                    GetConfiguredVisual(physics, "leftMainVisual"),
+                    GetConfiguredVisual(physics, "rightMainVisual"),
+                    GetConfiguredVisual(physics, "tailwheelVisual")
                 };
 
                 P51TireWearVisualController wear =
@@ -67,6 +74,21 @@ namespace Hanger51.Aircraft
                     maintenance.gameObject.AddComponent<P51LandingGearReplacementService>();
                 }
             }
+        }
+
+        private static Transform GetConfiguredVisual(
+            P51RaycastLandingGear physics,
+            string fieldName)
+        {
+            if (physics == null)
+            {
+                return null;
+            }
+
+            FieldInfo field = typeof(P51RaycastLandingGear).GetField(
+                fieldName,
+                PrivateInstance);
+            return field != null ? field.GetValue(physics) as Transform : null;
         }
 
         private static Transform FindDescendant(Transform root, string objectName)
