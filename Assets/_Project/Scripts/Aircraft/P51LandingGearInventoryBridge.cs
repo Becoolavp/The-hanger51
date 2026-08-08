@@ -131,6 +131,7 @@ namespace Hanger51.Aircraft
             PlayerInventory inventory,
             out string resultMessage)
         {
+            _ = inventory;
             resultMessage = string.Empty;
             if (!PrepareService(wheelIndex, out resultMessage))
             {
@@ -173,17 +174,15 @@ namespace Hanger51.Aircraft
                 maintenance.GetProperPressure(wheelIndex),
                 burst[wheelIndex]);
 
-            bool placedInInventory = StoreOrDropPart(
-                wheelIndex,
-                item,
-                condition,
-                inventory);
+            if (!SpawnLoosePart(wheelIndex, item, condition, true))
+            {
+                resultMessage = "The tire could not be placed beside the wheel.";
+                return false;
+            }
+
             installed[wheelIndex] = false;
             RefreshMaintenanceVisualsAndPhysics();
-
-            resultMessage = placedInInventory
-                ? $"Removed the {maintenance.GetWheelName(wheelIndex)} tire from its rim and stored that exact {condition.Health:F0}% / {condition.TirePressurePsi:F1} PSI tire in inventory."
-                : $"Removed the {maintenance.GetWheelName(wheelIndex)} tire. Inventory was full, so that exact conditioned tire was placed beside the aircraft.";
+            resultMessage = $"Pulled the {maintenance.GetWheelName(wheelIndex)} tire off the rim. That exact {condition.Health:F0}% / {condition.TirePressurePsi:F1} PSI tire is now loose beside the wheel; press E on it to put it in inventory.";
             return true;
         }
 
@@ -253,6 +252,7 @@ namespace Hanger51.Aircraft
             PlayerInventory inventory,
             out string resultMessage)
         {
+            _ = inventory;
             resultMessage = string.Empty;
             if (!PrepareService(wheelIndex, out resultMessage))
             {
@@ -284,18 +284,16 @@ namespace Hanger51.Aircraft
             EnginePartConditionData condition = EnginePartConditionData.Create(
                 EnginePartConditionKind.Rim,
                 rimHealth[wheelIndex]);
-            bool placedInInventory = StoreOrDropPart(
-                wheelIndex,
-                item,
-                condition,
-                inventory);
+            if (!SpawnLoosePart(wheelIndex, item, condition, false))
+            {
+                resultMessage = "The rim could not be placed beside the wheel.";
+                return false;
+            }
+
             rimInstalled[wheelIndex] = false;
             ApplyRimVisualState();
             OverridePhysicsForMissingRims();
-
-            resultMessage = placedInInventory
-                ? $"Removed the {maintenance.GetWheelName(wheelIndex)} rim and stored that exact rim in inventory."
-                : $"Removed the {maintenance.GetWheelName(wheelIndex)} rim. Inventory was full, so the rim was placed beside the aircraft.";
+            resultMessage = $"Pulled the {maintenance.GetWheelName(wheelIndex)} rim off the gear. That exact {condition.Health:F0}% rim is now loose beside the wheel; press E on it to put it in inventory.";
             return true;
         }
 
@@ -382,16 +380,15 @@ namespace Hanger51.Aircraft
             burst = tireBurstField.GetValue(maintenance) as bool[];
         }
 
-        private bool StoreOrDropPart(
+        private bool SpawnLoosePart(
             int wheelIndex,
             InventoryItemDefinition item,
             EnginePartConditionData condition,
-            PlayerInventory inventory)
+            bool isTire)
         {
-            if (inventory != null
-                && inventory.AddConditionedItem(item, condition) == 0)
+            if (item == null)
             {
-                return true;
+                return false;
             }
 
             GameObject pickupObject;
@@ -409,28 +406,41 @@ namespace Hanger51.Aircraft
             }
 
             pickupObject.name = $"Removed {item.DisplayName}";
-            float side = wheelIndex == 0 ? -1f : wheelIndex == 1 ? 1f : 0.6f;
-            pickupObject.transform.position = transform.position
-                + transform.right * side * 1.8f
-                + transform.forward * 0.4f
-                + Vector3.up * 0.35f;
+            Transform wheelReference = maintenance != null
+                ? maintenance.GetValveTarget(wheelIndex)
+                : null;
+            Vector3 basePosition = wheelReference != null
+                ? wheelReference.position
+                : transform.position;
+            Vector3 outward = wheelIndex == 0
+                ? -transform.right
+                : wheelIndex == 1
+                    ? transform.right
+                    : transform.right;
+            float outwardDistance = wheelIndex == 2 ? 0.48f : 0.72f;
+            pickupObject.transform.position = basePosition
+                + outward * outwardDistance
+                + Vector3.up * (isTire ? 0.18f : 0.12f)
+                + transform.forward * (wheelIndex == 2 ? -0.10f : 0.06f);
             pickupObject.transform.rotation = Quaternion.Euler(
                 90f,
                 transform.eulerAngles.y,
                 0f);
+
             Collider collider = pickupObject.GetComponent<Collider>();
             if (collider == null)
             {
                 collider = pickupObject.AddComponent<BoxCollider>();
             }
             collider.isTrigger = true;
+
             InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
             if (pickup == null)
             {
                 pickup = pickupObject.AddComponent<InventoryPickup>();
             }
             pickup.Configure(item, condition);
-            return false;
+            return true;
         }
 
         private void RefreshMaintenanceVisualsAndPhysics()
