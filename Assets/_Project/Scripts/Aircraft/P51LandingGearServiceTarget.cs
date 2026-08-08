@@ -18,7 +18,7 @@ namespace Hanger51.Aircraft
         [SerializeField, Range(0, 2)] private int wheelIndex;
         [SerializeField, Min(0.2f)] private float holdDuration = 1.15f;
 
-        private P51LandingGearReplacementService replacementService;
+        private P51LandingGearInventoryBridge inventoryBridge;
         private float holdProgress;
         private bool removing;
 
@@ -64,9 +64,22 @@ namespace Hanger51.Aircraft
                     return $"{name} wheel station — reinstall the gear first | X inspect";
                 }
 
-                return controller.IsTireInstalled(wheelIndex)
-                    ? $"Hold R: remove {name} tire from rim{progress} | N: connect nitrogen cart | X inspect"
-                    : $"Hold E: reinstall removed tire, or equip the correct replacement tire and hold E to fit new{progress} | X inspect";
+                if (inventoryBridge == null || !inventoryBridge.IsReady)
+                {
+                    return $"{name} wheel station — inventory wheel service needs P-51 Step 30 | X inspect";
+                }
+
+                if (controller.IsTireInstalled(wheelIndex))
+                {
+                    return $"Hold R: remove {name} tire to inventory{progress} | N: connect nitrogen cart | X inspect";
+                }
+
+                if (inventoryBridge.IsRimInstalled(wheelIndex))
+                {
+                    return $"Hold R: remove {name} rim to inventory | Equip correct tire + Hold E: install tire{progress} | X inspect";
+                }
+
+                return $"Equip correct {name} rim + Hold E: install rim{progress} | X inspect";
             }
         }
 
@@ -120,9 +133,7 @@ namespace Hanger51.Aircraft
             else
             {
                 valid = controller.IsGearInstalled(wheelIndex)
-                    && (shouldRemove
-                        ? controller.IsTireInstalled(wheelIndex)
-                        : shouldInstall && !controller.IsTireInstalled(wheelIndex));
+                    && (shouldRemove || shouldInstall);
             }
 
             if (!valid || !controller.CanService(out resultMessage))
@@ -150,21 +161,43 @@ namespace Hanger51.Aircraft
                     ? controller.TryRemoveGear(wheelIndex, out resultMessage)
                     : controller.TryInstallGear(wheelIndex, out resultMessage);
             }
-            else if (removing)
+            else if (inventoryBridge == null || !inventoryBridge.IsReady)
             {
-                completed = controller.TryRemoveTire(wheelIndex, out resultMessage);
+                completed = false;
+                resultMessage = "Wheel inventory service is not configured. Run P-51 Step 30.";
             }
-            else if (replacementService != null
-                && replacementService.CanUseEquippedReplacement(wheelIndex, inventory))
+            else if (removing && controller.IsTireInstalled(wheelIndex))
             {
-                completed = replacementService.TryInstallReplacementTire(
+                completed = inventoryBridge.TryRemoveTire(
+                    wheelIndex,
+                    inventory,
+                    out resultMessage);
+            }
+            else if (removing && inventoryBridge.IsRimInstalled(wheelIndex))
+            {
+                completed = inventoryBridge.TryRemoveRim(
+                    wheelIndex,
+                    inventory,
+                    out resultMessage);
+            }
+            else if (!removing && !inventoryBridge.IsRimInstalled(wheelIndex))
+            {
+                completed = inventoryBridge.TryInstallRim(
+                    wheelIndex,
+                    inventory,
+                    out resultMessage);
+            }
+            else if (!removing && !controller.IsTireInstalled(wheelIndex))
+            {
+                completed = inventoryBridge.TryInstallTire(
                     wheelIndex,
                     inventory,
                     out resultMessage);
             }
             else
             {
-                completed = controller.TryInstallTire(wheelIndex, out resultMessage);
+                completed = false;
+                resultMessage = "That wheel service action is not available in the current configuration.";
             }
 
             CancelHold();
@@ -174,9 +207,16 @@ namespace Hanger51.Aircraft
         public string Inspect()
         {
             ResolveReferences();
-            return controller != null
-                ? controller.GetInspectionText(wheelIndex)
-                : "Landing gear condition controller is missing.";
+            if (controller == null)
+            {
+                return "Landing gear condition controller is missing.";
+            }
+
+            string baseText = controller.GetInspectionText(wheelIndex);
+            string rimText = inventoryBridge != null
+                ? inventoryBridge.GetRimInspectionText(wheelIndex)
+                : "Rim inventory state unavailable";
+            return $"{baseText} | {rimText}";
         }
 
         public void CancelHold()
@@ -191,9 +231,9 @@ namespace Hanger51.Aircraft
             {
                 controller = GetComponentInParent<P51LandingGearMaintenanceController>();
             }
-            if (replacementService == null)
+            if (inventoryBridge == null)
             {
-                replacementService = GetComponentInParent<P51LandingGearReplacementService>();
+                inventoryBridge = GetComponentInParent<P51LandingGearInventoryBridge>();
             }
         }
 
