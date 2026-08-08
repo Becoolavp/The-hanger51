@@ -6,40 +6,49 @@ Use branch `agent/merlin-engine-assembly` and the saved movement-test scene.
 
 1. Exit Play mode and allow Unity to compile.
 2. Clear the Console and confirm there are no new red compiler errors.
-3. Confirm P-51 Steps 28 and 29 have already been completed.
-4. Run `Hanger 51 > P-51 Mustang > 30 - Add Inventory Wheels and Mobile Nitrogen Cart`.
-5. Expect `P-51 Step 30 complete`.
-6. Run `Hanger 51 > P-51 Mustang > 31 - Validate Inventory Wheels and Mobile Nitrogen Cart`.
-7. Expect `P-51 Step 31 passed`.
+3. Confirm P-51 Steps 28 through 31 have already been completed.
+4. Do not rerun older landing-gear generation steps after Step 30.
 
-Do not rerun older landing-gear generation steps after Step 30.
+The latest bolt-animation and world-first wheel-part behavior is runtime code and does not require another scene setup step after Steps 30/31 are already installed.
 
-## Tire inventory round trip
+## Large mounting-bolt animation
 
-1. Enter Play mode with the airplane stopped and the gear fully down.
+1. Enter Play mode with the airplane stopped and landing gear fully down.
 2. Exit the cockpit.
-3. Aim at a main tire and press `X`; record its health and PSI.
-4. Hold `R` at the tire.
-5. Confirm the tire disappears from the rim and appears in Player inventory.
-6. Confirm the inventory condition text still shows the same health and PSI.
-7. Equip that same main tire.
-8. Aim at the bare wheel station and hold `E`.
-9. Confirm the exact tire returns with the same health and PSI.
-10. Repeat with the smaller tailwheel tire.
+3. Aim at one large landing-gear mounting bolt.
+4. Hold `R`.
+5. Confirm the bolt visibly rotates several turns while backing out along its own shaft, similar to the Merlin fasteners.
+6. Confirm the landing-gear assembly is released only when the hold completes.
+7. Hold `E` at the mount to reinstall the gear.
+8. Confirm the large bolt visibly spins and moves back into its installed position.
 
-If inventory is full, the removed conditioned tire should appear beside the aircraft as a normal pickup rather than losing its state.
+## Tire physical pickup and inventory round trip
 
-## Rim inventory round trip
+1. Aim at a main tire and press `X`; record its health and PSI.
+2. Hold `R` at the tire.
+3. Confirm the installed tire disappears from the rim and that a separate physical tire appears beside that wheel.
+4. Confirm the loose tire does NOT enter inventory automatically.
+5. Aim at the loose tire and confirm its pickup prompt shows the same health and PSI.
+6. Press `E` on the loose tire.
+7. Confirm that exact tire now enters Player inventory with the same health and PSI.
+8. Equip that same main tire.
+9. Aim at the bare wheel station and hold `E`.
+10. Confirm the exact tire returns with the same health and PSI.
+11. Repeat with the smaller tailwheel tire.
 
-1. Remove a tire first.
+## Rim physical pickup and inventory round trip
+
+1. Remove the tire first and pick it up or move away from it.
 2. With the tire already removed, hold `R` at the same wheel station again.
-3. Confirm the rim disappears and enters inventory.
-4. Press `X` and confirm the wheel station reports the rim removed.
-5. Equip the matching rim item.
-6. Hold `E` at the wheel station.
-7. Confirm the rim returns.
-8. Equip the matching tire and hold `E` again to complete the wheel.
-9. Confirm a main rim/tire cannot be used as a tailwheel rim/tire and vice versa.
+3. Confirm the installed rim disappears and a separate physical rim appears beside that wheel.
+4. Confirm the rim does NOT enter inventory automatically.
+5. Aim at the loose rim and press `E` to pick it up.
+6. Press `X` at the wheel station and confirm it reports the rim removed.
+7. Equip the matching rim item.
+8. Hold `E` at the wheel station.
+9. Confirm the rim returns.
+10. Equip the matching tire and hold `E` again to complete the wheel.
+11. Confirm a main rim/tire cannot be used as a tailwheel rim/tire and vice versa.
 
 Shop products should include:
 
@@ -68,6 +77,7 @@ Shop products should include:
 - Gear retract/extend still works with `G`.
 - Normal raycast suspension, steering, brakes, and penetration protection still work.
 - A removed rim does not leave invisible wheel support.
+- Tire health, pressure, and burst state survive aircraft -> world pickup -> inventory -> aircraft.
 - Tire health and pressure still affect landing damage and drag.
 - A destroyed tire still looks failed and produces strong side drag until replaced.
 - Newly purchased tires remain partially inflated and require nitrogen service.
