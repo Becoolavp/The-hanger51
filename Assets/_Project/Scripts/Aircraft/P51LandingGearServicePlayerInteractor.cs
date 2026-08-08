@@ -17,6 +17,7 @@ namespace Hanger51.Aircraft
 
         private P51LandingGearServiceTarget currentTarget;
         private P51NitrogenCartController currentCart;
+        private P51NitrogenCartController pushedCart;
 
         private void Awake()
         {
@@ -34,8 +35,26 @@ namespace Hanger51.Aircraft
             if (playerCamera == null || inventoryUI == null || inventoryUI.IsOpen)
             {
                 CancelTargetHold();
+                ReleasePushedCart();
                 return;
             }
+
+            Keyboard keyboard = Keyboard.current;
+            if (pushedCart != null && pushedCart.IsBeingMoved)
+            {
+                if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
+                {
+                    pushedCart.TryToggleMove(playerCamera.transform, out string releaseMessage);
+                    inventoryUI.ShowStatusMessage(releaseMessage, 2.5f);
+                    pushedCart = null;
+                    inventoryUI.SetInteractionPrompt(string.Empty);
+                    return;
+                }
+
+                inventoryUI.SetInteractionPrompt(pushedCart.InteractionText);
+                return;
+            }
+            pushedCart = null;
 
             FindCandidate(out P51LandingGearServiceTarget target, out P51NitrogenCartController cart);
             if (target != currentTarget)
@@ -45,7 +64,6 @@ namespace Hanger51.Aircraft
             }
             currentCart = cart;
 
-            Keyboard keyboard = Keyboard.current;
             if (currentTarget != null)
             {
                 bool holdE = keyboard != null && keyboard.eKey.isPressed;
@@ -74,7 +92,7 @@ namespace Hanger51.Aircraft
                     string nitrogenMessage;
                     if (nearest == null)
                     {
-                        nitrogenMessage = "No nitrogen cart is within hose range.";
+                        nitrogenMessage = "No nitrogen cart exists in the hangar.";
                     }
                     else if (nearest.IsConnected)
                     {
@@ -99,6 +117,27 @@ namespace Hanger51.Aircraft
             {
                 if (keyboard != null)
                 {
+                    if (keyboard.eKey.wasPressedThisFrame)
+                    {
+                        if (currentCart.TryToggleMove(
+                                playerCamera.transform,
+                                out string moveMessage))
+                        {
+                            inventoryUI.ShowStatusMessage(moveMessage, 2.8f);
+                            if (currentCart.IsBeingMoved)
+                            {
+                                pushedCart = currentCart;
+                            }
+                        }
+                        else if (!string.IsNullOrWhiteSpace(moveMessage))
+                        {
+                            inventoryUI.ShowStatusMessage(moveMessage, 2.8f);
+                        }
+
+                        inventoryUI.SetInteractionPrompt(currentCart.InteractionText);
+                        return;
+                    }
+
                     float adjust = 0f;
                     if (keyboard.qKey.isPressed) adjust += 1f;
                     if (keyboard.zKey.isPressed) adjust -= 1f;
@@ -238,9 +277,19 @@ namespace Hanger51.Aircraft
             currentTarget?.CancelHold();
         }
 
+        private void ReleasePushedCart()
+        {
+            if (pushedCart != null)
+            {
+                pushedCart.StopMoving();
+                pushedCart = null;
+            }
+        }
+
         private void OnDisable()
         {
             CancelTargetHold();
+            ReleasePushedCart();
             currentTarget = null;
             currentCart = null;
             if (inventoryUI != null)
