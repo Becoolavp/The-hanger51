@@ -177,9 +177,20 @@ namespace Hanger51.Commerce
                 yield return null;
             }
 
-            GameObject deliveredContent = productKind == ShopProductKind.InventoryItem
-                ? SpawnInventoryDelivery()
-                : SpawnAssemblyDelivery();
+            GameObject deliveredContent;
+            switch (productKind)
+            {
+                case ShopProductKind.InventoryItem:
+                    deliveredContent = SpawnInventoryDelivery();
+                    break;
+                case ShopProductKind.ServiceObject:
+                    deliveredContent = SpawnServiceObjectDelivery();
+                    break;
+                default:
+                    deliveredContent = SpawnAssemblyDelivery();
+                    break;
+            }
+
             bool spawned = deliveredContent != null;
             if (spawned)
             {
@@ -195,11 +206,25 @@ namespace Hanger51.Commerce
                     : $"DELIVERY ERROR\n{productName}";
             }
 
-            pendingStatusMessage = spawned
-                ? productKind == ShopProductKind.InventoryItem
-                    ? $"Unboxed {productName}. Pick up the delivered item to clear this shipment bay."
-                    : $"Unboxed {productName}. The stand was removed with the crate; the complete Merlin is ready on the floor."
-                : $"The {productName} shipment opened, but its contents could not be created.";
+            if (spawned)
+            {
+                switch (productKind)
+                {
+                    case ShopProductKind.InventoryItem:
+                        pendingStatusMessage = $"Unboxed {productName}. Pick up the delivered item to clear this shipment bay.";
+                        break;
+                    case ShopProductKind.ServiceObject:
+                        pendingStatusMessage = $"Unboxed {productName}. The service equipment is ready to use; move it away from the shipment bay when finished.";
+                        break;
+                    default:
+                        pendingStatusMessage = $"Unboxed {productName}. The stand was removed with the crate; the complete Merlin is ready on the floor.";
+                        break;
+                }
+            }
+            else
+            {
+                pendingStatusMessage = $"The {productName} shipment opened, but its contents could not be created.";
+            }
 
             yield return new WaitForSeconds(3f);
             if (!spawned)
@@ -251,6 +276,31 @@ namespace Hanger51.Commerce
             return pickupObject;
         }
 
+        private GameObject SpawnServiceObjectDelivery()
+        {
+            if (assemblyTemplate == null)
+            {
+                return null;
+            }
+
+            GameObject serviceObject = Instantiate(assemblyTemplate);
+            serviceObject.name = $"Delivered {productName}";
+            serviceObject.transform.SetPositionAndRotation(
+                contentWorldPosition,
+                contentWorldRotation);
+            serviceObject.SetActive(true);
+
+            EngineOilCanController oilCan =
+                serviceObject.GetComponentInChildren<EngineOilCanController>(true);
+            if (oilCan != null)
+            {
+                oilCan.ResetToFullServiceState();
+            }
+
+            AlignBottomToGround(serviceObject, contentWorldPosition.y);
+            return serviceObject;
+        }
+
         private GameObject SpawnAssemblyDelivery()
         {
             if (assemblyTemplate == null)
@@ -296,9 +346,6 @@ namespace Hanger51.Commerce
             transport.CompletePlacement(false);
             transport.RefreshMaintenanceTargets();
 
-            // Shipment occupancy follows the actual portable engine rather than
-            // the invisible station owner. Moving the Merlin with the hoist will
-            // therefore free the receiving bay normally.
             return transport.TransportRoot.gameObject;
         }
 
@@ -379,9 +426,19 @@ namespace Hanger51.Commerce
                 return;
             }
 
-            string quantityText = productKind == ShopProductKind.InventoryItem
-                ? $"QTY {quantity}"
-                : "COMPLETE ASSEMBLY";
+            string quantityText;
+            switch (productKind)
+            {
+                case ShopProductKind.InventoryItem:
+                    quantityText = $"QTY {quantity}";
+                    break;
+                case ShopProductKind.ServiceObject:
+                    quantityText = "SERVICE EQUIPMENT";
+                    break;
+                default:
+                    quantityText = "COMPLETE ASSEMBLY";
+                    break;
+            }
             shippingLabel.text = $"HANGER 51 SUPPLY\n{productName}\n{quantityText}";
         }
 
