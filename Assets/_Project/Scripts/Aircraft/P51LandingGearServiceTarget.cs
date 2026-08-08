@@ -20,7 +20,14 @@ namespace Hanger51.Aircraft
         private float holdProgress;
         private bool removing;
 
-        public P51LandingGearMaintenanceController Controller => controller;
+        public P51LandingGearMaintenanceController Controller
+        {
+            get
+            {
+                ResolveController();
+                return controller;
+            }
+        }
         public P51LandingGearServiceKind ServiceKind => serviceKind;
         public int WheelIndex => wheelIndex;
         public Transform ServicePoint => transform;
@@ -29,6 +36,7 @@ namespace Hanger51.Aircraft
         {
             get
             {
+                ResolveController();
                 if (controller == null)
                 {
                     return string.Empty;
@@ -60,6 +68,16 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private void Awake()
+        {
+            ResolveController();
+        }
+
+        private void OnEnable()
+        {
+            ResolveController();
+        }
+
         public void Configure(
             P51LandingGearMaintenanceController configuredController,
             P51LandingGearServiceKind configuredKind,
@@ -70,6 +88,7 @@ namespace Hanger51.Aircraft
             serviceKind = configuredKind;
             wheelIndex = Mathf.Clamp(configuredWheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, configuredHoldDuration);
+            ResolveController();
         }
 
         public bool ProcessInteraction(
@@ -79,6 +98,7 @@ namespace Hanger51.Aircraft
             out string resultMessage)
         {
             resultMessage = string.Empty;
+            ResolveController();
             if (controller == null)
             {
                 CancelHold();
@@ -140,6 +160,7 @@ namespace Hanger51.Aircraft
 
         public string Inspect()
         {
+            ResolveController();
             return controller != null
                 ? controller.GetInspectionText(wheelIndex)
                 : "Landing gear condition controller is missing.";
@@ -151,6 +172,14 @@ namespace Hanger51.Aircraft
             removing = false;
         }
 
+        private void ResolveController()
+        {
+            if (controller == null)
+            {
+                controller = GetComponentInParent<P51LandingGearMaintenanceController>();
+            }
+        }
+
         private void OnDisable()
         {
             CancelHold();
@@ -160,6 +189,7 @@ namespace Hanger51.Aircraft
         {
             wheelIndex = Mathf.Clamp(wheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, holdDuration);
+            ResolveController();
         }
     }
 }
