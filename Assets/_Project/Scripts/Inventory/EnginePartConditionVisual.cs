@@ -12,11 +12,14 @@ namespace Hanger51.Inventory
 
         private readonly List<Material> runtimeMaterials = new List<Material>();
         private MaterialPropertyBlock propertyBlock;
+        private Vector3 baselineScale = Vector3.one;
+        private bool baselineScaleCaptured;
 
         public EnginePartConditionData Condition => condition;
 
         public void Configure(EnginePartConditionData configuredCondition)
         {
+            CaptureBaselineScale();
             condition = configuredCondition != null
                 ? configuredCondition.Clone()
                 : null;
@@ -26,15 +29,18 @@ namespace Hanger51.Inventory
 
         public void ApplyVisuals()
         {
+            CaptureBaselineScale();
             RemoveGeneratedCracks();
 
             if (condition == null || !condition.IsTracked)
             {
+                transform.localScale = baselineScale;
                 ClearRendererOverrides();
                 return;
             }
 
             ApplyWearTint();
+            ApplyTireShape();
             if (condition.IsCracked)
             {
                 CreateCrackMarks();
@@ -61,6 +67,12 @@ namespace Hanger51.Inventory
                     break;
                 case EnginePartConditionKind.EngineBlock:
                     damageColor = new Color(0.10f, 0.085f, 0.07f, 1f);
+                    break;
+                case EnginePartConditionKind.Tire:
+                    damageColor = new Color(0.16f, 0.085f, 0.035f, 1f);
+                    break;
+                case EnginePartConditionKind.Rim:
+                    damageColor = new Color(0.18f, 0.16f, 0.13f, 1f);
                     break;
                 default:
                     damageColor = Color.gray;
@@ -102,6 +114,49 @@ namespace Hanger51.Inventory
                 }
                 renderer.SetPropertyBlock(propertyBlock);
             }
+        }
+
+        private void ApplyTireShape()
+        {
+            transform.localScale = baselineScale;
+            if (condition == null || condition.Kind != EnginePartConditionKind.Tire)
+            {
+                return;
+            }
+
+            float recommended = Mathf.Max(1f, condition.RecommendedTirePressurePsi);
+            float pressureRatio = Mathf.Clamp01(condition.TirePressurePsi / recommended);
+            float healthRatio = Mathf.Clamp01(condition.Health / 100f);
+            float verticalScale;
+            float horizontalScale;
+
+            if (condition.TireFailed)
+            {
+                verticalScale = 0.34f;
+                horizontalScale = 1.12f;
+            }
+            else
+            {
+                float pressureShape = Mathf.Lerp(0.58f, 1f, pressureRatio);
+                float healthShape = Mathf.Lerp(0.82f, 1f, healthRatio);
+                verticalScale = pressureShape * healthShape;
+                horizontalScale = Mathf.Lerp(1.08f, 1f, pressureRatio);
+            }
+
+            transform.localScale = Vector3.Scale(
+                baselineScale,
+                new Vector3(horizontalScale, verticalScale, horizontalScale));
+        }
+
+        private void CaptureBaselineScale()
+        {
+            if (baselineScaleCaptured)
+            {
+                return;
+            }
+
+            baselineScale = transform.localScale;
+            baselineScaleCaptured = true;
         }
 
         private void ClearRendererOverrides()
