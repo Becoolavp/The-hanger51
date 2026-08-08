@@ -126,12 +126,10 @@ namespace Hanger51.Aircraft
                 : $"Rim: removed, last condition {GetRimHealth(wheelIndex):F1}%";
         }
 
-        public bool TryRemoveTire(
+        public bool TryRemoveWheelAssembly(
             int wheelIndex,
-            PlayerInventory inventory,
             out string resultMessage)
         {
-            _ = inventory;
             resultMessage = string.Empty;
             if (!PrepareService(wheelIndex, out resultMessage))
             {
@@ -139,24 +137,20 @@ namespace Hanger51.Aircraft
             }
             if (!maintenance.IsGearInstalled(wheelIndex))
             {
-                resultMessage = "Reinstall the landing gear before removing its tire.";
+                resultMessage = "Reinstall the landing gear before removing its wheel assembly.";
                 return false;
             }
-            if (!IsRimInstalled(wheelIndex))
+            if (!IsRimInstalled(wheelIndex) || !maintenance.IsTireInstalled(wheelIndex))
             {
-                resultMessage = "The rim is already removed.";
-                return false;
-            }
-            if (!maintenance.IsTireInstalled(wheelIndex))
-            {
-                resultMessage = $"The {maintenance.GetWheelName(wheelIndex)} tire is already removed.";
+                resultMessage = "The complete tire-and-rim wheel assembly is not installed on this gear.";
                 return false;
             }
 
-            InventoryItemDefinition item = GetTireItem(wheelIndex);
-            if (item == null)
+            InventoryItemDefinition tireItem = GetTireItem(wheelIndex);
+            InventoryItemDefinition rimItem = GetRimItem(wheelIndex);
+            if (tireItem == null || rimItem == null)
             {
-                resultMessage = "The tire inventory item is not configured. Run P-51 Step 30.";
+                resultMessage = "The wheel inventory items are not configured. Run P-51 Step 30.";
                 return false;
             }
 
@@ -165,7 +159,8 @@ namespace Hanger51.Aircraft
                 out float[] pressure,
                 out bool[] installed,
                 out bool[] burst);
-            EnginePartConditionData condition = EnginePartConditionData.Create(
+
+            EnginePartConditionData tireCondition = EnginePartConditionData.Create(
                 EnginePartConditionKind.Tire,
                 health[wheelIndex],
                 0f,
@@ -173,17 +168,57 @@ namespace Hanger51.Aircraft
                 pressure[wheelIndex],
                 maintenance.GetProperPressure(wheelIndex),
                 burst[wheelIndex]);
+            EnginePartConditionData rimCondition = EnginePartConditionData.Create(
+                EnginePartConditionKind.Rim,
+                rimHealth[wheelIndex]);
 
-            if (!SpawnLoosePart(wheelIndex, item, condition, true))
+            Transform wheelReference = maintenance.GetValveTarget(wheelIndex);
+            Vector3 basePosition = wheelReference != null
+                ? wheelReference.position
+                : transform.position;
+            Vector3 outward = wheelIndex == 0
+                ? -transform.right
+                : transform.right;
+            float outwardDistance = wheelIndex == 2 ? 0.58f : 0.82f;
+            Vector3 spawnPosition = basePosition
+                + outward * outwardDistance
+                + Vector3.up * (wheelIndex == 2 ? 0.13f : 0.24f)
+                + transform.forward * (wheelIndex == 2 ? -0.12f : 0.08f);
+            Quaternion spawnRotation = Quaternion.Euler(
+                0f,
+                transform.eulerAngles.y,
+                wheelIndex == 2 ? 82f : 90f);
+
+            P51LooseWheelAssembly looseWheel = P51LooseWheelAssembly.Create(
+                maintenance.GetWheelName(wheelIndex),
+                spawnPosition,
+                spawnRotation,
+                tireItem,
+                tireCondition,
+                rimItem,
+                rimCondition);
+            if (looseWheel == null)
             {
-                resultMessage = "The tire could not be placed beside the wheel.";
+                resultMessage = "The complete wheel assembly could not be placed beside the aircraft.";
                 return false;
             }
 
             installed[wheelIndex] = false;
+            rimInstalled[wheelIndex] = false;
             RefreshMaintenanceVisualsAndPhysics();
-            resultMessage = $"Pulled the {maintenance.GetWheelName(wheelIndex)} tire off the rim. That exact {condition.Health:F0}% / {condition.TirePressurePsi:F1} PSI tire is now loose beside the wheel; press E on it to put it in inventory.";
+
+            resultMessage = $"Removed the {maintenance.GetWheelName(wheelIndex)} wheel as one complete tire-and-rim assembly. It is loose beside the aircraft; hold R on the loose wheel to separate the tire from the rim.";
             return true;
+        }
+
+        public bool TryRemoveTire(
+            int wheelIndex,
+            PlayerInventory inventory,
+            out string resultMessage)
+        {
+            _ = inventory;
+            resultMessage = "Remove the complete wheel assembly from the aircraft first, then separate the tire from the rim on the ground.";
+            return false;
         }
 
         public bool TryInstallTire(
@@ -198,7 +233,7 @@ namespace Hanger51.Aircraft
             }
             if (!maintenance.IsGearInstalled(wheelIndex))
             {
-                resultMessage = "Reinstall the landing gear before fitting a tire.";
+                resultMessage = "Reinstall the landing-gear assembly before fitting a tire.";
                 return false;
             }
             if (!IsRimInstalled(wheelIndex))
@@ -243,7 +278,7 @@ namespace Hanger51.Aircraft
             installed[wheelIndex] = true;
             RefreshMaintenanceVisualsAndPhysics();
 
-            resultMessage = $"Installed that exact {required.DisplayName}: {health[wheelIndex]:F0}% health, {pressure[wheelIndex]:F1} PSI. Correct pressure is {maintenance.GetProperPressure(wheelIndex):F0} PSI.";
+            resultMessage = $"Installed that exact {required.DisplayName}: {health[wheelIndex]:F0}% health, {pressure[wheelIndex]:F1} PSI. The wheel retaining bolt is secured; correct pressure is {maintenance.GetProperPressure(wheelIndex):F0} PSI.";
             return true;
         }
 
@@ -265,7 +300,7 @@ namespace Hanger51.Aircraft
             }
             if (maintenance.IsTireInstalled(wheelIndex))
             {
-                resultMessage = "Remove the tire from the rim first.";
+                resultMessage = "Remove the complete tire-and-rim wheel assembly first; do not separate the tire while it is on the aircraft.";
                 return false;
             }
             if (!IsRimInstalled(wheelIndex))
@@ -293,7 +328,7 @@ namespace Hanger51.Aircraft
             rimInstalled[wheelIndex] = false;
             ApplyRimVisualState();
             OverridePhysicsForMissingRims();
-            resultMessage = $"Pulled the {maintenance.GetWheelName(wheelIndex)} rim off the gear. That exact {condition.Health:F0}% rim is now loose beside the wheel; press E on it to put it in inventory.";
+            resultMessage = $"Pulled the bare {maintenance.GetWheelName(wheelIndex)} rim off the gear. Press E on it to put it in inventory.";
             return true;
         }
 
@@ -314,7 +349,7 @@ namespace Hanger51.Aircraft
             }
             if (maintenance.IsTireInstalled(wheelIndex))
             {
-                resultMessage = "A tire is still installed. Remove it before changing the rim.";
+                resultMessage = "A complete wheel is already installed on that gear.";
                 return false;
             }
             if (IsRimInstalled(wheelIndex))
@@ -345,7 +380,7 @@ namespace Hanger51.Aircraft
             rimInstalled[wheelIndex] = true;
             ApplyRimVisualState();
             OverridePhysicsForMissingRims();
-            resultMessage = $"Installed the {required.DisplayName} at {rimHealth[wheelIndex]:F0}% condition. Fit the correct tire next.";
+            resultMessage = $"Installed the {required.DisplayName} at {rimHealth[wheelIndex]:F0}% condition. Equip the matching tire next.";
             return true;
         }
 
@@ -414,9 +449,7 @@ namespace Hanger51.Aircraft
                 : transform.position;
             Vector3 outward = wheelIndex == 0
                 ? -transform.right
-                : wheelIndex == 1
-                    ? transform.right
-                    : transform.right;
+                : transform.right;
             float outwardDistance = wheelIndex == 2 ? 0.48f : 0.72f;
             pickupObject.transform.position = basePosition
                 + outward * outwardDistance
