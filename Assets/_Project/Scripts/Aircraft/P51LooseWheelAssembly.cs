@@ -29,6 +29,7 @@ namespace Hanger51.Aircraft
         private Collider interactionCollider;
         private Transform tireVisual;
         private Transform rimVisual;
+        private Transform rebuildMarker;
         private float serviceProgress;
         private ServiceAction activeAction;
 
@@ -119,8 +120,8 @@ namespace Hanger51.Aircraft
             {
                 bool hasCorrectRim = inventory != null && inventory.EquippedItem == rimItem;
                 return hasCorrectRim
-                    ? $"Hold E: install equipped {rimItem.DisplayName} into loose wheel assembly{progress} | X inspect"
-                    : $"Equip {rimItem.DisplayName} to start rebuilding this wheel | X inspect";
+                    ? $"Hold E: install equipped {rimItem.DisplayName} at the visible loose-wheel rebuild marker{progress} | X inspect"
+                    : $"Equip {rimItem.DisplayName} and aim at the visible rebuild marker to start rebuilding this wheel | X inspect";
             }
 
             return $"Loose {wheelLabel} wheel service position | X inspect";
@@ -247,16 +248,16 @@ namespace Hanger51.Aircraft
         public string Inspect()
         {
             string tireSummary = tireInstalled
-                ? tireCondition != null ? tireCondition.GetConditionSummary() : "condition unavailable"
+                ? (tireCondition != null ? tireCondition.GetConditionSummary() : "condition unavailable")
                 : "removed from assembly";
             string rimSummary = rimInstalled
-                ? rimCondition != null ? rimCondition.GetConditionSummary() : "condition unavailable"
+                ? (rimCondition != null ? rimCondition.GetConditionSummary() : "condition unavailable")
                 : "removed from assembly";
             string state = IsComplete
                 ? "complete and ready to carry/reinstall"
                 : rimInstalled
                     ? "rim installed; tire missing"
-                    : "rim and tire missing";
+                    : "rim and tire missing; rebuild marker active";
             return $"Loose {wheelLabel} wheel assembly | {state} | Tire: {tireSummary} | Rim: {rimSummary} | Origin station: {GetOriginName()}";
         }
 
@@ -304,13 +305,15 @@ namespace Hanger51.Aircraft
             out string resultMessage)
         {
             resultMessage = string.Empty;
+            Vector3 groundSide = GetGroundSideDirection();
+
             switch (action)
             {
                 case ServiceAction.RemoveTire:
                     if (!SpawnPickup(
                             tireItem,
                             tireCondition,
-                            transform.position + transform.right * 0.66f + Vector3.up * 0.12f,
+                            transform.position + groundSide * 0.72f + Vector3.up * 0.14f,
                             transform.rotation))
                     {
                         resultMessage = "The tire could not be placed beside the loose rim.";
@@ -318,14 +321,14 @@ namespace Hanger51.Aircraft
                     }
                     tireInstalled = false;
                     RefreshVisuals();
-                    resultMessage = $"Separated the tire from the {wheelLabel} rim. The exact tire is now a physical pickup beside the rim; press E on it to put it in inventory.";
+                    resultMessage = $"Separated the tire from the {wheelLabel} rim. The exact tire is visibly on the floor beside the rim; press E on it to put it in inventory.";
                     return true;
 
                 case ServiceAction.RemoveRim:
                     if (!SpawnPickup(
                             rimItem,
                             rimCondition,
-                            transform.position - transform.right * 0.58f + Vector3.up * 0.10f,
+                            transform.position - groundSide * 0.62f + Vector3.up * 0.12f,
                             transform.rotation))
                     {
                         resultMessage = "The rim could not be placed beside the loose wheel service position.";
@@ -333,7 +336,7 @@ namespace Hanger51.Aircraft
                     }
                     rimInstalled = false;
                     RefreshVisuals();
-                    resultMessage = $"Removed the {wheelLabel} rim as a separate physical pickup. The loose wheel service position remains so you can rebuild it with this rim or a new replacement rim.";
+                    resultMessage = $"Removed the {wheelLabel} rim as a visible physical pickup. A rebuild marker remains so you can assemble this wheel with the original rim or a new replacement rim.";
                     return true;
 
                 case ServiceAction.InstallRim:
@@ -369,6 +372,18 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private Vector3 GetGroundSideDirection()
+        {
+            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (forward.sqrMagnitude < 0.001f)
+            {
+                forward = Vector3.forward;
+            }
+            forward.Normalize();
+            Vector3 side = Vector3.Cross(Vector3.up, forward);
+            return side.sqrMagnitude > 0.001f ? side.normalized : Vector3.right;
+        }
+
         private void BuildOrRefreshVisuals()
         {
             ResolveExistingVisuals();
@@ -380,6 +395,7 @@ namespace Hanger51.Aircraft
             {
                 rimVisual = CreateVisualChild(transform, rimItem, "Loose Rim");
             }
+            EnsureRebuildMarker();
             RefreshVisuals();
         }
 
@@ -392,6 +408,62 @@ namespace Hanger51.Aircraft
             if (rimVisual == null)
             {
                 rimVisual = transform.Find("Loose Rim");
+            }
+            if (rebuildMarker == null)
+            {
+                rebuildMarker = transform.Find("Loose Wheel Rebuild Marker");
+            }
+        }
+
+        private void EnsureRebuildMarker()
+        {
+            if (rebuildMarker != null)
+            {
+                return;
+            }
+
+            GameObject markerRoot = new GameObject("Loose Wheel Rebuild Marker");
+            markerRoot.transform.SetParent(transform, false);
+            markerRoot.transform.localPosition = Vector3.zero;
+            markerRoot.transform.localRotation = Quaternion.identity;
+
+            bool tail = originWheelIndex == 2;
+            float radius = tail ? 0.20f : 0.42f;
+            float length = tail ? 0.16f : 0.28f;
+            float thickness = tail ? 0.025f : 0.04f;
+
+            CreateMarkerPart(markerRoot.transform,
+                new Vector3(0f, radius, 0f),
+                new Vector3(thickness, length, thickness));
+            CreateMarkerPart(markerRoot.transform,
+                new Vector3(0f, -radius, 0f),
+                new Vector3(thickness, length, thickness));
+            CreateMarkerPart(markerRoot.transform,
+                new Vector3(0f, 0f, radius),
+                new Vector3(thickness, thickness, length));
+            CreateMarkerPart(markerRoot.transform,
+                new Vector3(0f, 0f, -radius),
+                new Vector3(thickness, thickness, length));
+
+            rebuildMarker = markerRoot.transform;
+            rebuildMarker.gameObject.SetActive(false);
+        }
+
+        private static void CreateMarkerPart(
+            Transform parent,
+            Vector3 localPosition,
+            Vector3 localScale)
+        {
+            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            marker.name = "Rebuild Marker Segment";
+            marker.transform.SetParent(parent, false);
+            marker.transform.localPosition = localPosition;
+            marker.transform.localRotation = Quaternion.identity;
+            marker.transform.localScale = localScale;
+            Collider collider = marker.GetComponent<Collider>();
+            if (collider != null)
+            {
+                collider.enabled = false;
             }
         }
 
@@ -406,6 +478,10 @@ namespace Hanger51.Aircraft
             {
                 rimVisual.gameObject.SetActive(rimInstalled);
                 ConfigureConditionVisual(rimVisual, rimCondition);
+            }
+            if (rebuildMarker != null)
+            {
+                rebuildMarker.gameObject.SetActive(!rimInstalled && !IsCarried);
             }
         }
 
@@ -523,8 +599,7 @@ namespace Hanger51.Aircraft
             pickup.enabled = true;
             pickup.Configure(item, condition);
 
-            EnginePartConditionVisual conditionVisual =
-                pickupObject.GetComponent<EnginePartConditionVisual>();
+            EnginePartConditionVisual conditionVisual = pickupObject.GetComponent<EnginePartConditionVisual>();
             if (conditionVisual == null)
             {
                 conditionVisual = pickupObject.AddComponent<EnginePartConditionVisual>();
