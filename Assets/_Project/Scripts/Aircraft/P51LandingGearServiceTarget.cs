@@ -1,3 +1,4 @@
+using System.Reflection;
 using Hanger51.Inventory;
 using UnityEngine;
 
@@ -13,6 +14,9 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Collider))]
     public sealed class P51LandingGearServiceTarget : MonoBehaviour
     {
+        private const BindingFlags PrivateInstance =
+            BindingFlags.Instance | BindingFlags.NonPublic;
+
         [SerializeField] private P51LandingGearMaintenanceController controller;
         [SerializeField] private P51LandingGearServiceKind serviceKind;
         [SerializeField, Range(0, 2)] private int wheelIndex;
@@ -34,6 +38,9 @@ namespace Hanger51.Aircraft
 
         private bool tireRemovalLatched;
         private Transform installedTireVisual;
+        private FieldInfo tireInstalledField;
+        private MethodInfo applyVisualStateMethod;
+        private MethodInfo pushPhysicsStateMethod;
 
         public P51LandingGearMaintenanceController Controller
         {
@@ -100,6 +107,7 @@ namespace Hanger51.Aircraft
         private void Awake()
         {
             ResolveReferences();
+            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
             ResolveInstalledTireVisual();
@@ -112,6 +120,7 @@ namespace Hanger51.Aircraft
         private void OnEnable()
         {
             ResolveReferences();
+            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
             ResolveInstalledTireVisual();
@@ -132,6 +141,10 @@ namespace Hanger51.Aircraft
 
             if (tireRemovalLatched)
             {
+                if (controller != null && controller.IsTireInstalled(wheelIndex))
+                {
+                    ForceControllerTireInstalled(false);
+                }
                 ForceInstalledTireVisible(false);
             }
         }
@@ -147,6 +160,7 @@ namespace Hanger51.Aircraft
             wheelIndex = Mathf.Clamp(configuredWheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, configuredHoldDuration);
             ResolveReferences();
+            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
             ResolveInstalledTireVisual();
@@ -238,6 +252,7 @@ namespace Hanger51.Aircraft
                 if (completed)
                 {
                     tireRemovalLatched = true;
+                    ForceControllerTireInstalled(false);
                     ForceInstalledTireVisible(false);
                 }
             }
@@ -264,6 +279,7 @@ namespace Hanger51.Aircraft
                 if (completed)
                 {
                     tireRemovalLatched = false;
+                    ForceControllerTireInstalled(true);
                     ForceInstalledTireVisible(true);
                 }
             }
@@ -287,8 +303,7 @@ namespace Hanger51.Aircraft
 
             string baseText = controller.GetInspectionText(wheelIndex);
             if (serviceKind == P51LandingGearServiceKind.TireAndValve
-                && tireRemovalLatched
-                && controller.IsTireInstalled(wheelIndex))
+                && tireRemovalLatched)
             {
                 baseText = $"{controller.GetWheelName(wheelIndex)} gear: gear installed | Tire: TIRE REMOVED | Correct pressure: {controller.GetProperPressure(wheelIndex):F0} PSI";
             }
@@ -323,6 +338,7 @@ namespace Hanger51.Aircraft
             }
             else if (tireRemovalLatched)
             {
+                ForceControllerTireInstalled(false);
                 ForceInstalledTireVisible(false);
             }
         }
@@ -465,6 +481,40 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private void ResolveControllerStateBindings()
+        {
+            if (controller == null)
+            {
+                return;
+            }
+
+            System.Type type = typeof(P51LandingGearMaintenanceController);
+            tireInstalledField = type.GetField("tireInstalled", PrivateInstance);
+            applyVisualStateMethod = type.GetMethod("ApplyVisualState", PrivateInstance);
+            pushPhysicsStateMethod = type.GetMethod("PushPhysicsState", PrivateInstance);
+        }
+
+        private void ForceControllerTireInstalled(bool installed)
+        {
+            ResolveReferences();
+            ResolveControllerStateBindings();
+            if (controller == null || tireInstalledField == null)
+            {
+                return;
+            }
+
+            bool[] states = tireInstalledField.GetValue(controller) as bool[];
+            if (states == null || wheelIndex < 0 || wheelIndex >= states.Length)
+            {
+                return;
+            }
+
+            states[wheelIndex] = installed;
+            tireInstalledField.SetValue(controller, states);
+            applyVisualStateMethod?.Invoke(controller, new object[] { true });
+            pushPhysicsStateMethod?.Invoke(controller, null);
+        }
+
         private void ResolveReferences()
         {
             if (controller == null)
@@ -491,6 +541,7 @@ namespace Hanger51.Aircraft
             boltExtractionDistance = Mathf.Max(0f, boltExtractionDistance);
             boltRotationTurns = Mathf.Max(0f, boltRotationTurns);
             ResolveReferences();
+            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
         }
