@@ -61,6 +61,11 @@ namespace Hanger51.Aircraft
                     follower = maintenance.gameObject.AddComponent<P51LandingGearVisualSuspensionFollower>();
                 }
                 follower.Configure(maintenance, tires, proxies);
+
+                if (maintenance.GetComponent<P51LandingGearReplacementService>() == null)
+                {
+                    maintenance.gameObject.AddComponent<P51LandingGearReplacementService>();
+                }
             }
         }
 
