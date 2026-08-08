@@ -9,9 +9,12 @@ namespace Hanger51.Aircraft
     [DisallowMultipleComponent]
     public sealed class P51LandingGearServicePlayerInteractor : MonoBehaviour
     {
+        private const string CarryAnchorName = "P-51 Wheel Carry Anchor";
+
         [SerializeField] private Camera playerCamera;
         [SerializeField] private InventoryUI inventoryUI;
         [SerializeField] private PlayerInventory inventory;
+        [SerializeField] private Transform wheelCarryAnchor;
         [SerializeField, Min(1f)] private float interactionDistance = 6f;
         [SerializeField] private LayerMask interactionLayers = ~0;
 
@@ -38,10 +41,18 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            Keyboard keyboard = Keyboard.current;
             FindCandidate(
                 out P51LandingGearServiceTarget target,
                 out P51NitrogenCartController cart,
                 out P51LooseWheelAssembly looseWheel);
+
+            P51LooseWheelAssembly carriedWheel = P51LooseWheelAssembly.CurrentCarried;
+            if (carriedWheel != null)
+            {
+                HandleCarriedWheel(carriedWheel, target, keyboard);
+                return;
+            }
 
             if (target != currentTarget)
             {
@@ -56,124 +67,21 @@ namespace Hanger51.Aircraft
             currentCart = cart;
             currentLooseWheel = looseWheel;
 
-            Keyboard keyboard = Keyboard.current;
             if (currentLooseWheel != null)
             {
-                bool holdR = keyboard != null && keyboard.rKey.isPressed;
-                if (currentLooseWheel.ProcessSeparation(
-                        holdR,
-                        Time.deltaTime,
-                        out string separationMessage)
-                    && !string.IsNullOrWhiteSpace(separationMessage))
-                {
-                    inventoryUI.ShowStatusMessage(separationMessage, 4f);
-                }
-
-                if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
-                {
-                    inventoryUI.ShowStatusMessage(currentLooseWheel.Inspect(), 4.5f);
-                }
-
-                inventoryUI.SetInteractionPrompt(currentLooseWheel.InteractionText);
+                HandleLooseWheel(currentLooseWheel, keyboard);
                 return;
             }
 
             if (currentTarget != null)
             {
-                bool holdE = keyboard != null && keyboard.eKey.isPressed;
-                bool holdR = keyboard != null && keyboard.rKey.isPressed;
-                if (currentTarget.ProcessInteraction(
-                        inventory,
-                        holdE,
-                        holdR,
-                        Time.deltaTime,
-                        out string serviceMessage)
-                    && !string.IsNullOrWhiteSpace(serviceMessage))
-                {
-                    inventoryUI.ShowStatusMessage(serviceMessage, 3.5f);
-                }
-
-                if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
-                {
-                    inventoryUI.ShowStatusMessage(currentTarget.Inspect(), 4f);
-                }
-
-                if (keyboard != null
-                    && keyboard.nKey.wasPressedThisFrame
-                    && currentTarget.ServiceKind == P51LandingGearServiceKind.TireAndValve)
-                {
-                    P51NitrogenCartController nearest = FindNearestCart(currentTarget.ServicePoint.position);
-                    string nitrogenMessage;
-                    if (nearest == null)
-                    {
-                        nitrogenMessage = "No nitrogen cart is within hose range.";
-                    }
-                    else if (nearest.IsConnected)
-                    {
-                        nearest.Disconnect();
-                        nitrogenMessage = "Nitrogen hose disconnected.";
-                    }
-                    else
-                    {
-                        nearest.TryConnect(
-                            currentTarget.Controller,
-                            currentTarget.WheelIndex,
-                            out nitrogenMessage);
-                    }
-                    inventoryUI.ShowStatusMessage(nitrogenMessage, 3.5f);
-                }
-
-                inventoryUI.SetInteractionPrompt(currentTarget.InteractionText);
+                HandleAircraftTarget(currentTarget, keyboard);
                 return;
             }
 
             if (currentCart != null)
             {
-                if (keyboard != null)
-                {
-                    if (keyboard.eKey.wasPressedThisFrame)
-                    {
-                        if (currentCart.TryToggleMove(transform, out string moveMessage)
-                            && !string.IsNullOrWhiteSpace(moveMessage))
-                        {
-                            inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(moveMessage))
-                        {
-                            inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
-                        }
-                    }
-
-                    float adjust = 0f;
-                    if (keyboard.qKey.isPressed) adjust += 1f;
-                    if (keyboard.zKey.isPressed) adjust -= 1f;
-                    if (Mathf.Abs(adjust) > 0.01f)
-                    {
-                        currentCart.AdjustRegulator(adjust, Time.deltaTime);
-                    }
-
-                    if (keyboard.fKey.isPressed)
-                    {
-                        if (currentCart.ServiceConnectedTire(
-                                Time.deltaTime,
-                                out string nitrogenMessage))
-                        {
-                            inventoryUI.ShowStatusMessage(nitrogenMessage, 0.3f);
-                        }
-                        else if (!string.IsNullOrWhiteSpace(nitrogenMessage))
-                        {
-                            inventoryUI.ShowStatusMessage(nitrogenMessage, 2f);
-                        }
-                    }
-
-                    if (keyboard.nKey.wasPressedThisFrame && currentCart.IsConnected)
-                    {
-                        currentCart.Disconnect();
-                        inventoryUI.ShowStatusMessage("Nitrogen hose disconnected.", 2f);
-                    }
-                }
-
-                inventoryUI.SetInteractionPrompt(currentCart.InteractionText);
+                HandleCart(currentCart, keyboard);
             }
         }
 
@@ -182,6 +90,198 @@ namespace Hanger51.Aircraft
             playerCamera = configuredCamera;
             inventoryUI = configuredInventoryUI;
             ResolveReferences();
+        }
+
+        private void HandleCarriedWheel(
+            P51LooseWheelAssembly carriedWheel,
+            P51LandingGearServiceTarget aimedTarget,
+            Keyboard keyboard)
+        {
+            currentLooseWheel = null;
+            currentCart = null;
+
+            bool validInstallTarget = aimedTarget != null
+                && aimedTarget.ServiceKind == P51LandingGearServiceKind.TireAndValve
+                && carriedWheel.CanInstallOn(aimedTarget.WheelIndex);
+
+            P51LandingGearServiceTarget desiredTarget = validInstallTarget
+                ? aimedTarget
+                : null;
+            if (desiredTarget != currentTarget)
+            {
+                currentTarget?.CancelHold();
+                currentTarget = desiredTarget;
+            }
+
+            if (currentTarget != null)
+            {
+                bool holdingE = keyboard != null && keyboard.eKey.isPressed;
+                if (currentTarget.ProcessInteraction(
+                        inventory,
+                        holdingE,
+                        false,
+                        Time.deltaTime,
+                        out string installMessage)
+                    && !string.IsNullOrWhiteSpace(installMessage))
+                {
+                    inventoryUI.ShowStatusMessage(installMessage, 3.5f);
+                }
+
+                if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+                {
+                    inventoryUI.ShowStatusMessage(currentTarget.Inspect(), 4f);
+                }
+
+                inventoryUI.SetInteractionPrompt(currentTarget.InteractionText);
+                return;
+            }
+
+            if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
+            {
+                if (TryFindWheelPlacementPose(out Vector3 position, out Quaternion rotation)
+                    && carriedWheel.TryPlace(position, rotation, out string placementMessage))
+                {
+                    inventoryUI.ShowStatusMessage(placementMessage, 2.8f);
+                    inventoryUI.SetInteractionPrompt(string.Empty);
+                    return;
+                }
+            }
+
+            inventoryUI.SetInteractionPrompt(
+                $"E: set down carried {carriedWheel.WheelLabel} wheel | Carry it to its highlighted original axle and hold E to reinstall");
+        }
+
+        private void HandleLooseWheel(
+            P51LooseWheelAssembly looseWheel,
+            Keyboard keyboard)
+        {
+            if (keyboard != null
+                && keyboard.eKey.wasPressedThisFrame
+                && looseWheel.IsComplete)
+            {
+                if (looseWheel.TryBeginCarry(wheelCarryAnchor, out string carryMessage))
+                {
+                    inventoryUI.ShowStatusMessage(carryMessage, 3f);
+                    currentLooseWheel = null;
+                    inventoryUI.SetInteractionPrompt(
+                        $"E: set down carried {looseWheel.WheelLabel} wheel | Carry it to its highlighted original axle and hold E to reinstall");
+                    return;
+                }
+                if (!string.IsNullOrWhiteSpace(carryMessage))
+                {
+                    inventoryUI.ShowStatusMessage(carryMessage, 3f);
+                }
+            }
+
+            bool holdE = keyboard != null && keyboard.eKey.isPressed;
+            bool holdR = keyboard != null && keyboard.rKey.isPressed;
+            if (looseWheel.ProcessService(
+                    inventory,
+                    holdE,
+                    holdR,
+                    Time.deltaTime,
+                    out string serviceMessage)
+                && !string.IsNullOrWhiteSpace(serviceMessage))
+            {
+                inventoryUI.ShowStatusMessage(serviceMessage, 4f);
+            }
+
+            if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+            {
+                inventoryUI.ShowStatusMessage(looseWheel.Inspect(), 4.5f);
+            }
+
+            inventoryUI.SetInteractionPrompt(looseWheel.GetInteractionText(inventory));
+        }
+
+        private void HandleAircraftTarget(
+            P51LandingGearServiceTarget target,
+            Keyboard keyboard)
+        {
+            bool holdE = keyboard != null && keyboard.eKey.isPressed;
+            bool holdR = keyboard != null && keyboard.rKey.isPressed;
+            if (target.ProcessInteraction(
+                    inventory,
+                    holdE,
+                    holdR,
+                    Time.deltaTime,
+                    out string serviceMessage)
+                && !string.IsNullOrWhiteSpace(serviceMessage))
+            {
+                inventoryUI.ShowStatusMessage(serviceMessage, 3.5f);
+            }
+
+            if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+            {
+                inventoryUI.ShowStatusMessage(target.Inspect(), 4f);
+            }
+
+            if (keyboard != null
+                && keyboard.nKey.wasPressedThisFrame
+                && target.ServiceKind == P51LandingGearServiceKind.TireAndValve)
+            {
+                P51NitrogenCartController nearest = FindNearestCart(target.ServicePoint.position);
+                string nitrogenMessage;
+                if (nearest == null)
+                {
+                    nitrogenMessage = "No nitrogen cart is within hose range.";
+                }
+                else if (nearest.IsConnected)
+                {
+                    nearest.Disconnect();
+                    nitrogenMessage = "Nitrogen hose disconnected.";
+                }
+                else
+                {
+                    nearest.TryConnect(target.Controller, target.WheelIndex, out nitrogenMessage);
+                }
+                inventoryUI.ShowStatusMessage(nitrogenMessage, 3.5f);
+            }
+
+            inventoryUI.SetInteractionPrompt(target.InteractionText);
+        }
+
+        private void HandleCart(P51NitrogenCartController cart, Keyboard keyboard)
+        {
+            if (keyboard != null)
+            {
+                if (keyboard.eKey.wasPressedThisFrame)
+                {
+                    cart.TryToggleMove(transform, out string moveMessage);
+                    if (!string.IsNullOrWhiteSpace(moveMessage))
+                    {
+                        inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
+                    }
+                }
+
+                float adjust = 0f;
+                if (keyboard.qKey.isPressed) adjust += 1f;
+                if (keyboard.zKey.isPressed) adjust -= 1f;
+                if (Mathf.Abs(adjust) > 0.01f)
+                {
+                    cart.AdjustRegulator(adjust, Time.deltaTime);
+                }
+
+                if (keyboard.fKey.isPressed)
+                {
+                    if (cart.ServiceConnectedTire(Time.deltaTime, out string nitrogenMessage))
+                    {
+                        inventoryUI.ShowStatusMessage(nitrogenMessage, 0.3f);
+                    }
+                    else if (!string.IsNullOrWhiteSpace(nitrogenMessage))
+                    {
+                        inventoryUI.ShowStatusMessage(nitrogenMessage, 2f);
+                    }
+                }
+
+                if (keyboard.nKey.wasPressedThisFrame && cart.IsConnected)
+                {
+                    cart.Disconnect();
+                    inventoryUI.ShowStatusMessage("Nitrogen hose disconnected.", 2f);
+                }
+            }
+
+            inventoryUI.SetInteractionPrompt(cart.InteractionText);
         }
 
         private void FindCandidate(
@@ -236,6 +336,7 @@ namespace Hanger51.Aircraft
                 P51LooseWheelAssembly candidateLooseWheel =
                     collider.GetComponentInParent<P51LooseWheelAssembly>();
                 if (candidateLooseWheel != null
+                    && !candidateLooseWheel.IsCarried
                     && hits[index].distance < looseWheelDistance)
                 {
                     bestLooseWheel = candidateLooseWheel;
@@ -266,6 +367,91 @@ namespace Hanger51.Aircraft
 
             bestTarget = null;
             bestLooseWheel = null;
+        }
+
+        private bool TryFindWheelPlacementPose(
+            out Vector3 worldPosition,
+            out Quaternion worldRotation)
+        {
+            worldPosition = Vector3.zero;
+            worldRotation = Quaternion.identity;
+
+            Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                interactionDistance,
+                interactionLayers,
+                QueryTriggerInteraction.Ignore);
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+
+            for (int index = 0; index < hits.Length; index++)
+            {
+                Transform hitTransform = hits[index].collider != null
+                    ? hits[index].collider.transform
+                    : null;
+                P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+                if (hitTransform == null
+                    || hitTransform.IsChildOf(transform)
+                    || (carried != null && hitTransform.IsChildOf(carried.transform)))
+                {
+                    continue;
+                }
+
+                Vector3 normal = hits[index].normal.sqrMagnitude > 0.001f
+                    ? hits[index].normal.normalized
+                    : Vector3.up;
+                Vector3 flatForward = Vector3.ProjectOnPlane(playerCamera.transform.forward, normal);
+                if (flatForward.sqrMagnitude < 0.001f)
+                {
+                    flatForward = Vector3.ProjectOnPlane(transform.forward, normal);
+                }
+                if (flatForward.sqrMagnitude < 0.001f)
+                {
+                    flatForward = Vector3.forward;
+                }
+                flatForward.Normalize();
+
+                worldPosition = hits[index].point + normal * 0.16f;
+                worldRotation = Quaternion.LookRotation(flatForward, normal)
+                    * Quaternion.Euler(0f, 0f, 90f);
+                return true;
+            }
+
+            Vector3 fallbackOrigin = playerCamera.transform.position
+                + playerCamera.transform.forward * 2.2f
+                + Vector3.up * 1.5f;
+            if (Physics.Raycast(
+                fallbackOrigin,
+                Vector3.down,
+                out RaycastHit groundHit,
+                6f,
+                interactionLayers,
+                QueryTriggerInteraction.Ignore))
+            {
+                Vector3 flatForward = Vector3.ProjectOnPlane(
+                    playerCamera.transform.forward,
+                    groundHit.normal);
+                if (flatForward.sqrMagnitude < 0.001f)
+                {
+                    flatForward = transform.forward;
+                }
+                flatForward.Normalize();
+                worldPosition = groundHit.point + groundHit.normal * 0.16f;
+                worldRotation = Quaternion.LookRotation(flatForward, groundHit.normal)
+                    * Quaternion.Euler(0f, 0f, 90f);
+                return true;
+            }
+
+            Vector3 forward = Vector3.ProjectOnPlane(playerCamera.transform.forward, Vector3.up);
+            if (forward.sqrMagnitude < 0.001f)
+            {
+                forward = transform.forward;
+            }
+            forward.Normalize();
+            worldPosition = transform.position + forward * 2f + Vector3.up * 0.25f;
+            worldRotation = Quaternion.LookRotation(forward, Vector3.up)
+                * Quaternion.Euler(0f, 0f, 90f);
+            return true;
         }
 
         private static P51NitrogenCartController FindNearestCart(Vector3 position)
@@ -304,6 +490,21 @@ namespace Hanger51.Aircraft
             if (inventory == null)
             {
                 inventory = GetComponent<PlayerInventory>();
+            }
+
+            if (wheelCarryAnchor == null && playerCamera != null)
+            {
+                Transform existing = playerCamera.transform.Find(CarryAnchorName);
+                if (existing == null)
+                {
+                    GameObject anchorObject = new GameObject(CarryAnchorName);
+                    existing = anchorObject.transform;
+                    existing.SetParent(playerCamera.transform, false);
+                }
+
+                existing.localPosition = new Vector3(0.78f, -0.58f, 1.55f);
+                existing.localRotation = Quaternion.Euler(8f, -8f, 82f);
+                wheelCarryAnchor = existing;
             }
         }
 
