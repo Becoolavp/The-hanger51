@@ -52,6 +52,8 @@ namespace Hanger51.Aircraft
         private readonly RaycastHit[] groundHits = new RaycastHit[12];
 
         private Rigidbody aircraftBody;
+        private P51RaycastLandingGear raycastLandingGear;
+        private P51LandingGearMaintenanceController landingGearMaintenance;
         private float throttle;
         private float pitchInput;
         private float rollInput;
@@ -223,6 +225,14 @@ namespace Hanger51.Aircraft
             if (engineReceiver == null)
             {
                 engineReceiver = GetComponent<AircraftEngineMountReceiver>();
+            }
+            if (raycastLandingGear == null)
+            {
+                raycastLandingGear = GetComponent<P51RaycastLandingGear>();
+            }
+            if (landingGearMaintenance == null)
+            {
+                landingGearMaintenance = GetComponent<P51LandingGearMaintenanceController>();
             }
 
             if (propellerRoot == null)
@@ -442,6 +452,12 @@ namespace Hanger51.Aircraft
 
         private bool CheckGrounded()
         {
+            ResolveReferences();
+            if (raycastLandingGear != null && raycastLandingGear.IsConfigured)
+            {
+                return raycastLandingGear.AnyWheelLoaded;
+            }
+
             if (landingGearContactPoints == null || landingGearContactPoints.Length == 0)
             {
                 return false;
@@ -502,24 +518,29 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            ResolveReferences();
             EnsureHudStyles();
 
             string engineState = engineRunning
                 ? "RUNNING"
                 : EngineInstalled ? "READY" : "NO INSTALLED ENGINE";
             string flightState = grounded ? "GROUND" : "AIRBORNE";
+            string gearState = landingGearMaintenance != null
+                ? landingGearMaintenance.GearStatusText
+                : "FIXED";
             string hud =
                 $"P-51D MUSTANG\n"
                 + $"Engine: {engineState}\n"
                 + $"Throttle: {Mathf.RoundToInt(throttle * 100f)}%\n"
                 + $"Airspeed: {AirspeedKnots:F0} kt\n"
                 + $"Altitude: {transform.position.y * 3.28084f:F0} ft\n"
+                + $"Gear: {gearState}\n"
                 + $"State: {flightState}\n\n"
-                + "T Start/Stop | Q Throttle + | Z Throttle -\n"
+                + "T Start/Stop | Q Throttle + | Z Throttle - | G Gear\n"
                 + "W Pitch Down | S Pitch Up | A/D Roll\n"
                 + "Space Wheel Brakes | E Exit cockpit";
 
-            GUI.Box(new Rect(18f, 18f, 355f, 205f), hud, hudStyle);
+            GUI.Box(new Rect(18f, 18f, 430f, 230f), hud, hudStyle);
 
             if (!string.IsNullOrWhiteSpace(cockpitMessage)
                 && Time.unscaledTime <= cockpitMessageClearTime)
