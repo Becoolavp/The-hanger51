@@ -43,6 +43,14 @@ namespace Hanger51.Aircraft
             GameObject root = new GameObject($"Removed {label} Wheel Assembly");
             root.transform.SetPositionAndRotation(worldPosition, worldRotation);
 
+            bool tail = label != null && label.ToLowerInvariant().Contains("tail");
+            BoxCollider collider = root.AddComponent<BoxCollider>();
+            collider.isTrigger = true;
+            collider.center = Vector3.up * (tail ? 0.16f : 0.32f);
+            collider.size = tail
+                ? new Vector3(0.55f, 0.55f, 0.34f)
+                : new Vector3(1.05f, 0.92f, 0.54f);
+
             P51LooseWheelAssembly loose = root.AddComponent<P51LooseWheelAssembly>();
             loose.tireItem = configuredTireItem;
             loose.rimItem = configuredRimItem;
@@ -78,14 +86,6 @@ namespace Hanger51.Aircraft
                 }
                 rimConditionVisual.Configure(loose.rimCondition);
             }
-
-            BoxCollider collider = root.AddComponent<BoxCollider>();
-            bool tail = label != null && label.ToLowerInvariant().Contains("tail");
-            collider.isTrigger = true;
-            collider.center = Vector3.up * (tail ? 0.16f : 0.32f);
-            collider.size = tail
-                ? new Vector3(0.55f, 0.55f, 0.34f)
-                : new Vector3(1.05f, 0.92f, 0.54f);
 
             return loose;
         }
