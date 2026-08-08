@@ -18,9 +18,17 @@ namespace Hanger51.Aircraft
         [SerializeField, Range(0, 2)] private int wheelIndex;
         [SerializeField, Min(0.2f)] private float holdDuration = 1.15f;
 
+        [Header("Mount Bolt Animation")]
+        [SerializeField] private Transform animatedBolt;
+        [SerializeField, Min(0f)] private float boltExtractionDistance = 0.20f;
+        [SerializeField, Min(0f)] private float boltRotationTurns = 2.5f;
+
         private P51LandingGearInventoryBridge inventoryBridge;
         private float holdProgress;
         private bool removing;
+        private Vector3 boltInstalledLocalPosition;
+        private Quaternion boltInstalledLocalRotation = Quaternion.identity;
+        private bool boltPoseCaptured;
 
         public P51LandingGearMaintenanceController Controller
         {
@@ -55,8 +63,8 @@ namespace Hanger51.Aircraft
                 if (serviceKind == P51LandingGearServiceKind.MountBolt)
                 {
                     return controller.IsGearInstalled(wheelIndex)
-                        ? $"Hold R: remove large {name} gear mounting bolt and gear{progress} | X inspect"
-                        : $"Hold E: reinstall {name} gear and large mounting bolt{progress} | X inspect";
+                        ? $"Hold R: unscrew large {name} gear mounting bolt and remove gear{progress} | X inspect"
+                        : $"Hold E: reinstall {name} gear and screw in large mounting bolt{progress} | X inspect";
                 }
 
                 if (!controller.IsGearInstalled(wheelIndex))
@@ -71,12 +79,12 @@ namespace Hanger51.Aircraft
 
                 if (controller.IsTireInstalled(wheelIndex))
                 {
-                    return $"Hold R: remove {name} tire to inventory{progress} | N: connect nitrogen cart | X inspect";
+                    return $"Hold R: pull {name} tire off rim onto the floor{progress} | N: connect nitrogen cart | X inspect";
                 }
 
                 if (inventoryBridge.IsRimInstalled(wheelIndex))
                 {
-                    return $"Hold R: remove {name} rim to inventory | Equip correct tire + Hold E: install tire{progress} | X inspect";
+                    return $"Hold R: pull {name} rim off gear onto the floor | Equip correct tire + Hold E: install tire{progress} | X inspect";
                 }
 
                 return $"Equip correct {name} rim + Hold E: install rim{progress} | X inspect";
@@ -86,11 +94,17 @@ namespace Hanger51.Aircraft
         private void Awake()
         {
             ResolveReferences();
+            ResolveBoltVisual();
+            CaptureBoltPose();
+            ResetBoltPose();
         }
 
         private void OnEnable()
         {
             ResolveReferences();
+            ResolveBoltVisual();
+            CaptureBoltPose();
+            ResetBoltPose();
         }
 
         public void Configure(
@@ -104,6 +118,9 @@ namespace Hanger51.Aircraft
             wheelIndex = Mathf.Clamp(configuredWheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, configuredHoldDuration);
             ResolveReferences();
+            ResolveBoltVisual();
+            CaptureBoltPose();
+            ResetBoltPose();
         }
 
         public bool ProcessInteraction(
@@ -144,11 +161,19 @@ namespace Hanger51.Aircraft
 
             if (holdProgress > 0f && removing != shouldRemove)
             {
+                ResetBoltPose();
                 holdProgress = 0f;
             }
+
             removing = shouldRemove;
             holdProgress = Mathf.Clamp01(
                 holdProgress + Mathf.Max(0f, deltaTime) / holdDuration);
+
+            if (serviceKind == P51LandingGearServiceKind.MountBolt)
+            {
+                ApplyBoltAnimatedPose(holdProgress, removing);
+            }
+
             if (holdProgress < 1f)
             {
                 return false;
@@ -223,6 +248,95 @@ namespace Hanger51.Aircraft
         {
             holdProgress = 0f;
             removing = false;
+            ResetBoltPose();
+        }
+
+        private void ApplyBoltAnimatedPose(float normalizedProgress, bool isRemoving)
+        {
+            if (serviceKind != P51LandingGearServiceKind.MountBolt)
+            {
+                return;
+            }
+
+            ResolveBoltVisual();
+            CaptureBoltPose();
+            if (animatedBolt == null || !boltPoseCaptured)
+            {
+                return;
+            }
+
+            animatedBolt.gameObject.SetActive(true);
+            Vector3 extractionDirection =
+                (boltInstalledLocalRotation * Vector3.up).normalized;
+            Vector3 extractedPosition = boltInstalledLocalPosition
+                + extractionDirection * boltExtractionDistance;
+            animatedBolt.localPosition = Vector3.Lerp(
+                isRemoving ? boltInstalledLocalPosition : extractedPosition,
+                isRemoving ? extractedPosition : boltInstalledLocalPosition,
+                Mathf.Clamp01(normalizedProgress));
+
+            float spinDirection = isRemoving ? -1f : 1f;
+            Quaternion spin = Quaternion.AngleAxis(
+                360f * boltRotationTurns * Mathf.Clamp01(normalizedProgress) * spinDirection,
+                Vector3.up);
+            animatedBolt.localRotation = boltInstalledLocalRotation * spin;
+        }
+
+        private void ResetBoltPose()
+        {
+            if (serviceKind != P51LandingGearServiceKind.MountBolt)
+            {
+                return;
+            }
+
+            ResolveBoltVisual();
+            CaptureBoltPose();
+            if (animatedBolt == null || !boltPoseCaptured)
+            {
+                return;
+            }
+
+            animatedBolt.localPosition = boltInstalledLocalPosition;
+            animatedBolt.localRotation = boltInstalledLocalRotation;
+            if (controller != null)
+            {
+                animatedBolt.gameObject.SetActive(controller.IsGearInstalled(wheelIndex));
+            }
+        }
+
+        private void ResolveBoltVisual()
+        {
+            if (serviceKind != P51LandingGearServiceKind.MountBolt || animatedBolt != null)
+            {
+                return;
+            }
+
+            Transform[] all = GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < all.Length; index++)
+            {
+                Transform candidate = all[index];
+                if (candidate != null
+                    && candidate != transform
+                    && candidate.name.Contains("Large Mount Bolt"))
+                {
+                    animatedBolt = candidate;
+                    break;
+                }
+            }
+        }
+
+        private void CaptureBoltPose()
+        {
+            if (boltPoseCaptured
+                || serviceKind != P51LandingGearServiceKind.MountBolt
+                || animatedBolt == null)
+            {
+                return;
+            }
+
+            boltInstalledLocalPosition = animatedBolt.localPosition;
+            boltInstalledLocalRotation = animatedBolt.localRotation;
+            boltPoseCaptured = true;
         }
 
         private void ResolveReferences()
@@ -239,14 +353,20 @@ namespace Hanger51.Aircraft
 
         private void OnDisable()
         {
-            CancelHold();
+            holdProgress = 0f;
+            removing = false;
+            ResetBoltPose();
         }
 
         private void OnValidate()
         {
             wheelIndex = Mathf.Clamp(wheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, holdDuration);
+            boltExtractionDistance = Mathf.Max(0f, boltExtractionDistance);
+            boltRotationTurns = Mathf.Max(0f, boltRotationTurns);
             ResolveReferences();
+            ResolveBoltVisual();
+            CaptureBoltPose();
         }
     }
 }
