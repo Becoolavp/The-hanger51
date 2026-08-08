@@ -9,52 +9,63 @@ Use branch `agent/merlin-engine-assembly` and the saved movement-test scene.
 3. Confirm P-51 Steps 28 through 31 were already completed.
 4. Do not rerun older landing-gear generation steps.
 
-The complete-wheel removal, wheel-retaining bolt, loose-wheel separation, and equipped-part highlight changes are runtime updates and do not require another Editor setup step.
+The complete-wheel carry/rebuild flow, corrected bolt direction/parenting, and carried-wheel install highlight are runtime updates and do not require another Editor setup step.
 
-## Complete wheel removal
+## Complete wheel removal and carry
 
-1. Enter Play mode with the airplane stopped and the landing gear fully down.
+1. Enter Play mode with the airplane stopped and landing gear fully down.
 2. Exit the cockpit.
 3. Aim at a main wheel and press `X`; record tire health/PSI and rim health.
-4. Confirm a visible wheel-retaining bolt is centered at the hub/outboard face of the wheel.
+4. Confirm a visible wheel-retaining bolt is centered at the wheel hub.
 5. Hold `R` at the wheel.
-6. Confirm the retaining bolt visibly rotates several turns and backs outward while the tire and rim remain on the axle.
-7. At the end of the hold, confirm the tire and rim leave the airplane together as one complete loose wheel assembly.
-8. Confirm the aircraft no longer shows either the installed tire or installed rim at that station.
-9. Confirm another `R` on the aircraft does not create another tire or wheel copy.
-10. Press `X` at the aircraft station and confirm the rim and tire are reported removed.
+6. From the exposed bolt-head side, confirm the retaining bolt turns in the normal loosening direction and backs outward along its own shaft.
+7. Confirm the tire and rim remain together on the axle until the bolt finishes coming out.
+8. Confirm the complete tire + rim assembly then leaves the aircraft as one loose wheel.
+9. Confirm the aircraft station has no tire or rim and another `R` cannot create a duplicate wheel.
+10. Aim at the complete loose wheel and press `E`.
+11. Confirm the complete wheel is visibly carried in front of the Player.
+12. Press `E` away from the aircraft axle and confirm the wheel can be set back down.
 
-## Loose wheel separation
+## Loose wheel separation and rebuild
 
-1. Aim at the complete wheel assembly lying beside the airplane.
-2. Press `X` and confirm it reports both the tire condition/PSI and rim condition.
-3. Hold `R` on the loose wheel.
-4. Confirm the complete wheel disappears and becomes two separate physical parts: one tire pickup and one rim pickup.
+1. With the complete wheel on the floor, press `X` and confirm tire condition/PSI, rim condition, and its original wheel station are reported.
+2. Hold `R` on the complete wheel.
+3. Confirm the tire separates as a visible physical pickup and does not disappear.
+4. Confirm the rim remains at the loose-wheel service position.
 5. Aim at the separated tire and confirm its pickup prompt retains the original health/PSI.
-6. Press `E` to put the tire in inventory.
-7. Aim at the separated rim and confirm its condition is retained.
-8. Press `E` to put the rim in inventory.
-9. Repeat with the smaller tailwheel and confirm its tire/rim dimensions remain distinct from the main wheel parts.
+6. Press `E` to put that tire in inventory.
+7. With the bare loose rim still present, hold `R` again if testing full disassembly.
+8. Confirm the rim becomes its own visible physical pickup and the loose-wheel rebuild position remains available.
+9. Press `E` to put the rim in inventory.
+10. Equip either the original rim or a correct new replacement rim.
+11. Aim at the loose-wheel rebuild position and hold `E`; confirm that exact rim is installed into the loose assembly.
+12. Equip either the original tire or a correct new replacement tire.
+13. Hold `E` on the loose rim and confirm that exact tire is fitted.
+14. Press `X` and confirm the loose wheel is complete again with the chosen tire health/PSI and rim condition.
+15. Confirm main and tail wheel parts remain different sizes and cannot be mixed.
 
-## Equipped-part installation highlights
+## Complete-wheel reinstallation highlight
 
-1. Leave one aircraft wheel station empty after the wheel has been removed.
-2. Equip the correct main or tail rim from inventory.
-3. Confirm a pulsing highlight appears around only the matching empty axle/wheel install point.
-4. Aim at the highlighted station and hold `E` to install the rim.
-5. Confirm the rim appears and the rim item is consumed from inventory.
-6. Equip the correct matching tire.
-7. Confirm the same wheel station highlights again, now indicating the tire installation area.
-8. Hold `E` to fit the tire.
-9. Confirm the tire returns with its stored health/PSI and the wheel-retaining bolt visibly screws back inward.
-10. Confirm a main rim/tire does not highlight or install at the tailwheel station and a tailwheel part does not highlight or install at a main station.
+1. Leave the original aircraft wheel station empty.
+2. With no complete wheel being carried, look at the bottom of the strut.
+3. Confirm there is no install highlight and no prompt claiming a wheel can currently be installed.
+4. Equip individual tire or rim inventory items and confirm the aircraft strut still does not highlight; those parts must be assembled off-aircraft first.
+5. Rebuild the loose wheel completely and press `E` to carry it.
+6. Confirm only that wheel's original axle gets the pulsing install highlight.
+7. Aim at the highlighted axle and hold `E`.
+8. Confirm the complete tire + rim assembly installs together.
+9. Confirm the wheel-retaining bolt turns in the tightening direction and moves inward along its shaft.
+10. Confirm the completed wheel restores its saved tire health/PSI and rim health.
+11. Confirm a carried wheel from another station cannot install on the wrong strut.
 
-## Gear mount bolt animation
+## Gear mount bolt direction and aircraft parenting
 
-1. Aim at the large landing-gear mounting bolt above the wheel assembly.
-2. Hold `R`.
-3. Confirm the large bolt rotates multiple turns and visibly backs out before the complete strut/gear assembly releases.
-4. Reinstall the gear and confirm the animation reverses as the bolt screws back in.
+1. Aim at each large landing-gear mounting bolt.
+2. Hold `R` and confirm it turns in the loosening direction and visibly backs out along its own shaft.
+3. Reinstall the gear and confirm the bolt rotates the opposite direction while moving back into its installed position.
+4. With all gear installed, move/tow/taxi the aircraft several meters.
+5. Confirm all three large gear mounting bolts and all three wheel-retaining bolts remain attached to their aircraft/gear positions and do not stay behind at their old world coordinates.
+6. Repeat after rotating the aircraft and confirm the bolts rotate/move with the aircraft hierarchy.
 
 ## Mobile nitrogen cart
 
@@ -75,13 +86,17 @@ The complete-wheel removal, wheel-retaining bolt, loose-wheel separation, and eq
 
 - `G` gear retract/extend still works.
 - Normal raycast suspension, steering, brakes, and ground-penetration protection still work.
-- One complete wheel removal produces exactly one loose wheel assembly.
-- Rim and tire remain together until the loose wheel is deliberately separated.
+- One wheel removal produces exactly one complete loose wheel assembly.
+- Complete wheels are physically carryable and placeable.
+- Tire separation leaves a visible conditioned tire pickup rather than destroying it.
+- A loose wheel can be fully disassembled and rebuilt with original or replacement parts.
+- Only a completed carried wheel highlights/installs at its original aircraft station.
+- Individual equipped rims/tires never make an empty aircraft strut falsely advertise installation.
+- Gear and wheel bolts remain parented to/move with the aircraft.
 - Removed wheel stations do not retain invisible support.
 - Tire health and pressure still affect landing damage and drag.
 - A destroyed tire remains visibly failed and produces strong side drag until replaced.
-- Condition survives installed wheel -> loose wheel -> separated pickup -> inventory -> reinstallation.
-- Correct equipped rim/tire highlights only its valid install location.
+- Condition survives installed wheel -> loose wheel -> separated pickup -> inventory -> rebuilt wheel -> aircraft.
 - Newly purchased tires remain partially inflated and require nitrogen service.
 - Merlin maintenance, inventory, shop shipments, towing, camera, and flight behavior remain available.
 - Run the existing Windows build validation after Play-mode checks pass.
