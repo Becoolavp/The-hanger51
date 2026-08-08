@@ -7,7 +7,8 @@ namespace Hanger51.Commerce
     public enum ShopProductKind
     {
         InventoryItem,
-        CompleteAssembly
+        CompleteAssembly,
+        ServiceObject
     }
 
     [Serializable]
@@ -37,11 +38,25 @@ namespace Hanger51.Commerce
             && !string.IsNullOrWhiteSpace(displayName)
             && price >= 0
             && ((productKind == ShopProductKind.InventoryItem && inventoryItem != null)
-                || (productKind == ShopProductKind.CompleteAssembly && assemblyTemplate != null));
+                || ((productKind == ShopProductKind.CompleteAssembly
+                    || productKind == ShopProductKind.ServiceObject)
+                    && assemblyTemplate != null));
 
-        public string DeliveryDescription => productKind == ShopProductKind.InventoryItem
-            ? $"Crated inventory delivery — quantity {quantity}"
-            : "Large crated assembly — delivered complete and serviceable";
+        public string DeliveryDescription
+        {
+            get
+            {
+                switch (productKind)
+                {
+                    case ShopProductKind.InventoryItem:
+                        return $"Crated inventory delivery — quantity {quantity}";
+                    case ShopProductKind.ServiceObject:
+                        return "Crated service equipment — delivered ready to use";
+                    default:
+                        return "Large crated assembly — delivered complete and serviceable";
+                }
+            }
+        }
 
         public void Configure(
             string configuredProductId,
