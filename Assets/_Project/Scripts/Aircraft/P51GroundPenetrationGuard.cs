@@ -83,18 +83,27 @@ namespace Hanger51.Aircraft
             }
 
             PenetrationCorrection best = default;
-            EvaluateAnchor(
-                landingGear.LeftMainAnchor,
-                mainMinimumAnchorHeight,
-                ref best);
-            EvaluateAnchor(
-                landingGear.RightMainAnchor,
-                mainMinimumAnchorHeight,
-                ref best);
-            EvaluateAnchor(
-                landingGear.TailwheelAnchor,
-                tailMinimumAnchorHeight,
-                ref best);
+            if (landingGear.IsWheelServiceDeployed(0))
+            {
+                EvaluateAnchor(
+                    landingGear.LeftMainAnchor,
+                    mainMinimumAnchorHeight,
+                    ref best);
+            }
+            if (landingGear.IsWheelServiceDeployed(1))
+            {
+                EvaluateAnchor(
+                    landingGear.RightMainAnchor,
+                    mainMinimumAnchorHeight,
+                    ref best);
+            }
+            if (landingGear.IsWheelServiceDeployed(2))
+            {
+                EvaluateAnchor(
+                    landingGear.TailwheelAnchor,
+                    tailMinimumAnchorHeight,
+                    ref best);
+            }
 
             if (!best.Valid || best.Distance <= 0f)
             {
