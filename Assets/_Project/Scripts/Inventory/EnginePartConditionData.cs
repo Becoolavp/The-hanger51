@@ -8,7 +8,9 @@ namespace Hanger51.Inventory
         None,
         EngineBlock,
         CylinderCover,
-        SparkPlug
+        SparkPlug,
+        Tire,
+        Rim
     }
 
     [Serializable]
@@ -19,22 +21,33 @@ namespace Hanger51.Inventory
         [SerializeField, Range(0f, 100f)] private float health = 100f;
         [SerializeField, Min(0f)] private float oilQuantityLiters;
         [SerializeField, Min(0f)] private float oilCapacityLiters;
+        [SerializeField, Min(0f)] private float tirePressurePsi;
+        [SerializeField, Min(0f)] private float recommendedTirePressurePsi;
+        [SerializeField] private bool tireFailed;
 
         public string InstanceId => instanceId;
         public EnginePartConditionKind Kind => kind;
         public float Health => Mathf.Clamp(health, 0f, 100f);
         public float OilQuantityLiters => Mathf.Max(0f, oilQuantityLiters);
         public float OilCapacityLiters => Mathf.Max(0f, oilCapacityLiters);
+        public float TirePressurePsi => Mathf.Max(0f, tirePressurePsi);
+        public float RecommendedTirePressurePsi => Mathf.Max(0f, recommendedTirePressurePsi);
+        public bool TireFailed => kind == EnginePartConditionKind.Tire
+            && (tireFailed || Health <= 0.01f);
         public bool IsTracked => kind != EnginePartConditionKind.None;
         public bool IsCracked => kind == EnginePartConditionKind.CylinderCover
             && Health <= 35f;
-        public string Signature => $"{instanceId}:{kind}:{Health:F3}:{OilQuantityLiters:F3}:{OilCapacityLiters:F3}";
+        public string Signature =>
+            $"{instanceId}:{kind}:{Health:F3}:{OilQuantityLiters:F3}:{OilCapacityLiters:F3}:{TirePressurePsi:F3}:{RecommendedTirePressurePsi:F3}:{TireFailed}";
 
         public static EnginePartConditionData Create(
             EnginePartConditionKind conditionKind,
             float conditionHealth,
             float oilQuantity = 0f,
-            float oilCapacity = 0f)
+            float oilCapacity = 0f,
+            float pressurePsi = 0f,
+            float recommendedPressurePsi = 0f,
+            bool failedTire = false)
         {
             EnginePartConditionData data = new EnginePartConditionData
             {
@@ -45,7 +58,10 @@ namespace Hanger51.Inventory
                 oilQuantityLiters = Mathf.Clamp(
                     oilQuantity,
                     0f,
-                    Mathf.Max(0f, oilCapacity))
+                    Mathf.Max(0f, oilCapacity)),
+                tirePressurePsi = Mathf.Max(0f, pressurePsi),
+                recommendedTirePressurePsi = Mathf.Max(0f, recommendedPressurePsi),
+                tireFailed = failedTire
             };
             return data;
         }
@@ -59,9 +75,25 @@ namespace Hanger51.Inventory
                 return null;
             }
 
-            return inferredKind == EnginePartConditionKind.EngineBlock
-                ? Create(inferredKind, 100f, 20f, 20f)
-                : Create(inferredKind, 100f);
+            if (inferredKind == EnginePartConditionKind.EngineBlock)
+            {
+                return Create(inferredKind, 100f, 20f, 20f);
+            }
+
+            if (inferredKind == EnginePartConditionKind.Tire)
+            {
+                bool tail = IsTailwheelItem(item);
+                return Create(
+                    inferredKind,
+                    100f,
+                    0f,
+                    0f,
+                    tail ? 6f : 8f,
+                    tail ? 24f : 30f,
+                    false);
+            }
+
+            return Create(inferredKind, 100f);
         }
 
         public static EnginePartConditionKind InferKind(InventoryItemDefinition item)
@@ -93,6 +125,18 @@ namespace Hanger51.Inventory
                 return EnginePartConditionKind.EngineBlock;
             }
 
+            if (identity.Contains("tire") || identity.Contains("tyre"))
+            {
+                return EnginePartConditionKind.Tire;
+            }
+
+            if (identity.Contains("rim")
+                || identity.Contains("wheel hub")
+                || identity.Contains("wheel-hub"))
+            {
+                return EnginePartConditionKind.Rim;
+            }
+
             return EnginePartConditionKind.None;
         }
 
@@ -111,7 +155,10 @@ namespace Hanger51.Inventory
                 kind = kind,
                 health = Health,
                 oilQuantityLiters = OilQuantityLiters,
-                oilCapacityLiters = OilCapacityLiters
+                oilCapacityLiters = OilCapacityLiters,
+                tirePressurePsi = TirePressurePsi,
+                recommendedTirePressurePsi = RecommendedTirePressurePsi,
+                tireFailed = TireFailed
             };
             return clone;
         }
@@ -128,6 +175,15 @@ namespace Hanger51.Inventory
                         : $"{Health:F1}%";
                 case EnginePartConditionKind.SparkPlug:
                     return $"{Health:F2}%";
+                case EnginePartConditionKind.Tire:
+                    return TireFailed
+                        ? $"{Health:F1}% — DESTROYED | {TirePressurePsi:F1} PSI"
+                        : $"{Health:F1}% | {TirePressurePsi:F1} PSI"
+                            + (RecommendedTirePressurePsi > 0.1f
+                                ? $" / {RecommendedTirePressurePsi:F0} PSI correct"
+                                : string.Empty);
+                case EnginePartConditionKind.Rim:
+                    return $"Rim {Health:F1}%";
                 default:
                     return string.Empty;
             }
@@ -146,6 +202,32 @@ namespace Hanger51.Inventory
                 oilQuantityLiters,
                 0f,
                 oilCapacityLiters);
+            tirePressurePsi = Mathf.Clamp(tirePressurePsi, 0f, 80f);
+            recommendedTirePressurePsi = Mathf.Clamp(
+                recommendedTirePressurePsi,
+                0f,
+                80f);
+            if (kind != EnginePartConditionKind.Tire)
+            {
+                tireFailed = false;
+                tirePressurePsi = 0f;
+                recommendedTirePressurePsi = 0f;
+            }
+        }
+
+        private static bool IsTailwheelItem(InventoryItemDefinition item)
+        {
+            if (item == null)
+            {
+                return false;
+            }
+
+            string identity = $"{item.ItemId} {item.name} {item.DisplayName}"
+                .ToLowerInvariant();
+            return identity.Contains("tailwheel")
+                || identity.Contains("tail wheel")
+                || identity.Contains("tail-tire")
+                || identity.Contains("tail tire");
         }
     }
 }
