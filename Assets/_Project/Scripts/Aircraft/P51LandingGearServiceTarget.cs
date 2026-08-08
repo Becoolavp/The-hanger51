@@ -1,3 +1,4 @@
+using Hanger51.Inventory;
 using UnityEngine;
 
 namespace Hanger51.Aircraft
@@ -17,6 +18,7 @@ namespace Hanger51.Aircraft
         [SerializeField, Range(0, 2)] private int wheelIndex;
         [SerializeField, Min(0.2f)] private float holdDuration = 1.15f;
 
+        private P51LandingGearReplacementService replacementService;
         private float holdProgress;
         private bool removing;
 
@@ -24,7 +26,7 @@ namespace Hanger51.Aircraft
         {
             get
             {
-                ResolveController();
+                ResolveReferences();
                 return controller;
             }
         }
@@ -36,7 +38,7 @@ namespace Hanger51.Aircraft
         {
             get
             {
-                ResolveController();
+                ResolveReferences();
                 if (controller == null)
                 {
                     return string.Empty;
@@ -64,18 +66,18 @@ namespace Hanger51.Aircraft
 
                 return controller.IsTireInstalled(wheelIndex)
                     ? $"Hold R: remove {name} tire from rim{progress} | N: connect nitrogen cart | X inspect"
-                    : $"Hold E: reinstall the same {name} tire on rim{progress} | X inspect";
+                    : $"Hold E: reinstall removed tire, or equip the correct replacement tire and hold E to fit new{progress} | X inspect";
             }
         }
 
         private void Awake()
         {
-            ResolveController();
+            ResolveReferences();
         }
 
         private void OnEnable()
         {
-            ResolveController();
+            ResolveReferences();
         }
 
         public void Configure(
@@ -88,17 +90,18 @@ namespace Hanger51.Aircraft
             serviceKind = configuredKind;
             wheelIndex = Mathf.Clamp(configuredWheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, configuredHoldDuration);
-            ResolveController();
+            ResolveReferences();
         }
 
         public bool ProcessInteraction(
+            PlayerInventory inventory,
             bool holdInstall,
             bool holdRemove,
             float deltaTime,
             out string resultMessage)
         {
             resultMessage = string.Empty;
-            ResolveController();
+            ResolveReferences();
             if (controller == null)
             {
                 CancelHold();
@@ -147,11 +150,21 @@ namespace Hanger51.Aircraft
                     ? controller.TryRemoveGear(wheelIndex, out resultMessage)
                     : controller.TryInstallGear(wheelIndex, out resultMessage);
             }
+            else if (removing)
+            {
+                completed = controller.TryRemoveTire(wheelIndex, out resultMessage);
+            }
+            else if (replacementService != null
+                && replacementService.CanUseEquippedReplacement(wheelIndex, inventory))
+            {
+                completed = replacementService.TryInstallReplacementTire(
+                    wheelIndex,
+                    inventory,
+                    out resultMessage);
+            }
             else
             {
-                completed = removing
-                    ? controller.TryRemoveTire(wheelIndex, out resultMessage)
-                    : controller.TryInstallTire(wheelIndex, out resultMessage);
+                completed = controller.TryInstallTire(wheelIndex, out resultMessage);
             }
 
             CancelHold();
@@ -160,7 +173,7 @@ namespace Hanger51.Aircraft
 
         public string Inspect()
         {
-            ResolveController();
+            ResolveReferences();
             return controller != null
                 ? controller.GetInspectionText(wheelIndex)
                 : "Landing gear condition controller is missing.";
@@ -172,11 +185,15 @@ namespace Hanger51.Aircraft
             removing = false;
         }
 
-        private void ResolveController()
+        private void ResolveReferences()
         {
             if (controller == null)
             {
                 controller = GetComponentInParent<P51LandingGearMaintenanceController>();
+            }
+            if (replacementService == null)
+            {
+                replacementService = GetComponentInParent<P51LandingGearReplacementService>();
             }
         }
 
@@ -189,7 +206,7 @@ namespace Hanger51.Aircraft
         {
             wheelIndex = Mathf.Clamp(wheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, holdDuration);
-            ResolveController();
+            ResolveReferences();
         }
     }
 }
