@@ -57,6 +57,11 @@ namespace Hanger51.Aircraft
         [SerializeField, Min(0f)] private float groundedRollDamping = 9000f;
 
         private readonly RaycastHit[] raycastHits = new RaycastHit[16];
+        private readonly bool[] serviceGearInstalled = { true, true, true };
+        private readonly bool[] serviceTireInstalled = { true, true, true };
+        private readonly bool[] serviceTireFailed = { false, false, false };
+        private readonly float[] servicePressureRatio = { 1f, 1f, 1f };
+        private readonly float[] serviceDeployment = { 1f, 1f, 1f };
 
         private WheelContact leftContact;
         private WheelContact rightContact;
@@ -112,6 +117,37 @@ namespace Hanger51.Aircraft
             ApplyBodyTuning();
         }
 
+        public void ApplyMaintenanceState(
+            int wheelIndex,
+            bool gearInstalled,
+            bool tireInstalled,
+            bool tireFailed,
+            float pressurePsi,
+            float nominalPressurePsi,
+            float deploymentFraction)
+        {
+            if (wheelIndex < 0 || wheelIndex >= 3)
+            {
+                return;
+            }
+
+            serviceGearInstalled[wheelIndex] = gearInstalled;
+            serviceTireInstalled[wheelIndex] = tireInstalled;
+            serviceTireFailed[wheelIndex] = tireFailed;
+            servicePressureRatio[wheelIndex] = nominalPressurePsi > 0.1f
+                ? Mathf.Clamp(pressurePsi / nominalPressurePsi, 0f, 2.5f)
+                : 1f;
+            serviceDeployment[wheelIndex] = Mathf.Clamp01(deploymentFraction);
+        }
+
+        public bool IsWheelServiceDeployed(int wheelIndex)
+        {
+            return wheelIndex >= 0
+                && wheelIndex < 3
+                && serviceGearInstalled[wheelIndex]
+                && serviceDeployment[wheelIndex] >= 0.94f;
+        }
+
         private void FixedUpdate()
         {
             ResolveReferences();
@@ -149,6 +185,7 @@ namespace Hanger51.Aircraft
 
             bool applyForces = aircraftBody != null && !aircraftBody.isKinematic;
             leftContact = EvaluateWheel(
+                0,
                 leftMainAnchor,
                 mainWheelRadius,
                 mainRestGroundDistance,
@@ -161,6 +198,7 @@ namespace Hanger51.Aircraft
                 mainBrakeFriction,
                 applyForces);
             rightContact = EvaluateWheel(
+                1,
                 rightMainAnchor,
                 mainWheelRadius,
                 mainRestGroundDistance,
@@ -173,6 +211,7 @@ namespace Hanger51.Aircraft
                 mainBrakeFriction,
                 applyForces);
             tailContact = EvaluateWheel(
+                2,
                 tailwheelAnchor,
                 tailwheelRadius,
                 tailRestGroundDistance,
@@ -270,8 +309,9 @@ namespace Hanger51.Aircraft
         }
 
         private WheelContact EvaluateWheel(
+            int wheelIndex,
             Transform wheelAnchor,
-            float wheelRadius,
+            float nominalWheelRadius,
             float restGroundDistance,
             float suspensionTravel,
             float springStrength,
@@ -294,9 +334,41 @@ namespace Hanger51.Aircraft
                 SuspensionForce = 0f
             };
 
-            if (wheelAnchor == null)
+            if (wheelAnchor == null || !IsWheelServiceDeployed(wheelIndex))
             {
                 return contact;
+            }
+
+            bool tireInstalled = serviceTireInstalled[wheelIndex];
+            bool failed = serviceTireFailed[wheelIndex];
+            float pressureRatio = Mathf.Clamp(servicePressureRatio[wheelIndex], 0f, 2.5f);
+            float effectiveRadius = nominalWheelRadius;
+            if (!tireInstalled || failed)
+            {
+                effectiveRadius *= wheelIndex == 2 ? 0.58f : 0.62f;
+            }
+            else if (pressureRatio < 1f)
+            {
+                effectiveRadius *= Mathf.Lerp(0.86f, 1f, pressureRatio);
+            }
+
+            float rollingMultiplier = 1f;
+            float passiveBrakeFraction = 0f;
+            if (!tireInstalled)
+            {
+                rollingMultiplier = 18f;
+                passiveBrakeFraction = 1.35f;
+            }
+            else if (failed)
+            {
+                rollingMultiplier = 24f;
+                passiveBrakeFraction = 1.60f;
+            }
+            else if (pressureRatio < 0.82f)
+            {
+                float under = 1f - Mathf.InverseLerp(0.25f, 0.82f, pressureRatio);
+                rollingMultiplier = Mathf.Lerp(2.2f, 7.5f, under);
+                passiveBrakeFraction = Mathf.Lerp(0.05f, 0.28f, under);
             }
 
             Vector3 suspensionUp = transform.up.normalized;
@@ -341,11 +413,8 @@ namespace Hanger51.Aircraft
                 ? groundHit.normal.normalized
                 : suspensionUp;
             contact.CenterPosition = groundHit.point
-                + contact.SurfaceNormal * wheelRadius;
+                + contact.SurfaceNormal * effectiveRadius;
 
-            // The damper cannot create force before the strut has physically
-            // compressed. This prevents a descending but still airborne wheel
-            // from being pulled onto the runway by a velocity-only damping term.
             if (compression <= 0.001f)
             {
                 return contact;
@@ -394,9 +463,12 @@ namespace Hanger51.Aircraft
                 wheelAnchor.position,
                 ForceMode.Force);
 
-            float lateralLimit = suspensionForce * lateralFrictionLimit;
+            float pressureGrip = failed || !tireInstalled
+                ? 0.32f
+                : Mathf.Lerp(0.48f, 1f, Mathf.Clamp01(pressureRatio / 0.9f));
+            float lateralLimit = suspensionForce * lateralFrictionLimit * pressureGrip;
             float lateralForce = Mathf.Clamp(
-                -lateralSpeed * lateralGrip,
+                -lateralSpeed * lateralGrip * pressureGrip,
                 -lateralLimit,
                 lateralLimit);
             aircraftBody.AddForceAtPosition(
@@ -408,9 +480,23 @@ namespace Hanger51.Aircraft
             {
                 float rollingForce = suspensionForce
                     * rollingResistanceCoefficient
+                    * rollingMultiplier
                     * -Mathf.Sign(contact.ForwardSpeed);
                 aircraftBody.AddForceAtPosition(
                     wheelForward * rollingForce,
+                    groundHit.point,
+                    ForceMode.Force);
+            }
+
+            if (passiveBrakeFraction > 0.001f)
+            {
+                float passiveLimit = suspensionForce * passiveBrakeFraction;
+                float passiveForce = Mathf.Clamp(
+                    -contact.ForwardSpeed * brakeVelocityGain,
+                    -passiveLimit,
+                    passiveLimit);
+                aircraftBody.AddForceAtPosition(
+                    wheelForward * passiveForce,
                     groundHit.point,
                     ForceMode.Force);
             }
@@ -552,7 +638,7 @@ namespace Hanger51.Aircraft
             }
 
             aircraftBody.centerOfMass = tunedCenterOfMass;
-            aircraftBody.maxDepenetrationVelocity = 4f;
+            aircraftBody.maxDepenetrationVelocity = 20f;
             aircraftBody.constraints = RigidbodyConstraints.None;
         }
 
