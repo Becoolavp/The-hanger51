@@ -88,6 +88,25 @@ namespace Hanger51.EngineAssembly
             StopPouring();
         }
 
+        public void ResetToFullServiceState()
+        {
+            ResolveReferences();
+            capacityLiters = Mathf.Max(0.1f, capacityLiters);
+            remainingLiters = capacityLiters;
+            carried = false;
+            open = false;
+            carryAnchor = null;
+            StopPouring();
+            if (pickupCollider != null)
+            {
+                pickupCollider.enabled = true;
+            }
+            if (capPivot != null)
+            {
+                capPivot.localRotation = Quaternion.Euler(closedCapEuler);
+            }
+        }
+
         public bool TryPickUp(Transform configuredCarryAnchor, out string resultMessage)
         {
             resultMessage = string.Empty;
