@@ -17,7 +17,7 @@ namespace Hanger51.Aircraft
 
         private P51LandingGearServiceTarget currentTarget;
         private P51NitrogenCartController currentCart;
-        private P51NitrogenCartController pushedCart;
+        private P51LooseWheelAssembly currentLooseWheel;
 
         private void Awake()
         {
@@ -34,35 +34,49 @@ namespace Hanger51.Aircraft
             ResolveReferences();
             if (playerCamera == null || inventoryUI == null || inventoryUI.IsOpen)
             {
-                CancelTargetHold();
-                ReleasePushedCart();
+                CancelCurrentHold();
                 return;
             }
 
-            Keyboard keyboard = Keyboard.current;
-            if (pushedCart != null && pushedCart.IsBeingMoved)
-            {
-                if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-                {
-                    pushedCart.TryToggleMove(playerCamera.transform, out string releaseMessage);
-                    inventoryUI.ShowStatusMessage(releaseMessage, 2.5f);
-                    pushedCart = null;
-                    inventoryUI.SetInteractionPrompt(string.Empty);
-                    return;
-                }
+            FindCandidate(
+                out P51LandingGearServiceTarget target,
+                out P51NitrogenCartController cart,
+                out P51LooseWheelAssembly looseWheel);
 
-                inventoryUI.SetInteractionPrompt(pushedCart.InteractionText);
-                return;
-            }
-            pushedCart = null;
-
-            FindCandidate(out P51LandingGearServiceTarget target, out P51NitrogenCartController cart);
             if (target != currentTarget)
             {
-                CancelTargetHold();
-                currentTarget = target;
+                currentTarget?.CancelHold();
             }
+            if (looseWheel != currentLooseWheel)
+            {
+                currentLooseWheel?.CancelHold();
+            }
+
+            currentTarget = target;
             currentCart = cart;
+            currentLooseWheel = looseWheel;
+
+            Keyboard keyboard = Keyboard.current;
+            if (currentLooseWheel != null)
+            {
+                bool holdR = keyboard != null && keyboard.rKey.isPressed;
+                if (currentLooseWheel.ProcessSeparation(
+                        holdR,
+                        Time.deltaTime,
+                        out string separationMessage)
+                    && !string.IsNullOrWhiteSpace(separationMessage))
+                {
+                    inventoryUI.ShowStatusMessage(separationMessage, 4f);
+                }
+
+                if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+                {
+                    inventoryUI.ShowStatusMessage(currentLooseWheel.Inspect(), 4.5f);
+                }
+
+                inventoryUI.SetInteractionPrompt(currentLooseWheel.InteractionText);
+                return;
+            }
 
             if (currentTarget != null)
             {
@@ -76,7 +90,7 @@ namespace Hanger51.Aircraft
                         out string serviceMessage)
                     && !string.IsNullOrWhiteSpace(serviceMessage))
                 {
-                    inventoryUI.ShowStatusMessage(serviceMessage, 3f);
+                    inventoryUI.ShowStatusMessage(serviceMessage, 3.5f);
                 }
 
                 if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
@@ -92,7 +106,7 @@ namespace Hanger51.Aircraft
                     string nitrogenMessage;
                     if (nearest == null)
                     {
-                        nitrogenMessage = "No nitrogen cart exists in the hangar.";
+                        nitrogenMessage = "No nitrogen cart is within hose range.";
                     }
                     else if (nearest.IsConnected)
                     {
@@ -119,23 +133,20 @@ namespace Hanger51.Aircraft
                 {
                     if (keyboard.eKey.wasPressedThisFrame)
                     {
-                        if (currentCart.TryToggleMove(
-                                playerCamera.transform,
-                                out string moveMessage))
+                        string moveMessage;
+                        if (currentCart.IsBeingMoved)
                         {
-                            inventoryUI.ShowStatusMessage(moveMessage, 2.8f);
-                            if (currentCart.IsBeingMoved)
-                            {
-                                pushedCart = currentCart;
-                            }
+                            currentCart.ReleaseMove();
+                            moveMessage = "Released the nitrogen cart.";
                         }
-                        else if (!string.IsNullOrWhiteSpace(moveMessage))
+                        else
                         {
-                            inventoryUI.ShowStatusMessage(moveMessage, 2.8f);
+                            currentCart.TryBeginMove(transform, out moveMessage);
                         }
-
-                        inventoryUI.SetInteractionPrompt(currentCart.InteractionText);
-                        return;
+                        if (!string.IsNullOrWhiteSpace(moveMessage))
+                        {
+                            inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
+                        }
                     }
 
                     float adjust = 0f;
@@ -180,10 +191,13 @@ namespace Hanger51.Aircraft
 
         private void FindCandidate(
             out P51LandingGearServiceTarget bestTarget,
-            out P51NitrogenCartController bestCart)
+            out P51NitrogenCartController bestCart,
+            out P51LooseWheelAssembly bestLooseWheel)
         {
             bestTarget = null;
             bestCart = null;
+            bestLooseWheel = null;
+
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
             RaycastHit[] hits = Physics.RaycastAll(
                 ray,
@@ -198,6 +212,8 @@ namespace Hanger51.Aircraft
             Array.Sort(hits, (a, b) => a.distance.CompareTo(b.distance));
             float targetDistance = float.PositiveInfinity;
             float cartDistance = float.PositiveInfinity;
+            float looseWheelDistance = float.PositiveInfinity;
+
             for (int index = 0; index < hits.Length; index++)
             {
                 Collider collider = hits[index].collider;
@@ -221,16 +237,40 @@ namespace Hanger51.Aircraft
                     bestCart = candidateCart;
                     cartDistance = hits[index].distance;
                 }
+
+                P51LooseWheelAssembly candidateLooseWheel =
+                    collider.GetComponentInParent<P51LooseWheelAssembly>();
+                if (candidateLooseWheel != null
+                    && hits[index].distance < looseWheelDistance)
+                {
+                    bestLooseWheel = candidateLooseWheel;
+                    looseWheelDistance = hits[index].distance;
+                }
             }
 
-            if (bestTarget != null && targetDistance <= cartDistance + 0.10f)
+            float closest = Mathf.Min(targetDistance, Mathf.Min(cartDistance, looseWheelDistance));
+            if (closest == float.PositiveInfinity)
             {
-                bestCart = null;
+                return;
             }
-            else if (bestCart != null)
+
+            const float tolerance = 0.10f;
+            if (looseWheelDistance <= closest + tolerance)
             {
                 bestTarget = null;
+                bestCart = null;
+                return;
             }
+
+            if (targetDistance <= closest + tolerance)
+            {
+                bestCart = null;
+                bestLooseWheel = null;
+                return;
+            }
+
+            bestTarget = null;
+            bestLooseWheel = null;
         }
 
         private static P51NitrogenCartController FindNearestCart(Vector3 position)
@@ -272,26 +312,18 @@ namespace Hanger51.Aircraft
             }
         }
 
-        private void CancelTargetHold()
+        private void CancelCurrentHold()
         {
             currentTarget?.CancelHold();
-        }
-
-        private void ReleasePushedCart()
-        {
-            if (pushedCart != null)
-            {
-                pushedCart.StopMoving();
-                pushedCart = null;
-            }
+            currentLooseWheel?.CancelHold();
         }
 
         private void OnDisable()
         {
-            CancelTargetHold();
-            ReleasePushedCart();
+            CancelCurrentHold();
             currentTarget = null;
             currentCart = null;
+            currentLooseWheel = null;
             if (inventoryUI != null)
             {
                 inventoryUI.SetInteractionPrompt(string.Empty);
