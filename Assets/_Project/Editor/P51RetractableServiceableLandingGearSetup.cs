@@ -5,6 +5,7 @@ using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Object = UnityEngine.Object;
 
 namespace Hanger51.EditorTools
 {
@@ -511,7 +512,7 @@ namespace Hanger51.EditorTools
                 new Vector3(0.05f, 1.02f, 0.18f), new Vector3(0.18f, 0.66f, 0.18f), Vector3.zero, metal, false);
             CreatePrimitive(cart.transform, PrimitiveType.Sphere, "Regulator Gauge",
                 new Vector3(0.05f, 1.76f, 0f), Vector3.one * 0.16f, Vector3.zero, yellow, false);
-            GameObject reel = CreatePrimitive(cart.transform, PrimitiveType.Cylinder, "Hose Reel",
+            CreatePrimitive(cart.transform, PrimitiveType.Cylinder, "Hose Reel",
                 new Vector3(0.43f, 0.88f, 0f), new Vector3(0.24f, 0.11f, 0.24f), new Vector3(90f, 0f, 0f), dark, false);
 
             GameObject hoseOriginObject = new GameObject("Nitrogen Hose Outlet");
