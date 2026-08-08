@@ -6,7 +6,7 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Collider))]
     public sealed class P51NitrogenCartController : MonoBehaviour
     {
-        [SerializeField, Range(0f, 80f)] private float regulatorPsi = 30f;
+        [SerializeField, Range(0f, 80f)] private float regulatorPsi = 20f;
         [SerializeField, Min(1f)] private float regulatorChangePerSecond = 8f;
         [SerializeField, Min(1f)] private float maximumHoseDistance = 9f;
         [SerializeField] private Transform hoseOrigin;
@@ -48,7 +48,7 @@ namespace Hanger51.Aircraft
             hoseOrigin = configuredHoseOrigin;
             hoseLine = configuredHoseLine;
             maximumHoseDistance = Mathf.Max(1f, configuredMaximumHoseDistance);
-            regulatorPsi = 30f;
+            regulatorPsi = 20f;
             Disconnect();
         }
 
@@ -101,9 +101,9 @@ namespace Hanger51.Aircraft
 
             connectedController = controller;
             connectedWheelIndex = wheelIndex;
-            regulatorPsi = controller.GetProperPressure(wheelIndex);
             UpdateHoseVisual();
-            resultMessage = $"Connected nitrogen hose to the {controller.GetWheelName(wheelIndex)} tire. Regulator set to the recommended {regulatorPsi:F0} PSI. Q/Z changes the setpoint; hold F at the cart to service.";
+            float correctPressure = controller.GetProperPressure(wheelIndex);
+            resultMessage = $"Connected nitrogen hose to the {controller.GetWheelName(wheelIndex)} tire. Current cart setpoint is {regulatorPsi:F0} PSI; this tire requires {correctPressure:F0} PSI. Aim at the cart, use Q/Z to set the regulator, then hold F to service.";
             return true;
         }
 
