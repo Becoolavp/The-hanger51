@@ -133,17 +133,12 @@ namespace Hanger51.Aircraft
                 {
                     if (keyboard.eKey.wasPressedThisFrame)
                     {
-                        string moveMessage;
-                        if (currentCart.IsBeingMoved)
+                        if (currentCart.TryToggleMove(transform, out string moveMessage)
+                            && !string.IsNullOrWhiteSpace(moveMessage))
                         {
-                            currentCart.ReleaseMove();
-                            moveMessage = "Released the nitrogen cart.";
+                            inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
                         }
-                        else
-                        {
-                            currentCart.TryBeginMove(transform, out moveMessage);
-                        }
-                        if (!string.IsNullOrWhiteSpace(moveMessage))
+                        else if (!string.IsNullOrWhiteSpace(moveMessage))
                         {
                             inventoryUI.ShowStatusMessage(moveMessage, 2.5f);
                         }
