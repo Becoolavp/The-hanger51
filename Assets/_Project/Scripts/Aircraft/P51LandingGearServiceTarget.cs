@@ -1,4 +1,3 @@
-using System.Reflection;
 using Hanger51.Inventory;
 using UnityEngine;
 
@@ -14,9 +13,6 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Collider))]
     public sealed class P51LandingGearServiceTarget : MonoBehaviour
     {
-        private const BindingFlags PrivateInstance =
-            BindingFlags.Instance | BindingFlags.NonPublic;
-
         [SerializeField] private P51LandingGearMaintenanceController controller;
         [SerializeField] private P51LandingGearServiceKind serviceKind;
         [SerializeField, Range(0, 2)] private int wheelIndex;
@@ -34,24 +30,17 @@ namespace Hanger51.Aircraft
         [SerializeField, Min(0f)] private float wheelBoltRotationTurns = 3f;
 
         private P51LandingGearInventoryBridge inventoryBridge;
-        private PlayerInventory playerInventory;
         private float holdProgress;
         private bool removing;
         private bool isHolding;
 
-        private Vector3 boltInstalledWorldPosition;
-        private Quaternion boltInstalledWorldRotation = Quaternion.identity;
+        private Vector3 boltInstalledLocalPosition;
+        private Quaternion boltInstalledLocalRotation = Quaternion.identity;
         private bool boltPoseCaptured;
 
         private Vector3 wheelBoltInstalledLocalPosition;
         private Quaternion wheelBoltInstalledLocalRotation = Quaternion.identity;
         private bool wheelBoltPoseCaptured;
-
-        private bool tireRemovalLatched;
-        private Transform installedTireVisual;
-        private FieldInfo tireInstalledField;
-        private MethodInfo applyVisualStateMethod;
-        private MethodInfo pushPhysicsStateMethod;
 
         public P51LandingGearMaintenanceController Controller
         {
@@ -84,6 +73,7 @@ namespace Hanger51.Aircraft
 
                 int percent = Mathf.RoundToInt(holdProgress * 100f);
                 string progress = holdProgress > 0f ? $" ({percent}%)" : string.Empty;
+
                 if (serviceKind == P51LandingGearServiceKind.MountBolt)
                 {
                     return controller.IsGearInstalled(wheelIndex)
@@ -93,50 +83,45 @@ namespace Hanger51.Aircraft
 
                 if (!controller.IsGearInstalled(wheelIndex))
                 {
-                    return $"{name} wheel station — reinstall the gear first | X inspect";
+                    return $"{name} wheel station — reinstall the gear strut first | X inspect";
                 }
 
                 if (inventoryBridge == null || !inventoryBridge.IsReady)
                 {
-                    return $"{name} wheel station — inventory wheel service needs P-51 Step 30 | X inspect";
+                    return $"{name} wheel station — wheel service needs P-51 Step 30 | X inspect";
                 }
 
                 bool rimPresent = inventoryBridge.IsRimInstalled(wheelIndex);
-                bool tirePresent = IsTirePresentForService();
+                bool tirePresent = controller.IsTireInstalled(wheelIndex);
                 if (rimPresent && tirePresent)
                 {
-                    return $"Hold R: unscrew visible wheel retaining bolt and pull complete {name} tire + rim off axle{progress} | N nitrogen | X inspect";
+                    return $"Hold R: unscrew wheel retaining bolt and pull complete {name} tire + rim off axle{progress} | N nitrogen | X inspect";
                 }
 
-                if (!rimPresent)
+                if (!rimPresent && !tirePresent)
                 {
-                    return inventoryBridge.HasCorrectEquippedRim(wheelIndex, playerInventory)
-                        ? $"Hold E: install equipped {name} rim at highlighted axle{progress} | X inspect"
-                        : $"Equip the correct {name} rim to highlight its axle install point | X inspect";
+                    P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+                    if (carried != null && carried.CanInstallOn(wheelIndex))
+                    {
+                        return $"Hold E: install carried complete {name} wheel on highlighted axle and tighten retaining bolt{progress} | X inspect";
+                    }
+                    if (carried != null)
+                    {
+                        return $"This axle needs its own {name} wheel; the carried {carried.WheelLabel} wheel belongs to another station | X inspect";
+                    }
+                    return $"{name} wheel removed — rebuild/pick up its complete tire + rim assembly and carry it here | X inspect";
                 }
 
-                if (!tirePresent)
-                {
-                    return inventoryBridge.HasCorrectEquippedTire(wheelIndex, playerInventory)
-                        ? $"Hold E: fit equipped {name} tire and screw wheel retaining bolt in{progress} | Hold R: remove bare rim | X inspect"
-                        : $"Equip the correct {name} tire to highlight this rim | Hold R: remove bare rim | X inspect";
-                }
-
-                return $"{name} wheel station | X inspect";
+                return $"{name} wheel state is incomplete — service the complete wheel off the aircraft | X inspect";
             }
         }
 
         private void Awake()
         {
             ResolveReferences();
-            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
-            ResolveInstalledTireVisual();
             EnsureWheelHardware();
-            tireRemovalLatched = serviceKind == P51LandingGearServiceKind.TireAndValve
-                && controller != null
-                && !controller.IsTireInstalled(wheelIndex);
             ApplyStableVisualState();
             UpdateInstallHighlight();
         }
@@ -144,10 +129,8 @@ namespace Hanger51.Aircraft
         private void OnEnable()
         {
             ResolveReferences();
-            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
-            ResolveInstalledTireVisual();
             EnsureWheelHardware();
             ApplyStableVisualState();
             UpdateInstallHighlight();
@@ -158,27 +141,9 @@ namespace Hanger51.Aircraft
             ResolveReferences();
             EnsureWheelHardware();
 
-            if (serviceKind == P51LandingGearServiceKind.MountBolt)
-            {
-                if (!isHolding)
-                {
-                    ApplyStableBoltPose();
-                }
-                return;
-            }
-
-            if (tireRemovalLatched)
-            {
-                if (controller != null && controller.IsTireInstalled(wheelIndex))
-                {
-                    ForceControllerTireInstalled(false);
-                }
-                ForceInstalledTireVisible(false);
-            }
-
             if (!isHolding)
             {
-                ApplyStableWheelBoltPose();
+                ApplyStableVisualState();
             }
             UpdateInstallHighlight();
         }
@@ -194,10 +159,8 @@ namespace Hanger51.Aircraft
             wheelIndex = Mathf.Clamp(configuredWheelIndex, 0, 2);
             holdDuration = Mathf.Max(0.2f, configuredHoldDuration);
             ResolveReferences();
-            ResolveControllerStateBindings();
             ResolveBoltVisual();
             CaptureBoltPose();
-            ResolveInstalledTireVisual();
             EnsureWheelHardware();
             ApplyStableVisualState();
             UpdateInstallHighlight();
@@ -210,12 +173,9 @@ namespace Hanger51.Aircraft
             float deltaTime,
             out string resultMessage)
         {
+            _ = inventory;
             resultMessage = string.Empty;
             ResolveReferences();
-            if (inventory != null)
-            {
-                playerInventory = inventory;
-            }
             if (controller == null)
             {
                 CancelHold();
@@ -224,12 +184,8 @@ namespace Hanger51.Aircraft
 
             bool shouldRemove = holdRemove && !holdInstall;
             bool shouldInstall = holdInstall && !holdRemove;
-            bool rimPresent = inventoryBridge != null
-                && inventoryBridge.IsReady
-                && inventoryBridge.IsRimInstalled(wheelIndex);
-            bool tirePresent = IsTirePresentForService();
-
             bool valid;
+
             if (serviceKind == P51LandingGearServiceKind.MountBolt)
             {
                 valid = shouldRemove
@@ -238,18 +194,22 @@ namespace Hanger51.Aircraft
             }
             else
             {
+                bool rimPresent = inventoryBridge != null
+                    && inventoryBridge.IsReady
+                    && inventoryBridge.IsRimInstalled(wheelIndex);
+                bool tirePresent = controller.IsTireInstalled(wheelIndex);
+                P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+
                 bool validRemove = shouldRemove
                     && controller.IsGearInstalled(wheelIndex)
-                    && ((rimPresent && tirePresent) || (rimPresent && !tirePresent));
+                    && rimPresent
+                    && tirePresent;
                 bool validInstall = shouldInstall
                     && controller.IsGearInstalled(wheelIndex)
-                    && ((!rimPresent
-                            && inventoryBridge != null
-                            && inventoryBridge.HasCorrectEquippedRim(wheelIndex, playerInventory))
-                        || (rimPresent
-                            && !tirePresent
-                            && inventoryBridge != null
-                            && inventoryBridge.HasCorrectEquippedTire(wheelIndex, playerInventory)));
+                    && !rimPresent
+                    && !tirePresent
+                    && carried != null
+                    && carried.CanInstallOn(wheelIndex);
                 valid = validRemove || validInstall;
             }
 
@@ -275,13 +235,9 @@ namespace Hanger51.Aircraft
             {
                 ApplyBoltAnimatedPose(holdProgress, removing);
             }
-            else if (rimPresent && tirePresent && shouldRemove)
+            else
             {
-                ApplyWheelBoltAnimatedPose(holdProgress, true);
-            }
-            else if (rimPresent && !tirePresent && shouldInstall)
-            {
-                ApplyWheelBoltAnimatedPose(holdProgress, false);
+                ApplyWheelBoltAnimatedPose(holdProgress, removing);
             }
 
             if (holdProgress < 1f)
@@ -299,51 +255,18 @@ namespace Hanger51.Aircraft
             else if (inventoryBridge == null || !inventoryBridge.IsReady)
             {
                 completed = false;
-                resultMessage = "Wheel inventory service is not configured. Run P-51 Step 30.";
+                resultMessage = "Wheel service is not configured. Run P-51 Step 30.";
             }
-            else if (removing && rimPresent && tirePresent)
+            else if (removing)
             {
-                completed = inventoryBridge.TryRemoveWheelAssembly(
-                    wheelIndex,
-                    out resultMessage);
-                if (completed)
-                {
-                    tireRemovalLatched = true;
-                    ForceControllerTireInstalled(false);
-                    ForceInstalledTireVisible(false);
-                }
-            }
-            else if (removing && rimPresent && !tirePresent)
-            {
-                completed = inventoryBridge.TryRemoveRim(
-                    wheelIndex,
-                    inventory,
-                    out resultMessage);
-            }
-            else if (!removing && !rimPresent)
-            {
-                completed = inventoryBridge.TryInstallRim(
-                    wheelIndex,
-                    inventory,
-                    out resultMessage);
-            }
-            else if (!removing && rimPresent && !tirePresent)
-            {
-                completed = inventoryBridge.TryInstallTire(
-                    wheelIndex,
-                    inventory,
-                    out resultMessage);
-                if (completed)
-                {
-                    tireRemovalLatched = false;
-                    ForceControllerTireInstalled(true);
-                    ForceInstalledTireVisible(true);
-                }
+                completed = inventoryBridge.TryRemoveWheelAssembly(wheelIndex, out resultMessage);
             }
             else
             {
-                completed = false;
-                resultMessage = "That wheel service action is not available in the current configuration.";
+                completed = inventoryBridge.TryInstallWheelAssembly(
+                    wheelIndex,
+                    P51LooseWheelAssembly.CurrentCarried,
+                    out resultMessage);
             }
 
             CancelHold();
@@ -360,12 +283,6 @@ namespace Hanger51.Aircraft
             }
 
             string baseText = controller.GetInspectionText(wheelIndex);
-            if (serviceKind == P51LandingGearServiceKind.TireAndValve
-                && tireRemovalLatched)
-            {
-                baseText = $"{controller.GetWheelName(wheelIndex)} gear: gear installed | Tire: TIRE REMOVED | Correct pressure: {controller.GetProperPressure(wheelIndex):F0} PSI";
-            }
-
             string rimText = inventoryBridge != null
                 ? inventoryBridge.GetRimInspectionText(wheelIndex)
                 : "Rim inventory state unavailable";
@@ -380,37 +297,20 @@ namespace Hanger51.Aircraft
             ApplyStableVisualState();
         }
 
-        private bool IsTirePresentForService()
-        {
-            return serviceKind == P51LandingGearServiceKind.TireAndValve
-                && !tireRemovalLatched
-                && controller != null
-                && controller.IsTireInstalled(wheelIndex);
-        }
-
         private void ApplyStableVisualState()
         {
             if (serviceKind == P51LandingGearServiceKind.MountBolt)
             {
                 ApplyStableBoltPose();
-                return;
             }
-
-            if (tireRemovalLatched)
+            else
             {
-                ForceControllerTireInstalled(false);
-                ForceInstalledTireVisible(false);
+                ApplyStableWheelBoltPose();
             }
-            ApplyStableWheelBoltPose();
         }
 
         private void ApplyBoltAnimatedPose(float normalizedProgress, bool isRemoving)
         {
-            if (serviceKind != P51LandingGearServiceKind.MountBolt)
-            {
-                return;
-            }
-
             ResolveBoltVisual();
             CaptureBoltPose();
             if (animatedBolt == null || !boltPoseCaptured)
@@ -419,22 +319,18 @@ namespace Hanger51.Aircraft
             }
 
             float t = Mathf.Clamp01(normalizedProgress);
-            Vector3 extractedPosition = GetBoltExtractedWorldPosition();
-            Vector3 startPosition = isRemoving
-                ? boltInstalledWorldPosition
-                : extractedPosition;
-            Vector3 endPosition = isRemoving
-                ? extractedPosition
-                : boltInstalledWorldPosition;
+            Vector3 extractedPosition = GetBoltExtractedLocalPosition();
+            Vector3 startPosition = isRemoving ? boltInstalledLocalPosition : extractedPosition;
+            Vector3 endPosition = isRemoving ? extractedPosition : boltInstalledLocalPosition;
 
             animatedBolt.gameObject.SetActive(true);
-            animatedBolt.position = Vector3.Lerp(startPosition, endPosition, t);
+            animatedBolt.localPosition = Vector3.Lerp(startPosition, endPosition, t);
 
-            float spinDirection = isRemoving ? -1f : 1f;
+            float spinDirection = isRemoving ? 1f : -1f;
             Quaternion spin = Quaternion.AngleAxis(
                 360f * boltRotationTurns * t * spinDirection,
-                transform.up);
-            animatedBolt.rotation = spin * boltInstalledWorldRotation;
+                Vector3.up);
+            animatedBolt.localRotation = boltInstalledLocalRotation * spin;
         }
 
         private void ApplyStableBoltPose()
@@ -453,15 +349,25 @@ namespace Hanger51.Aircraft
 
             bool installed = controller == null || controller.IsGearInstalled(wheelIndex);
             animatedBolt.gameObject.SetActive(true);
-            animatedBolt.SetPositionAndRotation(
-                installed ? boltInstalledWorldPosition : GetBoltExtractedWorldPosition(),
-                boltInstalledWorldRotation);
+            animatedBolt.localPosition = installed
+                ? boltInstalledLocalPosition
+                : GetBoltExtractedLocalPosition();
+            animatedBolt.localRotation = boltInstalledLocalRotation;
         }
 
-        private Vector3 GetBoltExtractedWorldPosition()
+        private Vector3 GetBoltExtractedLocalPosition()
         {
-            return boltInstalledWorldPosition
-                + transform.up * Mathf.Max(0f, boltExtractionDistance);
+            Vector3 shaftDirection = boltInstalledLocalRotation * Vector3.up;
+            if (wheelIndex == 1)
+            {
+                shaftDirection = -shaftDirection;
+            }
+            if (shaftDirection.sqrMagnitude < 0.001f)
+            {
+                shaftDirection = Vector3.up;
+            }
+            return boltInstalledLocalPosition
+                + shaftDirection.normalized * Mathf.Max(0f, boltExtractionDistance);
         }
 
         private void ApplyWheelBoltAnimatedPose(float normalizedProgress, bool isRemoving)
@@ -474,19 +380,16 @@ namespace Hanger51.Aircraft
 
             float t = Mathf.Clamp01(normalizedProgress);
             Vector3 extracted = GetWheelBoltExtractedLocalPosition();
-            Vector3 start = isRemoving
-                ? wheelBoltInstalledLocalPosition
-                : extracted;
-            Vector3 end = isRemoving
-                ? extracted
-                : wheelBoltInstalledLocalPosition;
+            Vector3 start = isRemoving ? wheelBoltInstalledLocalPosition : extracted;
+            Vector3 end = isRemoving ? extracted : wheelBoltInstalledLocalPosition;
+
             wheelRetainingBolt.gameObject.SetActive(true);
             wheelRetainingBolt.localPosition = Vector3.Lerp(start, end, t);
 
-            float spinDirection = isRemoving ? -1f : 1f;
+            float spinDirection = isRemoving ? 1f : -1f;
             Quaternion spin = Quaternion.AngleAxis(
                 360f * wheelBoltRotationTurns * t * spinDirection,
-                Vector3.right);
+                Vector3.up);
             wheelRetainingBolt.localRotation = wheelBoltInstalledLocalRotation * spin;
         }
 
@@ -505,10 +408,11 @@ namespace Hanger51.Aircraft
 
             bool completeWheel = controller != null
                 && controller.IsGearInstalled(wheelIndex)
+                && controller.IsTireInstalled(wheelIndex)
                 && inventoryBridge != null
                 && inventoryBridge.IsReady
-                && inventoryBridge.IsRimInstalled(wheelIndex)
-                && IsTirePresentForService();
+                && inventoryBridge.IsRimInstalled(wheelIndex);
+
             wheelRetainingBolt.gameObject.SetActive(
                 controller == null || controller.IsGearInstalled(wheelIndex));
             wheelRetainingBolt.localPosition = completeWheel
@@ -519,9 +423,13 @@ namespace Hanger51.Aircraft
 
         private Vector3 GetWheelBoltExtractedLocalPosition()
         {
-            Vector3 outward = wheelIndex == 0 ? Vector3.left : Vector3.right;
+            Vector3 shaftDirection = wheelBoltInstalledLocalRotation * Vector3.up;
+            if (shaftDirection.sqrMagnitude < 0.001f)
+            {
+                shaftDirection = wheelIndex == 0 ? Vector3.left : Vector3.right;
+            }
             return wheelBoltInstalledLocalPosition
-                + outward * Mathf.Max(0f, wheelBoltExtractionDistance);
+                + shaftDirection.normalized * Mathf.Max(0f, wheelBoltExtractionDistance);
         }
 
         private void EnsureWheelHardware()
@@ -538,7 +446,7 @@ namespace Hanger51.Aircraft
                 {
                     wheelRetainingBolt = existing;
                 }
-                else
+                else if (Application.isPlaying)
                 {
                     GameObject bolt = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
                     bolt.name = "Wheel Retaining Bolt";
@@ -549,7 +457,10 @@ namespace Hanger51.Aircraft
                         side * (tail ? 0.11f : 0.19f),
                         0f,
                         0f);
-                    bolt.transform.localRotation = Quaternion.Euler(0f, 0f, 90f);
+                    bolt.transform.localRotation = Quaternion.Euler(
+                        0f,
+                        0f,
+                        wheelIndex == 0 ? 90f : -90f);
                     bolt.transform.localScale = tail
                         ? new Vector3(0.055f, 0.075f, 0.055f)
                         : new Vector3(0.080f, 0.105f, 0.080f);
@@ -594,6 +505,11 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            if (!Application.isPlaying)
+            {
+                return;
+            }
+
             GameObject root = new GameObject("Wheel Install Highlight");
             root.transform.SetParent(transform, false);
             root.transform.localPosition = Vector3.zero;
@@ -613,14 +529,6 @@ namespace Hanger51.Aircraft
                 new Vector3(markerThickness, markerThickness, markerLength), material);
             CreateHighlightMarker(root.transform, new Vector3(0f, 0f, -radius),
                 new Vector3(markerThickness, markerThickness, markerLength), material);
-            CreateHighlightMarker(root.transform, new Vector3(0f, radius * 0.70f, radius * 0.70f),
-                Vector3.one * markerThickness * 1.5f, material);
-            CreateHighlightMarker(root.transform, new Vector3(0f, radius * 0.70f, -radius * 0.70f),
-                Vector3.one * markerThickness * 1.5f, material);
-            CreateHighlightMarker(root.transform, new Vector3(0f, -radius * 0.70f, radius * 0.70f),
-                Vector3.one * markerThickness * 1.5f, material);
-            CreateHighlightMarker(root.transform, new Vector3(0f, -radius * 0.70f, -radius * 0.70f),
-                Vector3.one * markerThickness * 1.5f, material);
 
             installHighlightRoot = root;
             installHighlightRoot.SetActive(false);
@@ -640,31 +548,22 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            bool show = false;
-            if (controller != null
+            bool wheelMissing = controller != null
                 && controller.IsGearInstalled(wheelIndex)
+                && !controller.IsTireInstalled(wheelIndex)
                 && inventoryBridge != null
                 && inventoryBridge.IsReady
-                && playerInventory != null)
-            {
-                bool rimPresent = inventoryBridge.IsRimInstalled(wheelIndex);
-                bool tirePresent = IsTirePresentForService();
-                show = !rimPresent
-                    ? inventoryBridge.HasCorrectEquippedRim(wheelIndex, playerInventory)
-                    : !tirePresent
-                        && inventoryBridge.HasCorrectEquippedTire(wheelIndex, playerInventory);
-            }
+                && !inventoryBridge.IsRimInstalled(wheelIndex);
+            P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+            bool show = wheelMissing
+                && carried != null
+                && carried.IsCarried
+                && carried.CanInstallOn(wheelIndex);
 
             installHighlightRoot.SetActive(show);
-            if (show)
-            {
-                float pulse = 1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.045f;
-                installHighlightRoot.transform.localScale = Vector3.one * pulse;
-            }
-            else
-            {
-                installHighlightRoot.transform.localScale = Vector3.one;
-            }
+            installHighlightRoot.transform.localScale = show
+                ? Vector3.one * (1f + Mathf.Sin(Time.unscaledTime * 5f) * 0.045f)
+                : Vector3.one;
         }
 
         private static void CreateHighlightMarker(
@@ -693,10 +592,9 @@ namespace Hanger51.Aircraft
 
         private Material FindServiceHardwareMaterial()
         {
-            P51LandingGearServiceTarget[] targets =
-                controller != null
-                    ? controller.GetComponentsInChildren<P51LandingGearServiceTarget>(true)
-                    : new P51LandingGearServiceTarget[0];
+            P51LandingGearServiceTarget[] targets = controller != null
+                ? controller.GetComponentsInChildren<P51LandingGearServiceTarget>(true)
+                : new P51LandingGearServiceTarget[0];
             for (int index = 0; index < targets.Length; index++)
             {
                 if (targets[index] == null
@@ -787,56 +685,9 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            boltInstalledWorldPosition = animatedBolt.position;
-            boltInstalledWorldRotation = animatedBolt.rotation;
+            boltInstalledLocalPosition = animatedBolt.localPosition;
+            boltInstalledLocalRotation = animatedBolt.localRotation;
             boltPoseCaptured = true;
-        }
-
-        private void ResolveInstalledTireVisual()
-        {
-            if (serviceKind != P51LandingGearServiceKind.TireAndValve
-                || installedTireVisual != null
-                || controller == null)
-            {
-                return;
-            }
-
-            string expectedName = wheelIndex == 0
-                ? "Left Main Tire Visual"
-                : wheelIndex == 1
-                    ? "Right Main Tire Visual"
-                    : "Tailwheel Tire Visual";
-            Transform[] all = controller.GetComponentsInChildren<Transform>(true);
-            for (int index = 0; index < all.Length; index++)
-            {
-                if (all[index] != null && all[index].name == expectedName)
-                {
-                    installedTireVisual = all[index];
-                    break;
-                }
-            }
-        }
-
-        private void ForceInstalledTireVisible(bool visible)
-        {
-            ResolveInstalledTireVisual();
-            if (installedTireVisual != null)
-            {
-                installedTireVisual.gameObject.SetActive(visible);
-            }
-
-            Renderer[] valveRenderers = GetComponentsInChildren<Renderer>(true);
-            for (int index = 0; index < valveRenderers.Length; index++)
-            {
-                Renderer renderer = valveRenderers[index];
-                if (renderer != null
-                    && renderer.transform != wheelRetainingBolt
-                    && (installHighlightRoot == null
-                        || !renderer.transform.IsChildOf(installHighlightRoot.transform)))
-                {
-                    renderer.enabled = visible;
-                }
-            }
         }
 
         private void ResolveReferences()
@@ -849,43 +700,6 @@ namespace Hanger51.Aircraft
             {
                 inventoryBridge = controller.GetComponent<P51LandingGearInventoryBridge>();
             }
-            if (playerInventory == null)
-            {
-                playerInventory = FindFirstObjectByType<PlayerInventory>();
-            }
-        }
-
-        private void ResolveControllerStateBindings()
-        {
-            if (controller == null)
-            {
-                return;
-            }
-
-            System.Type type = typeof(P51LandingGearMaintenanceController);
-            tireInstalledField = type.GetField("tireInstalled", PrivateInstance);
-            applyVisualStateMethod = type.GetMethod("ApplyVisualState", PrivateInstance);
-            pushPhysicsStateMethod = type.GetMethod("PushPhysicsState", PrivateInstance);
-        }
-
-        private void ForceControllerTireInstalled(bool installed)
-        {
-            ResolveReferences();
-            ResolveControllerStateBindings();
-            if (controller == null || tireInstalledField == null)
-            {
-                return;
-            }
-
-            bool[] states = tireInstalledField.GetValue(controller) as bool[];
-            if (states == null || wheelIndex < 0 || wheelIndex >= states.Length)
-            {
-                return;
-            }
-
-            states[wheelIndex] = installed;
-            applyVisualStateMethod?.Invoke(controller, new object[] { true });
-            pushPhysicsStateMethod?.Invoke(controller, null);
         }
 
         private void OnDisable()
