@@ -1,4 +1,3 @@
-using System.Reflection;
 using Hanger51.EngineAssembly;
 using UnityEngine;
 
@@ -10,13 +9,6 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Rigidbody))]
     public sealed class P51EngineConditionPowerBridge : MonoBehaviour
     {
-        private const BindingFlags PrivateInstance =
-            BindingFlags.Instance | BindingFlags.NonPublic;
-        private static readonly FieldInfo EngineRunningField =
-            typeof(P51FlightController).GetField("engineRunning", PrivateInstance);
-        private static readonly FieldInfo ThrottleField =
-            typeof(P51FlightController).GetField("throttle", PrivateInstance);
-
         [SerializeField] private P51FlightController flightController;
         [SerializeField] private Rigidbody aircraftBody;
         [SerializeField, Min(1000f)] private float configuredMaximumThrustNewtons = 24000f;
@@ -62,12 +54,9 @@ namespace Hanger51.Aircraft
 
             bool justStarted = flightController.EngineRunning
                 && !previousEngineRunning;
-            if (justStarted
-                && activeCondition != null
-                && activeCondition.OilQuantityLiters
-                    < activeCondition.SafeMinimumOilLiters)
+            if (justStarted && activeCondition != null)
             {
-                StopEngineForLowOil();
+                ShowLowOilStartWarningIfNeeded();
             }
 
             previousEngineRunning = flightController.EngineRunning;
@@ -128,19 +117,28 @@ namespace Hanger51.Aircraft
             }
         }
 
-        private void StopEngineForLowOil()
+        private void ShowLowOilStartWarningIfNeeded()
         {
             if (flightController == null || activeCondition == null)
             {
                 return;
             }
 
-            EngineRunningField?.SetValue(flightController, false);
-            ThrottleField?.SetValue(flightController, 0f);
-            activeCondition.SetOperatingState(false, 0f);
+            float oil = activeCondition.OilQuantityLiters;
+            float safe = activeCondition.SafeMinimumOilLiters;
+            if (oil >= safe)
+            {
+                return;
+            }
+
+            string severity = oil <= 0.25f
+                ? "NO OIL"
+                : oil < safe * 0.50f
+                    ? "CRITICALLY LOW OIL"
+                    : "LOW OIL";
             flightController.ShowCockpitMessage(
-                $"START BLOCKED — oil is {activeCondition.OilQuantityLiters:F1} L; add oil to at least {activeCondition.SafeMinimumOilLiters:F1} L.",
-                5f);
+                $"WARNING — {severity}: {oil:F1}/{activeCondition.OilCapacityLiters:F1} L. Engine start allowed, but continued operation can rapidly damage the Merlin.",
+                6f);
         }
 
         private void RefreshConditionReference()
