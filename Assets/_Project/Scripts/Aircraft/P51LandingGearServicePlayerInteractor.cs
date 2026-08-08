@@ -11,6 +11,7 @@ namespace Hanger51.Aircraft
     {
         [SerializeField] private Camera playerCamera;
         [SerializeField] private InventoryUI inventoryUI;
+        [SerializeField] private PlayerInventory inventory;
         [SerializeField, Min(1f)] private float interactionDistance = 6f;
         [SerializeField] private LayerMask interactionLayers = ~0;
 
@@ -50,6 +51,7 @@ namespace Hanger51.Aircraft
                 bool holdE = keyboard != null && keyboard.eKey.isPressed;
                 bool holdR = keyboard != null && keyboard.rKey.isPressed;
                 if (currentTarget.ProcessInteraction(
+                        inventory,
                         holdE,
                         holdR,
                         Time.deltaTime,
@@ -225,6 +227,10 @@ namespace Hanger51.Aircraft
             {
                 inventoryUI = FindFirstObjectByType<InventoryUI>();
             }
+            if (inventory == null)
+            {
+                inventory = GetComponent<PlayerInventory>();
+            }
         }
 
         private void CancelTargetHold()
@@ -246,6 +252,7 @@ namespace Hanger51.Aircraft
         private void OnValidate()
         {
             interactionDistance = Mathf.Max(1f, interactionDistance);
+            ResolveReferences();
         }
     }
 }
