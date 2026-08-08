@@ -73,6 +73,10 @@ namespace Hanger51.Aircraft
                 {
                     maintenance.gameObject.AddComponent<P51LandingGearReplacementService>();
                 }
+                if (maintenance.GetComponent<P51LandingGearGroundRetractionGuard>() == null)
+                {
+                    maintenance.gameObject.AddComponent<P51LandingGearGroundRetractionGuard>();
+                }
             }
         }
 
@@ -130,7 +134,9 @@ namespace Hanger51.Aircraft
 
         private void LateUpdate()
         {
-            if (maintenance == null || maintenance.DeploymentFraction < 0.94f)
+            if (maintenance == null
+                || !maintenance.GearCommandDown
+                || maintenance.DeploymentFraction < 0.94f)
             {
                 return;
             }
