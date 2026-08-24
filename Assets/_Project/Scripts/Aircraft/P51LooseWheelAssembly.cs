@@ -7,45 +7,35 @@ namespace Hanger51.Aircraft
     [RequireComponent(typeof(Collider))]
     public sealed class P51LooseWheelAssembly : MonoBehaviour
     {
-        private enum ServiceAction
-        {
-            None,
-            RemoveTire,
-            InstallRim,
-            InstallTire
-        }
-
         [SerializeField] private InventoryItemDefinition tireItem;
         [SerializeField] private InventoryItemDefinition rimItem;
         [SerializeField] private EnginePartConditionData tireCondition;
         [SerializeField] private EnginePartConditionData rimCondition;
         [SerializeField] private string wheelLabel = "P-51 wheel";
-        [SerializeField, Range(0, 2)] private int originWheelIndex;
-        [SerializeField] private bool tireInstalled = true;
-        [SerializeField] private bool rimInstalled = true;
+        [SerializeField, Range(-1, 2)] private int originWheelIndex = -1;
         [SerializeField, Min(0.2f)] private float serviceHoldSeconds = 1.15f;
 
         private Collider interactionCollider;
         private Transform tireVisual;
         private Transform rimVisual;
-        private Transform rebuildMarker;
         private Transform serviceValveTarget;
         private float serviceProgress;
-        private ServiceAction activeAction;
 
         public static P51LooseWheelAssembly CurrentCarried { get; private set; }
 
-        public bool IsComplete => tireInstalled && rimInstalled;
+        public bool IsComplete => tireItem != null && rimItem != null;
         public bool IsCarried => CurrentCarried == this;
-        public bool HasTire => tireInstalled;
-        public bool HasRim => rimInstalled;
-        public bool IsBareRim => rimInstalled && !tireInstalled;
         public bool IsTireFailed => tireCondition != null && tireCondition.TireFailed;
         public int OriginWheelIndex => originWheelIndex;
         public string WheelLabel => wheelLabel;
         public float TirePressurePsi => tireCondition != null ? tireCondition.TirePressurePsi : 0f;
-        public float ProperPressurePsi => originWheelIndex == 2 ? 24f : 30f;
-        public Transform ServiceValveTarget => IsComplete ? serviceValveTarget : null;
+        public float ProperPressurePsi => IsTailWheel ? 24f : 30f;
+        public Transform ServiceValveTarget => serviceValveTarget;
+
+        private bool IsTailWheel =>
+            (rimItem != null && rimItem.ItemId == P51LandingGearInventoryBridge.TailRimItemId)
+            || (tireItem != null && tireItem.ItemId == P51LandingGearInventoryBridge.TailTireItemId)
+            || originWheelIndex == 2;
 
         public static P51LooseWheelAssembly Create(
             string label,
@@ -65,7 +55,8 @@ namespace Hanger51.Aircraft
             GameObject root = new GameObject($"Removed {label} Wheel Assembly");
             root.transform.SetPositionAndRotation(worldPosition, worldRotation);
 
-            bool tail = configuredOriginWheelIndex == 2;
+            bool tail = configuredOriginWheelIndex == 2
+                || configuredRimItem.ItemId == P51LandingGearInventoryBridge.TailRimItemId;
             BoxCollider collider = root.AddComponent<BoxCollider>();
             collider.isTrigger = true;
             collider.center = Vector3.up * (tail ? 0.16f : 0.32f);
@@ -83,11 +74,13 @@ namespace Hanger51.Aircraft
                 ? configuredRimCondition.Clone()
                 : EnginePartConditionData.CreateDefaultForItem(configuredRimItem);
             loose.wheelLabel = string.IsNullOrWhiteSpace(label) ? "P-51 wheel" : label;
-            loose.originWheelIndex = Mathf.Clamp(configuredOriginWheelIndex, 0, 2);
-            loose.tireInstalled = true;
-            loose.rimInstalled = true;
+            loose.originWheelIndex = Mathf.Clamp(configuredOriginWheelIndex, -1, 2);
+            if (loose.rimCondition != null && loose.originWheelIndex >= 0)
+            {
+                loose.rimCondition.SetWheelStationIndex(loose.originWheelIndex);
+            }
             loose.interactionCollider = collider;
-            loose.BuildOrRefreshVisuals();
+            loose.BuildVisuals();
             return loose;
         }
 
@@ -96,49 +89,16 @@ namespace Hanger51.Aircraft
             ResolveCollider();
             ResolveExistingVisuals();
             EnsureServiceValveTarget();
-            RefreshVisuals();
-        }
-
-        public bool HasCorrectEquippedTire(PlayerInventory inventory)
-        {
-            return inventory != null && tireItem != null && inventory.EquippedItem == tireItem;
-        }
-
-        public bool HasCorrectEquippedRim(PlayerInventory inventory)
-        {
-            return inventory != null && rimItem != null && inventory.EquippedItem == rimItem;
         }
 
         public string GetInteractionText(PlayerInventory inventory)
         {
+            _ = inventory;
             int percent = Mathf.RoundToInt(serviceProgress * 100f);
             string progress = serviceProgress > 0f ? $" ({percent}%)" : string.Empty;
-
-            if (IsCarried)
-            {
-                return $"Carrying {wheelLabel} wheel assembly";
-            }
-
-            if (IsComplete)
-            {
-                return $"E: carry complete {wheelLabel} wheel | Hold R: remove tire from rim{progress} | N nitrogen | X inspect";
-            }
-
-            if (IsBareRim)
-            {
-                return HasCorrectEquippedTire(inventory)
-                    ? $"Hold E: mount equipped {tireItem.DisplayName} onto this rim{progress} | X inspect"
-                    : $"E: put bare {rimItem.DisplayName} in inventory | Equip {tireItem.DisplayName} to mount a tire | X inspect";
-            }
-
-            if (!rimInstalled)
-            {
-                return HasCorrectEquippedRim(inventory)
-                    ? $"Hold E: place equipped {rimItem.DisplayName} at this wheel rebuild position{progress} | X inspect"
-                    : $"Equip {rimItem.DisplayName} to restore the rim at this wheel rebuild position | X inspect";
-            }
-
-            return $"Loose {wheelLabel} wheel service position | X inspect";
+            return IsCarried
+                ? $"Carrying {wheelLabel} wheel assembly"
+                : $"E: carry complete {wheelLabel} wheel | Hold R: remove tire from rim{progress} | N nitrogen | X inspect";
         }
 
         public bool ProcessService(
@@ -148,24 +108,14 @@ namespace Hanger51.Aircraft
             float deltaTime,
             out string resultMessage)
         {
+            _ = inventory;
+            _ = installHeld;
             resultMessage = string.Empty;
-            if (IsCarried)
+
+            if (IsCarried || !removeHeld)
             {
                 CancelHold();
                 return false;
-            }
-
-            ServiceAction desired = ResolveDesiredAction(inventory, installHeld, removeHeld);
-            if (desired == ServiceAction.None)
-            {
-                CancelHold();
-                return false;
-            }
-
-            if (activeAction != desired)
-            {
-                activeAction = desired;
-                serviceProgress = 0f;
             }
 
             serviceProgress = Mathf.Clamp01(
@@ -175,47 +125,13 @@ namespace Hanger51.Aircraft
                 return false;
             }
 
-            bool completed = CompleteServiceAction(desired, inventory, out resultMessage);
             serviceProgress = 0f;
-            activeAction = ServiceAction.None;
-            return completed;
-        }
-
-        public bool TryPickupBareRim(PlayerInventory inventory, out string resultMessage)
-        {
-            resultMessage = string.Empty;
-            if (!IsBareRim)
-            {
-                resultMessage = "Remove the tire before putting the rim in inventory.";
-                return false;
-            }
-            if (inventory == null || rimItem == null)
-            {
-                resultMessage = "The rim inventory item is not available.";
-                return false;
-            }
-
-            int remaining = inventory.AddConditionedItem(rimItem, rimCondition);
-            if (remaining > 0)
-            {
-                resultMessage = "Inventory is full; the bare rim remains on the floor.";
-                return false;
-            }
-
-            rimInstalled = false;
-            RefreshVisuals();
-            resultMessage = $"Put the bare {rimItem.DisplayName} in inventory. The wheel rebuild position remains here so the same rim or a replacement rim can be installed later.";
-            return true;
+            return RemoveTireAndLeaveStandaloneRim(out resultMessage);
         }
 
         public bool TryBeginCarry(Transform carryAnchor, out string resultMessage)
         {
             resultMessage = string.Empty;
-            if (!IsComplete)
-            {
-                resultMessage = "Mount a tire on the rim before carrying the complete wheel back to the aircraft.";
-                return false;
-            }
             if (carryAnchor == null)
             {
                 resultMessage = "The Player wheel-carry anchor is missing.";
@@ -238,7 +154,7 @@ namespace Hanger51.Aircraft
             transform.SetParent(carryAnchor, false);
             transform.localPosition = Vector3.zero;
             transform.localRotation = Quaternion.identity;
-            resultMessage = $"Picked up the complete {wheelLabel} wheel assembly. Carry it to its highlighted landing-gear axle and hold E to reinstall, or press E away from the axle to set it down.";
+            resultMessage = $"Picked up the complete {wheelLabel} wheel assembly. Carry it to a compatible highlighted landing-gear axle and hold E to reinstall, or press E away from the axle to set it down.";
             return true;
         }
 
@@ -264,7 +180,17 @@ namespace Hanger51.Aircraft
 
         public bool CanInstallOn(int wheelIndex)
         {
-            return IsComplete && wheelIndex == originWheelIndex;
+            if (!IsComplete || wheelIndex < 0 || wheelIndex > 2)
+            {
+                return false;
+            }
+
+            if (originWheelIndex >= 0)
+            {
+                return wheelIndex == originWheelIndex;
+            }
+
+            return IsTailWheel ? wheelIndex == 2 : wheelIndex == 0 || wheelIndex == 1;
         }
 
         public EnginePartConditionData CaptureTireCondition()
@@ -274,7 +200,12 @@ namespace Hanger51.Aircraft
 
         public EnginePartConditionData CaptureRimCondition()
         {
-            return rimCondition != null ? rimCondition.Clone() : null;
+            EnginePartConditionData clone = rimCondition != null ? rimCondition.Clone() : null;
+            if (clone != null && originWheelIndex >= 0)
+            {
+                clone.SetWheelStationIndex(originWheelIndex);
+            }
+            return clone;
         }
 
         public bool ServicePressureToward(
@@ -283,11 +214,6 @@ namespace Hanger51.Aircraft
             out string resultMessage)
         {
             resultMessage = string.Empty;
-            if (!IsComplete)
-            {
-                resultMessage = "The tire must be mounted on its rim before nitrogen service.";
-                return false;
-            }
             if (tireCondition == null || tireCondition.Kind != EnginePartConditionKind.Tire)
             {
                 resultMessage = "The loose tire condition record is missing.";
@@ -306,16 +232,16 @@ namespace Hanger51.Aircraft
                 Mathf.Max(0f, deltaTime) * 12f);
             tireCondition.SetTirePressure(nextPressure);
 
-            float burstPressure = originWheelIndex == 2 ? 35f : 43f;
+            float burstPressure = IsTailWheel ? 35f : 43f;
             if (nextPressure >= burstPressure)
             {
                 tireCondition.FailTire(nextPressure);
-                RefreshVisuals();
+                ConfigureConditionVisual(tireVisual, tireCondition);
                 resultMessage = $"BANG — the loose {wheelLabel} tire burst from overpressure at {nextPressure:F1} PSI.";
                 return true;
             }
 
-            RefreshVisuals();
+            ConfigureConditionVisual(tireVisual, tireCondition);
             resultMessage = $"Loose {wheelLabel} tire: {nextPressure:F1} PSI | Setpoint {target:F1} PSI | Correct {ProperPressurePsi:F0} PSI";
             return true;
         }
@@ -331,122 +257,68 @@ namespace Hanger51.Aircraft
 
         public string Inspect()
         {
-            string tireSummary = tireInstalled
-                ? (tireCondition != null ? tireCondition.GetConditionSummary() : "condition unavailable")
-                : "removed from rim";
-            string rimSummary = rimInstalled
-                ? (rimCondition != null ? rimCondition.GetConditionSummary() : "condition unavailable")
-                : "stored/removed";
-            string state = IsComplete
-                ? "complete tire + rim wheel"
-                : IsBareRim
-                    ? "bare rim; tire removed"
-                    : "rim removed from rebuild position";
-            return $"Loose {wheelLabel} wheel | {state} | Tire: {tireSummary} | Rim: {rimSummary} | Origin station: {GetOriginName()}";
+            string tireSummary = tireCondition != null
+                ? tireCondition.GetConditionSummary()
+                : "condition unavailable";
+            string rimSummary = rimCondition != null
+                ? rimCondition.GetConditionSummary()
+                : "condition unavailable";
+            return $"Loose {wheelLabel} complete wheel | Tire: {tireSummary} | Rim: {rimSummary} | Origin: {GetOriginName()}";
         }
 
         public void CancelHold()
         {
             serviceProgress = 0f;
-            activeAction = ServiceAction.None;
         }
 
-        private ServiceAction ResolveDesiredAction(
-            PlayerInventory inventory,
-            bool installHeld,
-            bool removeHeld)
-        {
-            if (removeHeld && !installHeld && IsComplete)
-            {
-                return ServiceAction.RemoveTire;
-            }
-
-            if (installHeld && !removeHeld && inventory != null)
-            {
-                if (!rimInstalled && HasCorrectEquippedRim(inventory))
-                {
-                    return ServiceAction.InstallRim;
-                }
-                if (IsBareRim && HasCorrectEquippedTire(inventory))
-                {
-                    return ServiceAction.InstallTire;
-                }
-            }
-
-            return ServiceAction.None;
-        }
-
-        private bool CompleteServiceAction(
-            ServiceAction action,
-            PlayerInventory inventory,
-            out string resultMessage)
+        private bool RemoveTireAndLeaveStandaloneRim(out string resultMessage)
         {
             resultMessage = string.Empty;
             Vector3 groundSide = GetGroundSideDirection();
-
-            switch (action)
+            if (!SpawnPickup(
+                    tireItem,
+                    tireCondition,
+                    transform.position + groundSide * 0.72f + Vector3.up * 0.14f,
+                    transform.rotation))
             {
-                case ServiceAction.RemoveTire:
-                    if (!SpawnPickup(
-                            tireItem,
-                            tireCondition,
-                            transform.position + groundSide * 0.72f + Vector3.up * 0.14f,
-                            transform.rotation))
-                    {
-                        resultMessage = "The tire could not be placed beside the loose rim.";
-                        return false;
-                    }
-                    tireInstalled = false;
-                    RefreshVisuals();
-                    resultMessage = $"Removed the tire from the {wheelLabel} rim. The rim stays intact, and the exact tire is now a physical pickup beside it.";
-                    return true;
-
-                case ServiceAction.InstallRim:
-                    if (inventory == null
-                        || rimItem == null
-                        || !inventory.TryRemoveFirstItem(rimItem, out EnginePartConditionData installedRim))
-                    {
-                        resultMessage = "The equipped rim could not be removed from inventory.";
-                        return false;
-                    }
-                    rimCondition = installedRim ?? EnginePartConditionData.CreateDefaultForItem(rimItem);
-                    rimInstalled = true;
-                    RefreshVisuals();
-                    resultMessage = $"Placed that exact {rimItem.DisplayName} at the {wheelLabel} rebuild position. Mount the matching tire onto it next.";
-                    return true;
-
-                case ServiceAction.InstallTire:
-                    if (inventory == null
-                        || tireItem == null
-                        || !inventory.TryRemoveFirstItem(tireItem, out EnginePartConditionData installedTire))
-                    {
-                        resultMessage = "The equipped tire could not be removed from inventory.";
-                        return false;
-                    }
-                    tireCondition = installedTire ?? EnginePartConditionData.CreateDefaultForItem(tireItem);
-                    tireInstalled = true;
-                    RefreshVisuals();
-                    resultMessage = $"Mounted that exact {tireItem.DisplayName} back onto the {wheelLabel} rim. The complete wheel can now be carried and reinstalled on its strut.";
-                    return true;
-
-                default:
-                    return false;
+                resultMessage = "The tire could not be placed beside the rim.";
+                return false;
             }
+
+            if (rimCondition == null)
+            {
+                rimCondition = EnginePartConditionData.CreateDefaultForItem(rimItem);
+            }
+            if (rimCondition != null && originWheelIndex >= 0)
+            {
+                rimCondition.SetWheelStationIndex(originWheelIndex);
+            }
+
+            if (tireVisual != null)
+            {
+                Destroy(tireVisual.gameObject);
+                tireVisual = null;
+            }
+            if (serviceValveTarget != null)
+            {
+                Destroy(serviceValveTarget.gameObject);
+                serviceValveTarget = null;
+            }
+
+            InventoryPickup rimPickup = GetComponent<InventoryPickup>();
+            if (rimPickup == null)
+            {
+                rimPickup = gameObject.AddComponent<InventoryPickup>();
+            }
+            rimPickup.Configure(rimItem, rimCondition);
+            P51BareRimServiceTarget.EnsureForPickup(rimPickup, originWheelIndex);
+
+            resultMessage = $"Removed the tire from the {wheelLabel} rim. The destroyed/removed tire is a separate physical pickup, and the bare rim is now a normal pickup that can also accept a matching replacement tire directly.";
+            Destroy(this);
+            return true;
         }
 
-        private Vector3 GetGroundSideDirection()
-        {
-            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
-            if (forward.sqrMagnitude < 0.001f)
-            {
-                forward = Vector3.forward;
-            }
-            forward.Normalize();
-            Vector3 side = Vector3.Cross(Vector3.up, forward);
-            return side.sqrMagnitude > 0.001f ? side.normalized : Vector3.right;
-        }
-
-        private void BuildOrRefreshVisuals()
+        private void BuildVisuals()
         {
             ResolveExistingVisuals();
             if (tireVisual == null)
@@ -457,9 +329,9 @@ namespace Hanger51.Aircraft
             {
                 rimVisual = CreateVisualChild(transform, rimItem, "Loose Rim");
             }
-            EnsureRebuildMarker();
             EnsureServiceValveTarget();
-            RefreshVisuals();
+            ConfigureConditionVisual(tireVisual, tireCondition);
+            ConfigureConditionVisual(rimVisual, rimCondition);
         }
 
         private void ResolveExistingVisuals()
@@ -471,10 +343,6 @@ namespace Hanger51.Aircraft
             if (rimVisual == null)
             {
                 rimVisual = transform.Find("Loose Rim");
-            }
-            if (rebuildMarker == null)
-            {
-                rebuildMarker = transform.Find("Loose Wheel Rebuild Marker");
             }
             if (serviceValveTarget == null)
             {
@@ -491,102 +359,22 @@ namespace Hanger51.Aircraft
 
             GameObject valve = new GameObject("Loose Tire Valve Target");
             valve.transform.SetParent(transform, false);
-            bool tail = originWheelIndex == 2;
-            valve.transform.localPosition = tail
+            valve.transform.localPosition = IsTailWheel
                 ? new Vector3(0.08f, 0.07f, 0f)
                 : new Vector3(0.16f, 0.14f, 0f);
             serviceValveTarget = valve.transform;
         }
 
-        private void EnsureRebuildMarker()
+        private Vector3 GetGroundSideDirection()
         {
-            if (rebuildMarker != null)
+            Vector3 forward = Vector3.ProjectOnPlane(transform.forward, Vector3.up);
+            if (forward.sqrMagnitude < 0.001f)
             {
-                return;
+                forward = Vector3.forward;
             }
-
-            GameObject markerRoot = new GameObject("Loose Wheel Rebuild Marker");
-            markerRoot.transform.SetParent(transform, false);
-            markerRoot.transform.localPosition = Vector3.zero;
-            markerRoot.transform.localRotation = Quaternion.identity;
-
-            bool tail = originWheelIndex == 2;
-            float radius = tail ? 0.20f : 0.42f;
-            float length = tail ? 0.16f : 0.28f;
-            float thickness = tail ? 0.025f : 0.04f;
-
-            CreateMarkerPart(markerRoot.transform,
-                new Vector3(0f, radius, 0f),
-                new Vector3(thickness, length, thickness));
-            CreateMarkerPart(markerRoot.transform,
-                new Vector3(0f, -radius, 0f),
-                new Vector3(thickness, length, thickness));
-            CreateMarkerPart(markerRoot.transform,
-                new Vector3(0f, 0f, radius),
-                new Vector3(thickness, thickness, length));
-            CreateMarkerPart(markerRoot.transform,
-                new Vector3(0f, 0f, -radius),
-                new Vector3(thickness, thickness, length));
-
-            rebuildMarker = markerRoot.transform;
-            rebuildMarker.gameObject.SetActive(false);
-        }
-
-        private static void CreateMarkerPart(
-            Transform parent,
-            Vector3 localPosition,
-            Vector3 localScale)
-        {
-            GameObject marker = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            marker.name = "Rebuild Marker Segment";
-            marker.transform.SetParent(parent, false);
-            marker.transform.localPosition = localPosition;
-            marker.transform.localRotation = Quaternion.identity;
-            marker.transform.localScale = localScale;
-            Collider collider = marker.GetComponent<Collider>();
-            if (collider != null)
-            {
-                collider.enabled = false;
-            }
-        }
-
-        private void RefreshVisuals()
-        {
-            if (tireVisual != null)
-            {
-                tireVisual.gameObject.SetActive(tireInstalled);
-                ConfigureConditionVisual(tireVisual, tireCondition);
-            }
-            if (rimVisual != null)
-            {
-                rimVisual.gameObject.SetActive(rimInstalled);
-                ConfigureConditionVisual(rimVisual, rimCondition);
-            }
-            if (rebuildMarker != null)
-            {
-                rebuildMarker.gameObject.SetActive(!rimInstalled && !IsCarried);
-            }
-            if (serviceValveTarget != null)
-            {
-                serviceValveTarget.gameObject.SetActive(IsComplete && !IsCarried);
-            }
-        }
-
-        private static void ConfigureConditionVisual(
-            Transform visualRoot,
-            EnginePartConditionData condition)
-        {
-            if (visualRoot == null)
-            {
-                return;
-            }
-
-            EnginePartConditionVisual visual = visualRoot.GetComponent<EnginePartConditionVisual>();
-            if (visual == null)
-            {
-                visual = visualRoot.gameObject.AddComponent<EnginePartConditionVisual>();
-            }
-            visual.Configure(condition);
+            forward.Normalize();
+            Vector3 side = Vector3.Cross(Vector3.up, forward);
+            return side.sqrMagnitude > 0.001f ? side.normalized : Vector3.right;
         }
 
         private static Transform CreateVisualChild(
@@ -614,34 +402,41 @@ namespace Hanger51.Aircraft
             child.name = childName;
             child.transform.localPosition = Vector3.zero;
             child.transform.localRotation = Quaternion.identity;
-            DisablePickupAndColliders(child);
+
+            InventoryPickup[] pickups = child.GetComponentsInChildren<InventoryPickup>(true);
+            for (int index = 0; index < pickups.Length; index++)
+            {
+                pickups[index].enabled = false;
+            }
+            Collider[] colliders = child.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
+            {
+                colliders[index].enabled = false;
+            }
+            P51BareRimServiceTarget[] rimTargets =
+                child.GetComponentsInChildren<P51BareRimServiceTarget>(true);
+            for (int index = 0; index < rimTargets.Length; index++)
+            {
+                rimTargets[index].enabled = false;
+            }
             return child.transform;
         }
 
-        private static void DisablePickupAndColliders(GameObject root)
+        private static void ConfigureConditionVisual(
+            Transform visualRoot,
+            EnginePartConditionData condition)
         {
-            if (root == null)
+            if (visualRoot == null)
             {
                 return;
             }
 
-            InventoryPickup[] pickups = root.GetComponentsInChildren<InventoryPickup>(true);
-            for (int index = 0; index < pickups.Length; index++)
+            EnginePartConditionVisual visual = visualRoot.GetComponent<EnginePartConditionVisual>();
+            if (visual == null)
             {
-                if (pickups[index] != null)
-                {
-                    pickups[index].enabled = false;
-                }
+                visual = visualRoot.gameObject.AddComponent<EnginePartConditionVisual>();
             }
-
-            Collider[] colliders = root.GetComponentsInChildren<Collider>(true);
-            for (int index = 0; index < colliders.Length; index++)
-            {
-                if (colliders[index] != null)
-                {
-                    colliders[index].enabled = false;
-                }
-            }
+            visual.Configure(condition);
         }
 
         private static bool SpawnPickup(
@@ -655,43 +450,31 @@ namespace Hanger51.Aircraft
                 return false;
             }
 
-            GameObject pickupObject;
+            GameObject pickupObject = item.WorldPrefab != null
+                ? Instantiate(item.WorldPrefab)
+                : GameObject.CreatePrimitive(PrimitiveType.Cylinder);
             if (item.WorldPrefab != null)
             {
-                pickupObject = Instantiate(item.WorldPrefab);
                 pickupObject.transform.localScale = item.WorldScale;
             }
-            else
-            {
-                pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            }
-
             pickupObject.SetActive(true);
-            pickupObject.name = $"Separated {item.DisplayName}";
             pickupObject.transform.SetPositionAndRotation(worldPosition, worldRotation);
-
-            Collider collider = pickupObject.GetComponent<Collider>();
-            if (collider == null)
-            {
-                collider = pickupObject.AddComponent<BoxCollider>();
-            }
-            collider.enabled = true;
-            collider.isTrigger = true;
 
             InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
             if (pickup == null)
             {
                 pickup = pickupObject.AddComponent<InventoryPickup>();
             }
-            pickup.enabled = true;
             pickup.Configure(item, condition);
 
-            EnginePartConditionVisual conditionVisual = pickupObject.GetComponent<EnginePartConditionVisual>();
-            if (conditionVisual == null)
+            BoxCollider rootCollider = pickupObject.GetComponent<BoxCollider>();
+            if (rootCollider == null)
             {
-                conditionVisual = pickupObject.AddComponent<EnginePartConditionVisual>();
+                rootCollider = pickupObject.AddComponent<BoxCollider>();
             }
-            conditionVisual.Configure(condition);
+            rootCollider.enabled = true;
+            rootCollider.isTrigger = true;
+
             return true;
         }
 
@@ -705,11 +488,10 @@ namespace Hanger51.Aircraft
 
         private string GetOriginName()
         {
-            return originWheelIndex == 0
-                ? "left main"
-                : originWheelIndex == 1
-                    ? "right main"
-                    : "tail";
+            if (originWheelIndex == 0) return "left main";
+            if (originWheelIndex == 1) return "right main";
+            if (originWheelIndex == 2) return "tail";
+            return IsTailWheel ? "tail-compatible" : "either main";
         }
 
         private void OnDestroy()
@@ -723,6 +505,12 @@ namespace Hanger51.Aircraft
         private void OnDisable()
         {
             CancelHold();
+        }
+
+        private void OnValidate()
+        {
+            originWheelIndex = Mathf.Clamp(originWheelIndex, -1, 2);
+            serviceHoldSeconds = Mathf.Max(0.2f, serviceHoldSeconds);
         }
     }
 }
