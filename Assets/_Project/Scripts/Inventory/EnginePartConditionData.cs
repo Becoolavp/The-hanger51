@@ -24,6 +24,7 @@ namespace Hanger51.Inventory
         [SerializeField, Min(0f)] private float tirePressurePsi;
         [SerializeField, Min(0f)] private float recommendedTirePressurePsi;
         [SerializeField] private bool tireFailed;
+        [SerializeField] private int wheelStationIndex = -1;
 
         public string InstanceId => instanceId;
         public EnginePartConditionKind Kind => kind;
@@ -32,13 +33,16 @@ namespace Hanger51.Inventory
         public float OilCapacityLiters => Mathf.Max(0f, oilCapacityLiters);
         public float TirePressurePsi => Mathf.Max(0f, tirePressurePsi);
         public float RecommendedTirePressurePsi => Mathf.Max(0f, recommendedTirePressurePsi);
+        public int WheelStationIndex => kind == EnginePartConditionKind.Rim
+            ? Mathf.Clamp(wheelStationIndex, -1, 2)
+            : -1;
         public bool TireFailed => kind == EnginePartConditionKind.Tire
             && (tireFailed || Health <= 0.01f);
         public bool IsTracked => kind != EnginePartConditionKind.None;
         public bool IsCracked => kind == EnginePartConditionKind.CylinderCover
             && Health <= 35f;
         public string Signature =>
-            $"{instanceId}:{kind}:{Health:F3}:{OilQuantityLiters:F3}:{OilCapacityLiters:F3}:{TirePressurePsi:F3}:{RecommendedTirePressurePsi:F3}:{TireFailed}";
+            $"{instanceId}:{kind}:{Health:F3}:{OilQuantityLiters:F3}:{OilCapacityLiters:F3}:{TirePressurePsi:F3}:{RecommendedTirePressurePsi:F3}:{TireFailed}:{WheelStationIndex}";
 
         public static EnginePartConditionData Create(
             EnginePartConditionKind conditionKind,
@@ -61,7 +65,8 @@ namespace Hanger51.Inventory
                     Mathf.Max(0f, oilCapacity)),
                 tirePressurePsi = Mathf.Max(0f, pressurePsi),
                 recommendedTirePressurePsi = Mathf.Max(0f, recommendedPressurePsi),
-                tireFailed = failedTire
+                tireFailed = failedTire,
+                wheelStationIndex = -1
             };
             return data;
         }
@@ -158,7 +163,8 @@ namespace Hanger51.Inventory
                 oilCapacityLiters = OilCapacityLiters,
                 tirePressurePsi = TirePressurePsi,
                 recommendedTirePressurePsi = RecommendedTirePressurePsi,
-                tireFailed = TireFailed
+                tireFailed = TireFailed,
+                wheelStationIndex = WheelStationIndex
             };
             return clone;
         }
@@ -185,6 +191,16 @@ namespace Hanger51.Inventory
             tireFailed = true;
         }
 
+        public void SetWheelStationIndex(int stationIndex)
+        {
+            if (kind != EnginePartConditionKind.Rim)
+            {
+                return;
+            }
+
+            wheelStationIndex = Mathf.Clamp(stationIndex, -1, 2);
+        }
+
         public string GetConditionSummary()
         {
             switch (kind)
@@ -205,7 +221,9 @@ namespace Hanger51.Inventory
                                 ? $" / {RecommendedTirePressurePsi:F0} PSI correct"
                                 : string.Empty);
                 case EnginePartConditionKind.Rim:
-                    return $"Rim {Health:F1}%";
+                    return WheelStationIndex >= 0
+                        ? $"Rim {Health:F1}% | station {WheelStationIndex + 1}"
+                        : $"Rim {Health:F1}%";
                 default:
                     return string.Empty;
             }
@@ -229,11 +247,16 @@ namespace Hanger51.Inventory
                 recommendedTirePressurePsi,
                 0f,
                 80f);
+            wheelStationIndex = Mathf.Clamp(wheelStationIndex, -1, 2);
             if (kind != EnginePartConditionKind.Tire)
             {
                 tireFailed = false;
                 tirePressurePsi = 0f;
                 recommendedTirePressurePsi = 0f;
+            }
+            if (kind != EnginePartConditionKind.Rim)
+            {
+                wheelStationIndex = -1;
             }
         }
 
