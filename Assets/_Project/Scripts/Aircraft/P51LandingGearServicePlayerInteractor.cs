@@ -173,6 +173,51 @@ namespace Hanger51.Aircraft
                 }
             }
 
+            if (keyboard != null
+                && keyboard.eKey.wasPressedThisFrame
+                && looseWheel.IsBareRim
+                && !looseWheel.HasCorrectEquippedTire(inventory))
+            {
+                if (looseWheel.TryPickupBareRim(inventory, out string rimMessage)
+                    || !string.IsNullOrWhiteSpace(rimMessage))
+                {
+                    inventoryUI.ShowStatusMessage(rimMessage, 3f);
+                }
+            }
+
+            P51NitrogenCartController connectedCart = FindConnectedCart(looseWheel);
+            if (keyboard != null
+                && keyboard.nKey.wasPressedThisFrame
+                && looseWheel.IsComplete)
+            {
+                string nitrogenMessage;
+                if (connectedCart != null)
+                {
+                    connectedCart.Disconnect();
+                    connectedCart = null;
+                    nitrogenMessage = "Nitrogen hose disconnected from the loose wheel.";
+                }
+                else
+                {
+                    P51NitrogenCartController nearest = FindNearestCart(
+                        looseWheel.ServiceValveTarget != null
+                            ? looseWheel.ServiceValveTarget.position
+                            : looseWheel.transform.position);
+                    if (nearest == null)
+                    {
+                        nitrogenMessage = "No nitrogen cart is available.";
+                    }
+                    else
+                    {
+                        nearest.TryConnect(looseWheel, out nitrogenMessage);
+                        connectedCart = FindConnectedCart(looseWheel);
+                    }
+                }
+                inventoryUI.ShowStatusMessage(nitrogenMessage, 3.5f);
+            }
+
+            HandleNitrogenControls(connectedCart, keyboard);
+
             bool holdE = keyboard != null && keyboard.eKey.isPressed;
             bool holdR = keyboard != null && keyboard.rKey.isPressed;
             if (looseWheel.ProcessService(
@@ -191,7 +236,12 @@ namespace Hanger51.Aircraft
                 inventoryUI.ShowStatusMessage(looseWheel.Inspect(), 4.5f);
             }
 
-            inventoryUI.SetInteractionPrompt(looseWheel.GetInteractionText(inventory));
+            string prompt = looseWheel.GetInteractionText(inventory);
+            if (connectedCart != null)
+            {
+                prompt += $" | HOSE CONNECTED {connectedCart.RegulatorPsi:F0} PSI: Q/Z adjust | Hold F service | N disconnect";
+            }
+            inventoryUI.SetInteractionPrompt(prompt);
         }
 
         private void HandleAircraftTarget(
@@ -216,29 +266,46 @@ namespace Hanger51.Aircraft
                 inventoryUI.ShowStatusMessage(target.Inspect(), 4f);
             }
 
+            P51NitrogenCartController connectedCart = target.ServiceKind
+                == P51LandingGearServiceKind.TireAndValve
+                ? FindConnectedCart(target.Controller, target.WheelIndex)
+                : null;
+
             if (keyboard != null
                 && keyboard.nKey.wasPressedThisFrame
                 && target.ServiceKind == P51LandingGearServiceKind.TireAndValve)
             {
-                P51NitrogenCartController nearest = FindNearestCart(target.ServicePoint.position);
                 string nitrogenMessage;
-                if (nearest == null)
+                if (connectedCart != null)
                 {
-                    nitrogenMessage = "No nitrogen cart is within hose range.";
-                }
-                else if (nearest.IsConnected)
-                {
-                    nearest.Disconnect();
+                    connectedCart.Disconnect();
+                    connectedCart = null;
                     nitrogenMessage = "Nitrogen hose disconnected.";
                 }
                 else
                 {
-                    nearest.TryConnect(target.Controller, target.WheelIndex, out nitrogenMessage);
+                    P51NitrogenCartController nearest = FindNearestCart(target.ServicePoint.position);
+                    if (nearest == null)
+                    {
+                        nitrogenMessage = "No nitrogen cart is available.";
+                    }
+                    else
+                    {
+                        nearest.TryConnect(target.Controller, target.WheelIndex, out nitrogenMessage);
+                        connectedCart = FindConnectedCart(target.Controller, target.WheelIndex);
+                    }
                 }
                 inventoryUI.ShowStatusMessage(nitrogenMessage, 3.5f);
             }
 
-            inventoryUI.SetInteractionPrompt(target.InteractionText);
+            HandleNitrogenControls(connectedCart, keyboard);
+
+            string prompt = target.InteractionText;
+            if (connectedCart != null)
+            {
+                prompt += $" | HOSE CONNECTED {connectedCart.RegulatorPsi:F0} PSI: Q/Z adjust | Hold F service | N disconnect";
+            }
+            inventoryUI.SetInteractionPrompt(prompt);
         }
 
         private void HandleCart(P51NitrogenCartController cart, Keyboard keyboard)
@@ -264,14 +331,7 @@ namespace Hanger51.Aircraft
 
                 if (keyboard.fKey.isPressed)
                 {
-                    if (cart.ServiceConnectedTire(Time.deltaTime, out string nitrogenMessage))
-                    {
-                        inventoryUI.ShowStatusMessage(nitrogenMessage, 0.3f);
-                    }
-                    else if (!string.IsNullOrWhiteSpace(nitrogenMessage))
-                    {
-                        inventoryUI.ShowStatusMessage(nitrogenMessage, 2f);
-                    }
+                    ShowNitrogenServiceResult(cart);
                 }
 
                 if (keyboard.nKey.wasPressedThisFrame && cart.IsConnected)
@@ -282,6 +342,46 @@ namespace Hanger51.Aircraft
             }
 
             inventoryUI.SetInteractionPrompt(cart.InteractionText);
+        }
+
+        private void HandleNitrogenControls(
+            P51NitrogenCartController cart,
+            Keyboard keyboard)
+        {
+            if (cart == null || keyboard == null)
+            {
+                return;
+            }
+
+            float adjust = 0f;
+            if (keyboard.qKey.isPressed) adjust += 1f;
+            if (keyboard.zKey.isPressed) adjust -= 1f;
+            if (Mathf.Abs(adjust) > 0.01f)
+            {
+                cart.AdjustRegulator(adjust, Time.deltaTime);
+            }
+
+            if (keyboard.fKey.isPressed)
+            {
+                ShowNitrogenServiceResult(cart);
+            }
+        }
+
+        private void ShowNitrogenServiceResult(P51NitrogenCartController cart)
+        {
+            if (cart == null)
+            {
+                return;
+            }
+
+            if (cart.ServiceConnectedTire(Time.deltaTime, out string nitrogenMessage))
+            {
+                inventoryUI.ShowStatusMessage(nitrogenMessage, 0.3f);
+            }
+            else if (!string.IsNullOrWhiteSpace(nitrogenMessage))
+            {
+                inventoryUI.ShowStatusMessage(nitrogenMessage, 2f);
+            }
         }
 
         private void FindCandidate(
@@ -475,6 +575,39 @@ namespace Hanger51.Aircraft
                 }
             }
             return best;
+        }
+
+        private static P51NitrogenCartController FindConnectedCart(
+            P51LandingGearMaintenanceController controller,
+            int wheelIndex)
+        {
+            P51NitrogenCartController[] carts = FindObjectsByType<P51NitrogenCartController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None);
+            for (int index = 0; index < carts.Length; index++)
+            {
+                if (carts[index] != null && carts[index].IsConnectedTo(controller, wheelIndex))
+                {
+                    return carts[index];
+                }
+            }
+            return null;
+        }
+
+        private static P51NitrogenCartController FindConnectedCart(
+            P51LooseWheelAssembly looseWheel)
+        {
+            P51NitrogenCartController[] carts = FindObjectsByType<P51NitrogenCartController>(
+                FindObjectsInactive.Exclude,
+                FindObjectsSortMode.None);
+            for (int index = 0; index < carts.Length; index++)
+            {
+                if (carts[index] != null && carts[index].IsConnectedTo(looseWheel))
+                {
+                    return carts[index];
+                }
+            }
+            return null;
         }
 
         private void ResolveReferences()
