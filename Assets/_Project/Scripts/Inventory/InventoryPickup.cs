@@ -11,9 +11,12 @@ namespace Hanger51.Inventory
         [SerializeField] private List<EnginePartConditionData> conditionInstances =
             new List<EnginePartConditionData>();
 
+        private bool runtimePickupBlocked;
+
         public InventoryItemDefinition Item => item;
         public int Quantity => quantity;
         public IReadOnlyList<EnginePartConditionData> ConditionInstances => conditionInstances;
+        public bool IsPickupBlocked => runtimePickupBlocked;
 
         public string InteractionText
         {
@@ -30,6 +33,11 @@ namespace Hanger51.Inventory
                     ? $"Press E to pick up {item.DisplayName}{quantityText}"
                     : $"Press E to pick up {item.DisplayName}{quantityText} — {conditionText}";
             }
+        }
+
+        public void SetRuntimePickupBlocked(bool blocked)
+        {
+            runtimePickupBlocked = blocked;
         }
 
         public void Configure(InventoryItemDefinition configuredItem, int configuredQuantity)
@@ -95,7 +103,10 @@ namespace Hanger51.Inventory
 
         public bool TryPickup(PlayerInventory inventory)
         {
-            if (inventory == null || item == null || quantity <= 0)
+            if (runtimePickupBlocked
+                || inventory == null
+                || item == null
+                || quantity <= 0)
             {
                 return false;
             }
@@ -143,6 +154,7 @@ namespace Hanger51.Inventory
 
         private void FinalizeConfiguration()
         {
+            runtimePickupBlocked = false;
             EnsureConditionCount();
             name = item != null ? $"{item.DisplayName} Pickup" : "Inventory Pickup";
             ApplyConditionVisual();
