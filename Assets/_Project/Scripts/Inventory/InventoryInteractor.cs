@@ -118,7 +118,10 @@ namespace Hanger51.Inventory
                 return;
             }
 
-            if (currentPickup == null || keyboard == null || !keyboard.eKey.wasPressedThisFrame)
+            if (currentPickup == null
+                || currentPickup.IsPickupBlocked
+                || keyboard == null
+                || !keyboard.eKey.wasPressedThisFrame)
             {
                 return;
             }
