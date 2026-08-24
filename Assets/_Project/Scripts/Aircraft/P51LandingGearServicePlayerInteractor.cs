@@ -148,7 +148,7 @@ namespace Hanger51.Aircraft
             }
 
             inventoryUI.SetInteractionPrompt(
-                $"E: set down carried {carriedWheel.WheelLabel} wheel | Carry it to its highlighted original axle and hold E to reinstall");
+                $"E: set down carried {carriedWheel.WheelLabel} wheel | Carry it to a compatible highlighted axle and hold E to reinstall");
         }
 
         private void HandleLooseWheel(
@@ -164,24 +164,12 @@ namespace Hanger51.Aircraft
                     inventoryUI.ShowStatusMessage(carryMessage, 3f);
                     currentLooseWheel = null;
                     inventoryUI.SetInteractionPrompt(
-                        $"E: set down carried {looseWheel.WheelLabel} wheel | Carry it to its highlighted original axle and hold E to reinstall");
+                        $"E: set down carried {looseWheel.WheelLabel} wheel | Carry it to a compatible highlighted axle and hold E to reinstall");
                     return;
                 }
                 if (!string.IsNullOrWhiteSpace(carryMessage))
                 {
                     inventoryUI.ShowStatusMessage(carryMessage, 3f);
-                }
-            }
-
-            if (keyboard != null
-                && keyboard.eKey.wasPressedThisFrame
-                && looseWheel.IsBareRim
-                && !looseWheel.HasCorrectEquippedTire(inventory))
-            {
-                if (looseWheel.TryPickupBareRim(inventory, out string rimMessage)
-                    || !string.IsNullOrWhiteSpace(rimMessage))
-                {
-                    inventoryUI.ShowStatusMessage(rimMessage, 3f);
                 }
             }
 
