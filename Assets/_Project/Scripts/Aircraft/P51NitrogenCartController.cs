@@ -25,12 +25,15 @@ namespace Hanger51.Aircraft
 
         private P51LandingGearMaintenanceController connectedController;
         private int connectedWheelIndex = -1;
+        private P51LooseWheelAssembly connectedLooseWheel;
         private Transform mover;
         private bool beingMoved;
         private Vector3 lastCartPosition;
 
         public float RegulatorPsi => regulatorPsi;
-        public bool IsConnected => connectedController != null && connectedWheelIndex >= 0;
+        public bool IsConnected =>
+            (connectedController != null && connectedWheelIndex >= 0)
+            || connectedLooseWheel != null;
         public bool IsBeingMoved => beingMoved && mover != null;
         public string InteractionText
         {
@@ -44,7 +47,7 @@ namespace Hanger51.Aircraft
                 {
                     return $"Nitrogen cart: {regulatorPsi:F0} PSI setpoint | Q/Z adjust | Hold F service | N disconnect | Disconnect before moving";
                 }
-                return $"E: grab and wheel cart | {regulatorPsi:F0} PSI setpoint | Q/Z adjust | Aim at tire valve + N to connect";
+                return $"E: grab and wheel cart | {regulatorPsi:F0} PSI setpoint | Q/Z adjust | Aim at a mounted tire + N to connect";
             }
         }
 
@@ -57,20 +60,19 @@ namespace Hanger51.Aircraft
 
         private void FixedUpdate()
         {
-            if (!IsBeingMoved)
+            if (IsBeingMoved)
             {
-                return;
+                MoveTowardPlayerHandle();
             }
-
-            MoveTowardPlayerHandle();
         }
 
         private void LateUpdate()
         {
             if (IsConnected)
             {
-                Transform valve = connectedController.GetValveTarget(connectedWheelIndex);
+                Transform valve = GetConnectedValveTarget();
                 if (valve == null
+                    || !ConnectionStillValid()
                     || Vector3.Distance(transform.position, valve.position) > maximumHoseDistance)
                 {
                     Disconnect();
@@ -109,6 +111,22 @@ namespace Hanger51.Aircraft
             ResolveMovementReferences();
             PrepareBody();
             lastCartPosition = transform.position;
+        }
+
+        public bool IsConnectedTo(
+            P51LandingGearMaintenanceController controller,
+            int wheelIndex)
+        {
+            return connectedLooseWheel == null
+                && connectedController == controller
+                && connectedWheelIndex == wheelIndex;
+        }
+
+        public bool IsConnectedTo(P51LooseWheelAssembly looseWheel)
+        {
+            return connectedController == null
+                && connectedLooseWheel != null
+                && connectedLooseWheel == looseWheel;
         }
 
         public bool TryToggleMove(Transform playerMover, out string resultMessage)
@@ -179,6 +197,11 @@ namespace Hanger51.Aircraft
                 resultMessage = "Release the nitrogen cart handle before connecting the hose.";
                 return false;
             }
+            if (IsConnected)
+            {
+                resultMessage = "The nitrogen hose is already connected. Press N at the connected tire to disconnect first.";
+                return false;
+            }
             if (controller == null)
             {
                 resultMessage = "No tire service target was selected.";
@@ -211,9 +234,57 @@ namespace Hanger51.Aircraft
 
             connectedController = controller;
             connectedWheelIndex = wheelIndex;
+            connectedLooseWheel = null;
             UpdateHoseVisual();
             float correctPressure = controller.GetProperPressure(wheelIndex);
-            resultMessage = $"Connected nitrogen hose to the {controller.GetWheelName(wheelIndex)} tire. Current cart setpoint is {regulatorPsi:F0} PSI; this tire requires {correctPressure:F0} PSI. Aim at the cart, use Q/Z to set the regulator, then hold F to service.";
+            resultMessage = $"Connected nitrogen hose to the {controller.GetWheelName(wheelIndex)} tire. Setpoint {regulatorPsi:F0} PSI; correct pressure {correctPressure:F0} PSI. Keep looking at the tire or the cart: Q/Z adjusts pressure and Hold F services.";
+            return true;
+        }
+
+        public bool TryConnect(
+            P51LooseWheelAssembly looseWheel,
+            out string resultMessage)
+        {
+            resultMessage = string.Empty;
+            if (IsBeingMoved)
+            {
+                resultMessage = "Release the nitrogen cart handle before connecting the hose.";
+                return false;
+            }
+            if (IsConnected)
+            {
+                resultMessage = "The nitrogen hose is already connected. Press N at the connected tire to disconnect first.";
+                return false;
+            }
+            if (looseWheel == null || !looseWheel.IsComplete)
+            {
+                resultMessage = "The tire must be mounted on its rim before connecting nitrogen.";
+                return false;
+            }
+            if (looseWheel.IsTireFailed)
+            {
+                resultMessage = "That tire is destroyed and must be replaced before pressure service.";
+                return false;
+            }
+
+            Transform valve = looseWheel.ServiceValveTarget;
+            if (valve == null)
+            {
+                resultMessage = "The loose wheel tire valve is not available.";
+                return false;
+            }
+            float distance = Vector3.Distance(transform.position, valve.position);
+            if (distance > maximumHoseDistance)
+            {
+                resultMessage = $"The nitrogen cart is {distance:F1} m from the loose wheel. Wheel it within {maximumHoseDistance:F0} m before connecting.";
+                return false;
+            }
+
+            connectedController = null;
+            connectedWheelIndex = -1;
+            connectedLooseWheel = looseWheel;
+            UpdateHoseVisual();
+            resultMessage = $"Connected nitrogen hose to the loose {looseWheel.WheelLabel} tire. Setpoint {regulatorPsi:F0} PSI; correct pressure {looseWheel.ProperPressurePsi:F0} PSI. Q/Z adjusts and Hold F services while looking at the wheel or cart.";
             return true;
         }
 
@@ -221,6 +292,7 @@ namespace Hanger51.Aircraft
         {
             connectedController = null;
             connectedWheelIndex = -1;
+            connectedLooseWheel = null;
             UpdateHoseVisual();
         }
 
@@ -229,20 +301,61 @@ namespace Hanger51.Aircraft
             resultMessage = string.Empty;
             if (!IsConnected)
             {
-                resultMessage = "Connect the nitrogen hose to a tire valve first.";
+                resultMessage = "Connect the nitrogen hose to a tire first.";
                 return false;
             }
 
-            bool serviced = connectedController.ServicePressureToward(
+            bool serviced;
+            if (connectedLooseWheel != null)
+            {
+                serviced = connectedLooseWheel.ServicePressureToward(
+                    regulatorPsi,
+                    deltaTime,
+                    out resultMessage);
+                if (connectedLooseWheel == null || connectedLooseWheel.IsTireFailed)
+                {
+                    Disconnect();
+                }
+                return serviced;
+            }
+
+            serviced = connectedController.ServicePressureToward(
                 connectedWheelIndex,
                 regulatorPsi,
                 deltaTime,
                 out resultMessage);
-            if (connectedController.IsTireFailed(connectedWheelIndex))
+            if (connectedController == null
+                || connectedController.IsTireFailed(connectedWheelIndex))
             {
                 Disconnect();
             }
             return serviced;
+        }
+
+        private bool ConnectionStillValid()
+        {
+            if (connectedLooseWheel != null)
+            {
+                return connectedLooseWheel.IsComplete && !connectedLooseWheel.IsTireFailed;
+            }
+
+            return connectedController != null
+                && connectedWheelIndex >= 0
+                && connectedController.IsGearInstalled(connectedWheelIndex)
+                && connectedController.IsTireInstalled(connectedWheelIndex)
+                && !connectedController.IsTireFailed(connectedWheelIndex);
+        }
+
+        private Transform GetConnectedValveTarget()
+        {
+            if (connectedLooseWheel != null)
+            {
+                return connectedLooseWheel.ServiceValveTarget;
+            }
+
+            return connectedController != null && connectedWheelIndex >= 0
+                ? connectedController.GetValveTarget(connectedWheelIndex)
+                : null;
         }
 
         private void MoveTowardPlayerHandle()
@@ -345,7 +458,7 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            Transform valve = connectedController.GetValveTarget(connectedWheelIndex);
+            Transform valve = GetConnectedValveTarget();
             if (valve == null)
             {
                 hoseLine.enabled = false;
