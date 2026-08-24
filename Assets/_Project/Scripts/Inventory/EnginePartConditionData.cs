@@ -163,6 +163,28 @@ namespace Hanger51.Inventory
             return clone;
         }
 
+        public void SetTirePressure(float pressurePsi)
+        {
+            if (kind != EnginePartConditionKind.Tire)
+            {
+                return;
+            }
+
+            tirePressurePsi = Mathf.Clamp(pressurePsi, 0f, 80f);
+        }
+
+        public void FailTire(float pressurePsi)
+        {
+            if (kind != EnginePartConditionKind.Tire)
+            {
+                return;
+            }
+
+            tirePressurePsi = Mathf.Clamp(pressurePsi, 0f, 80f);
+            health = 0f;
+            tireFailed = true;
+        }
+
         public string GetConditionSummary()
         {
             switch (kind)
