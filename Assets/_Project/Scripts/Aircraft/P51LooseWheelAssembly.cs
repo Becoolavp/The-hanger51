@@ -126,7 +126,7 @@ namespace Hanger51.Aircraft
             }
 
             serviceProgress = 0f;
-            return RemoveTireAndLeaveStandaloneRim(out resultMessage);
+            return SeparateTireAndRim(out resultMessage);
         }
 
         public bool TryBeginCarry(Transform carryAnchor, out string resultMessage)
@@ -271,50 +271,75 @@ namespace Hanger51.Aircraft
             serviceProgress = 0f;
         }
 
-        private bool RemoveTireAndLeaveStandaloneRim(out string resultMessage)
+        private bool SeparateTireAndRim(out string resultMessage)
         {
             resultMessage = string.Empty;
-            Vector3 groundSide = GetGroundSideDirection();
-            if (!SpawnPickup(
-                    tireItem,
-                    tireCondition,
-                    transform.position + groundSide * 0.72f + Vector3.up * 0.14f,
-                    transform.rotation))
+            if (tireItem == null || rimItem == null)
             {
-                resultMessage = "The tire could not be placed beside the rim.";
+                resultMessage = "This wheel is missing its tire or rim inventory definition.";
                 return false;
             }
 
-            if (rimCondition == null)
+            EnginePartConditionData savedTire = tireCondition != null
+                ? tireCondition.Clone()
+                : EnginePartConditionData.CreateDefaultForItem(tireItem);
+            EnginePartConditionData savedRim = rimCondition != null
+                ? rimCondition.Clone()
+                : EnginePartConditionData.CreateDefaultForItem(rimItem);
+            if (savedRim != null && originWheelIndex >= 0)
             {
-                rimCondition = EnginePartConditionData.CreateDefaultForItem(rimItem);
-            }
-            if (rimCondition != null && originWheelIndex >= 0)
-            {
-                rimCondition.SetWheelStationIndex(originWheelIndex);
-            }
-
-            if (tireVisual != null)
-            {
-                Destroy(tireVisual.gameObject);
-                tireVisual = null;
-            }
-            if (serviceValveTarget != null)
-            {
-                Destroy(serviceValveTarget.gameObject);
-                serviceValveTarget = null;
+                savedRim.SetWheelStationIndex(originWheelIndex);
             }
 
-            InventoryPickup rimPickup = GetComponent<InventoryPickup>();
+            Vector3 side = GetGroundSideDirection();
+            Vector3 rimPosition = transform.position;
+            Quaternion partRotation = transform.rotation;
+            float tireSeparation = IsTailWheel ? 0.62f : 1.05f;
+            float tireLift = IsTailWheel ? 0.10f : 0.16f;
+            Vector3 tirePosition = rimPosition + side * tireSeparation + Vector3.up * tireLift;
+
+            InventoryPickup tirePickup = CreateStandalonePickup(
+                tireItem,
+                savedTire,
+                tirePosition,
+                partRotation,
+                $"Removed {tireItem.DisplayName}");
+            if (tirePickup == null)
+            {
+                resultMessage = "The removed tire could not be created as a physical pickup.";
+                return false;
+            }
+
+            InventoryPickup rimPickup = CreateStandalonePickup(
+                rimItem,
+                savedRim,
+                rimPosition,
+                partRotation,
+                $"Bare {rimItem.DisplayName}");
             if (rimPickup == null)
             {
-                rimPickup = gameObject.AddComponent<InventoryPickup>();
+                Destroy(tirePickup.gameObject);
+                resultMessage = "The bare rim could not be created; tire separation was cancelled.";
+                return false;
             }
-            rimPickup.Configure(rimItem, rimCondition);
-            P51BareRimServiceTarget.EnsureForPickup(rimPickup, originWheelIndex);
 
-            resultMessage = $"Removed the tire from the {wheelLabel} rim. The destroyed/removed tire is a separate physical pickup, and the bare rim is now a normal pickup that can also accept a matching replacement tire directly.";
-            Destroy(this);
+            P51BareRimServiceTarget rimTarget =
+                P51BareRimServiceTarget.EnsureForPickup(rimPickup, originWheelIndex);
+            if (rimTarget == null)
+            {
+                Destroy(tirePickup.gameObject);
+                Destroy(rimPickup.gameObject);
+                resultMessage = "The bare rim service target could not be created; tire separation was cancelled.";
+                return false;
+            }
+
+            if (CurrentCarried == this)
+            {
+                CurrentCarried = null;
+            }
+
+            resultMessage = $"Removed the tire from the {wheelLabel} rim. The old complete-wheel object is gone: the bare rim is a standalone pickup here, and the exact tire is a separate pickup beside it. Pick up either part normally, or equip a matching tire and hold E on the bare rim to rebuild the wheel.";
+            Destroy(gameObject);
             return true;
         }
 
@@ -439,15 +464,16 @@ namespace Hanger51.Aircraft
             visual.Configure(condition);
         }
 
-        private static bool SpawnPickup(
+        private static InventoryPickup CreateStandalonePickup(
             InventoryItemDefinition item,
             EnginePartConditionData condition,
             Vector3 worldPosition,
-            Quaternion worldRotation)
+            Quaternion worldRotation,
+            string objectName)
         {
             if (item == null)
             {
-                return false;
+                return null;
             }
 
             GameObject pickupObject = item.WorldPrefab != null
@@ -457,15 +483,16 @@ namespace Hanger51.Aircraft
             {
                 pickupObject.transform.localScale = item.WorldScale;
             }
-            pickupObject.SetActive(true);
-            pickupObject.transform.SetPositionAndRotation(worldPosition, worldRotation);
 
-            InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
-            if (pickup == null)
+            pickupObject.name = objectName;
+            pickupObject.transform.SetPositionAndRotation(worldPosition, worldRotation);
+            pickupObject.SetActive(true);
+
+            Collider[] colliders = pickupObject.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
             {
-                pickup = pickupObject.AddComponent<InventoryPickup>();
+                colliders[index].enabled = false;
             }
-            pickup.Configure(item, condition);
 
             BoxCollider rootCollider = pickupObject.GetComponent<BoxCollider>();
             if (rootCollider == null)
@@ -474,8 +501,60 @@ namespace Hanger51.Aircraft
             }
             rootCollider.enabled = true;
             rootCollider.isTrigger = true;
+            FitColliderToRenderers(pickupObject, rootCollider);
 
-            return true;
+            InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
+            if (pickup == null)
+            {
+                pickup = pickupObject.AddComponent<InventoryPickup>();
+            }
+            pickup.enabled = true;
+            pickup.SetRuntimePickupBlocked(false);
+            pickup.Configure(item, condition);
+
+            EnginePartConditionVisual conditionVisual =
+                pickupObject.GetComponent<EnginePartConditionVisual>();
+            if (conditionVisual == null)
+            {
+                conditionVisual = pickupObject.AddComponent<EnginePartConditionVisual>();
+            }
+            conditionVisual.Configure(condition);
+            return pickup;
+        }
+
+        private static void FitColliderToRenderers(GameObject root, BoxCollider collider)
+        {
+            if (root == null || collider == null)
+            {
+                return;
+            }
+
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0)
+            {
+                collider.center = Vector3.zero;
+                collider.size = Vector3.one * 0.45f;
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null)
+                {
+                    bounds.Encapsulate(renderers[index].bounds);
+                }
+            }
+
+            Vector3 scale = root.transform.lossyScale;
+            float sx = Mathf.Max(0.001f, Mathf.Abs(scale.x));
+            float sy = Mathf.Max(0.001f, Mathf.Abs(scale.y));
+            float sz = Mathf.Max(0.001f, Mathf.Abs(scale.z));
+            collider.center = root.transform.InverseTransformPoint(bounds.center);
+            collider.size = new Vector3(
+                Mathf.Max(0.12f, bounds.size.x / sx),
+                Mathf.Max(0.12f, bounds.size.y / sy),
+                Mathf.Max(0.12f, bounds.size.z / sz));
         }
 
         private void ResolveCollider()
