@@ -4,7 +4,10 @@ using UnityEngine;
 
 namespace Hanger51.Inventory
 {
-    [RequireComponent(typeof(Collider))]
+    // Do not require a Collider here. Several generated service-part prefabs intentionally contain
+    // no collider of their own, and runtime delivery/drop code adds InventoryPickup before fitting
+    // the final root interaction collider. Requiring the abstract Collider base type can make Unity
+    // reject AddComponent<InventoryPickup>() before that setup has a chance to run.
     public sealed class InventoryPickup : MonoBehaviour
     {
         [SerializeField] private InventoryItemDefinition item;
