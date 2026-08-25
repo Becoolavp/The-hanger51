@@ -97,8 +97,8 @@ namespace Hanger51.EditorTools
 
                     // Keep the full longitudinal barrel length so the muzzle remains ahead of the
                     // leading edge, but compress the receiver vertically and laterally to fit the wing.
-                    Renderer barrelJacket = SetBarrelPartsBlackAndGetHeatRenderer(mountedGun, gunDark);
-                    heatedBarrels[stationIndex] = barrelJacket;
+                    Renderer exposedBarrel = SetBarrelPartsBlackAndGetHeatRenderer(mountedGun, gunDark);
+                    heatedBarrels[stationIndex] = exposedBarrel;
 
                     Vector3 ammoTargetPosition = ammoTarget.localPosition;
                     ammoTargetPosition.y = 0.075f;
@@ -210,7 +210,7 @@ namespace Hanger51.EditorTools
                     Transform ammoTarget = FindChildRecursive(interior, $"{wingName} Ammo Bay {localStation}");
                     Transform mountedGun = gunTarget != null ? FindChildRecursive(gunTarget, "Installed M2 Wing Gun") : null;
                     Transform mountedAmmo = ammoTarget != null ? FindChildRecursive(ammoTarget, "Installed Wing Ammo Box") : null;
-                    Transform barrelJacket = mountedGun != null ? FindChildRecursive(mountedGun, "Barrel Jacket") : null;
+                    Transform exposedBarrel = mountedGun != null ? FindChildRecursive(mountedGun, "Barrel") : null;
                     Transform muzzle = gunTarget != null ? FindChildRecursive(gunTarget, "Muzzle") : null;
 
                     if (mountedGun != null
@@ -236,9 +236,9 @@ namespace Hanger51.EditorTools
                         passed = false;
                     }
 
-                    Renderer barrelRenderer = barrelJacket != null ? barrelJacket.GetComponent<Renderer>() : null;
+                    Renderer barrelRenderer = exposedBarrel != null ? exposedBarrel.GetComponent<Renderer>() : null;
                     if (barrelRenderer != null && barrelRenderer.sharedMaterial != null
-                        && barrelRenderer.sharedMaterial.name.Contains("WingGunDark", StringComparison.OrdinalIgnoreCase))
+                        && barrelRenderer.sharedMaterial.name.IndexOf("WingGunDark", StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         blackBarrelCount++;
                     }
@@ -269,7 +269,7 @@ namespace Hanger51.EditorTools
                 if (renderer == null) continue;
                 renderer.sharedMaterial = gunDark;
                 EditorUtility.SetDirty(renderer);
-                if (barrelPartNames[index] == "Barrel Jacket") heatRenderer = renderer;
+                if (barrelPartNames[index] == "Barrel") heatRenderer = renderer;
             }
             return heatRenderer;
         }
