@@ -1,4 +1,5 @@
 using System;
+using Hanger51.Aircraft;
 using Hanger51.EngineAssembly;
 using UnityEngine;
 using UnityEngine.InputSystem;
@@ -16,6 +17,7 @@ namespace Hanger51.Inventory
         private InventoryPickup currentPickup;
         private EngineAssemblyStation currentAssemblyStation;
         private EngineAssemblyInteractionTarget currentAssemblyTarget;
+        private P51BareRimServiceTarget currentBareRim;
 
         private void Awake()
         {
@@ -48,13 +50,65 @@ namespace Hanger51.Inventory
             if (inventoryUI.IsOpen)
             {
                 CancelCurrentAssemblyHold();
+                CancelCurrentRimHold();
                 currentPickup = null;
                 return;
             }
 
+            Keyboard keyboard = Keyboard.current;
+
+            P51BareRimServiceTarget aimedRim = FindBareRimTarget();
+            if (aimedRim != null)
+            {
+                if (currentBareRim != aimedRim)
+                {
+                    CancelCurrentRimHold();
+                    currentBareRim = aimedRim;
+                }
+
+                CancelCurrentAssemblyHold();
+                currentPickup = null;
+                currentAssemblyStation = null;
+                currentAssemblyTarget = null;
+                inventoryUI.SetAssemblyStation(null);
+
+                bool holdingE = keyboard != null && keyboard.eKey.isPressed;
+                bool pressedE = keyboard != null && keyboard.eKey.wasPressedThisFrame;
+                if (currentBareRim.ProcessInteraction(
+                        inventory,
+                        holdingE,
+                        pressedE,
+                        Time.deltaTime,
+                        out string rimMessage)
+                    && !string.IsNullOrWhiteSpace(rimMessage))
+                {
+                    inventoryUI.ShowStatusMessage(rimMessage, 3.5f);
+
+                    if (rimMessage.StartsWith("Picked up ", StringComparison.Ordinal))
+                    {
+                        currentBareRim = null;
+                        inventoryUI.SetInteractionPrompt(string.Empty);
+                        return;
+                    }
+                }
+
+                if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+                {
+                    inventoryUI.ShowStatusMessage(currentBareRim.Inspect(), 4f);
+                }
+
+                inventoryUI.SetInteractionPrompt(currentBareRim.GetInteractionText(inventory));
+                return;
+            }
+
+            if (currentBareRim != null)
+            {
+                CancelCurrentRimHold();
+                currentBareRim = null;
+            }
+
             FindInteractionTarget();
 
-            Keyboard keyboard = Keyboard.current;
             if (currentAssemblyTarget != null)
             {
                 bool holdingE = keyboard != null && keyboard.eKey.isPressed;
@@ -140,6 +194,44 @@ namespace Hanger51.Inventory
             {
                 inventoryUI.ShowStatusMessage("Inventory is full");
             }
+        }
+
+        private P51BareRimServiceTarget FindBareRimTarget()
+        {
+            if (playerCamera == null)
+            {
+                return null;
+            }
+
+            Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                Mathf.Max(interactionDistance, 6f),
+                interactionLayers,
+                QueryTriggerInteraction.Collide);
+            if (hits == null || hits.Length == 0)
+            {
+                return null;
+            }
+
+            Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
+            for (int index = 0; index < hits.Length; index++)
+            {
+                Collider collider = hits[index].collider;
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                P51BareRimServiceTarget target =
+                    collider.GetComponentInParent<P51BareRimServiceTarget>();
+                if (target != null && target.IsReady)
+                {
+                    return target;
+                }
+            }
+
+            return null;
         }
 
         private void FindInteractionTarget()
@@ -276,6 +368,11 @@ namespace Hanger51.Inventory
                 : currentAssemblyStation.InteractionText;
         }
 
+        private void CancelCurrentRimHold()
+        {
+            currentBareRim?.CancelHold();
+        }
+
         private void CancelCurrentAssemblyHold()
         {
             if (currentAssemblyTarget != null)
@@ -294,6 +391,7 @@ namespace Hanger51.Inventory
         private void OnDisable()
         {
             CancelCurrentAssemblyHold();
+            CancelCurrentRimHold();
             EnginePartConditionTransferContext.Clear();
 
             if (inventoryUI != null)
