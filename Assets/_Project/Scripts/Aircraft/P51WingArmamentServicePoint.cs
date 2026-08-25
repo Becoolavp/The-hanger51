@@ -33,6 +33,9 @@ namespace Hanger51.Aircraft
         public P51WingArmamentServiceKind ServiceKind => serviceKind;
         public int WingIndex => wingIndex;
         public int StationIndex => stationIndex;
+        public float HoldProgress => holdProgress;
+        public bool IsRemoving => removing;
+        public bool IsInteractionInProgress => holdProgress > 0f;
 
         private void Awake()
         {
