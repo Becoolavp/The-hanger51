@@ -127,12 +127,12 @@ namespace Hanger51.Inventory
                     && keyboard.eKey.wasPressedThisFrame
                     && !aimedWheelPart.IsPickupBlocked)
                 {
-                    string itemName = aimedWheelPart.Item != null
+                    string wheelItemName = aimedWheelPart.Item != null
                         ? aimedWheelPart.Item.DisplayName
                         : "wheel part";
                     if (aimedWheelPart.TryPickup(inventory))
                     {
-                        inventoryUI.ShowStatusMessage($"Picked up {itemName}");
+                        inventoryUI.ShowStatusMessage($"Picked up {wheelItemName}");
                         inventoryUI.SetInteractionPrompt(string.Empty);
                         return;
                     }
