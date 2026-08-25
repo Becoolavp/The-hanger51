@@ -18,9 +18,8 @@ namespace Hanger51.EditorTools
         private const string BuildFolder = "Builds/Windows";
         private const string ExecutableName = "TheHanger51.exe";
         private const string PlayerLogName = "TheHanger51_Player.log";
-        private const string DiagnosticExecutableName = "TheHanger51_EmptyDiagnostic.exe";
-        private const string DiagnosticLogName = "TheHanger51_EmptyDiagnostic_Player.log";
-        private const string DiagnosticScenePath = "Assets/_Project/Scenes/__Hanger51BuildDiagnostic.unity";
+        private const int LaunchWidth = 1920;
+        private const int LaunchHeight = 1080;
 
         [MenuItem("Hanger 51/Build/1 - Prepare Current Scene for Build")]
         public static void PrepareCurrentSceneForBuildMenu()
@@ -37,12 +36,7 @@ namespace Hanger51.EditorTools
         [MenuItem("Hanger 51/Build/3 - Build and Run Windows")]
         public static void BuildAndRunWindows()
         {
-            if (!PrepareCurrentSceneForBuild(false))
-            {
-                return;
-            }
-
-            if (!ValidateBuildSetup(false))
+            if (!PrepareCurrentSceneForBuild(false) || !ValidateBuildSetup(false))
             {
                 return;
             }
@@ -69,14 +63,13 @@ namespace Hanger51.EditorTools
             LaunchBuiltPlayer(outputPath, PlayerLogName, true);
         }
 
-        [MenuItem("Hanger 51/Build/4 - Run Last Windows Build (Diagnostic)")]
-        public static void RunLastWindowsBuildDiagnostic()
+        [MenuItem("Hanger 51/Build/4 - Run Last Windows Build")]
+        public static void RunLastWindowsBuild()
         {
             string outputPath = Path.Combine(BuildFolder, ExecutableName);
             if (!File.Exists(outputPath))
             {
-                Debug.LogError(
-                    $"No Windows build exists at '{outputPath}'. Run Build Step 3 first.");
+                Debug.LogError($"No Windows build exists at '{outputPath}'. Run Build Step 3 first.");
                 return;
             }
 
@@ -87,94 +80,6 @@ namespace Hanger51.EditorTools
         public static void RevealLastPlayerLog()
         {
             RevealLog(PlayerLogName, "standalone");
-        }
-
-        [MenuItem("Hanger 51/Build/6 - Build Empty Diagnostic Windows")]
-        public static void BuildEmptyDiagnosticWindows()
-        {
-            if (EditorApplication.isPlaying)
-            {
-                Debug.LogError("Empty diagnostic build failed. Exit Play mode first.");
-                return;
-            }
-
-            if (EditorApplication.isCompiling)
-            {
-                Debug.LogError("Empty diagnostic build failed. Wait for Unity to finish compiling first.");
-                return;
-            }
-
-            if (!EditorSceneManager.SaveOpenScenes())
-            {
-                Debug.LogError("Empty diagnostic build failed. Unity could not save the currently open scenes.");
-                return;
-            }
-
-            if (!PrepareCleanBuildFolder())
-            {
-                return;
-            }
-
-            Scene diagnosticScene = default;
-            bool createdDiagnosticScene = false;
-            try
-            {
-                if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DiagnosticScenePath) != null)
-                {
-                    AssetDatabase.DeleteAsset(DiagnosticScenePath);
-                }
-
-                diagnosticScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
-                if (!EditorSceneManager.SaveScene(diagnosticScene, DiagnosticScenePath, false))
-                {
-                    Debug.LogError($"Could not create temporary diagnostic scene at '{DiagnosticScenePath}'.");
-                    return;
-                }
-                createdDiagnosticScene = true;
-                EditorSceneManager.CloseScene(diagnosticScene, true);
-                diagnosticScene = default;
-                AssetDatabase.Refresh();
-
-                string outputPath = Path.Combine(BuildFolder, DiagnosticExecutableName);
-                Debug.Log(
-                    "Empty diagnostic build started. This build contains a completely blank scene and uses a full Unity build-cache clean. "
-                    + "If this player stays open, the Windows player pipeline is healthy and the corruption is tied to the real game scene/data.");
-
-                BuildReport report = BuildWindowsPlayer(
-                    new[] { DiagnosticScenePath },
-                    outputPath,
-                    "Empty diagnostic build");
-                if (!BuildSucceeded(report, "Empty diagnostic build"))
-                {
-                    return;
-                }
-
-                LaunchBuiltPlayer(outputPath, DiagnosticLogName, true);
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError("Empty diagnostic build failed unexpectedly.\n" + exception);
-            }
-            finally
-            {
-                if (diagnosticScene.IsValid() && diagnosticScene.isLoaded)
-                {
-                    EditorSceneManager.CloseScene(diagnosticScene, true);
-                }
-
-                if (createdDiagnosticScene
-                    || AssetDatabase.LoadAssetAtPath<SceneAsset>(DiagnosticScenePath) != null)
-                {
-                    AssetDatabase.DeleteAsset(DiagnosticScenePath);
-                    AssetDatabase.Refresh();
-                }
-            }
-        }
-
-        [MenuItem("Hanger 51/Build/7 - Reveal Empty Diagnostic Log")]
-        public static void RevealEmptyDiagnosticLog()
-        {
-            RevealLog(DiagnosticLogName, "empty diagnostic");
         }
 
         public static bool PrepareCurrentSceneForBuild(bool logSuccess)
@@ -200,9 +105,7 @@ namespace Hanger51.EditorTools
 
             if (string.IsNullOrWhiteSpace(activeScene.path))
             {
-                Debug.LogError(
-                    "Build Step 1 failed. The active scene has never been saved. "
-                    + "Use File > Save As before building.");
+                Debug.LogError("Build Step 1 failed. The active scene has never been saved. Use File > Save As before building.");
                 return false;
             }
 
@@ -212,20 +115,15 @@ namespace Hanger51.EditorTools
                 return false;
             }
 
-            List<EditorBuildSettingsScene> scenes =
-                new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
-
+            List<EditorBuildSettingsScene> scenes = new List<EditorBuildSettingsScene>(EditorBuildSettings.scenes);
             scenes.RemoveAll(scene => scene.path == activeScene.path);
             scenes.Insert(0, new EditorBuildSettingsScene(activeScene.path, true));
             EditorBuildSettings.scenes = scenes.ToArray();
-
             AssetDatabase.SaveAssets();
 
             if (logSuccess)
             {
-                Debug.Log(
-                    $"Build Step 1 passed. Saved all open scenes and placed "
-                    + $"'{activeScene.path}' first in the build list.");
+                Debug.Log($"Build Step 1 passed. Saved all open scenes and placed '{activeScene.path}' first in the build list.");
             }
 
             return true;
@@ -262,19 +160,14 @@ namespace Hanger51.EditorTools
 
                 if (!activeSceneIsFirst)
                 {
-                    Debug.LogError(
-                        "Build validation failed: the active scene is not the first enabled build scene.");
+                    Debug.LogError("Build validation failed: the active scene is not the first enabled build scene.");
                     passed = false;
                 }
             }
 
-            if (!BuildPipeline.IsBuildTargetSupported(
-                    BuildTargetGroup.Standalone,
-                    BuildTarget.StandaloneWindows64))
+            if (!BuildPipeline.IsBuildTargetSupported(BuildTargetGroup.Standalone, BuildTarget.StandaloneWindows64))
             {
-                Debug.LogError(
-                    "Build validation failed: Windows Build Support is not installed for this Unity Editor. "
-                    + "Add it through Unity Hub > Installs > gear icon > Add modules.");
+                Debug.LogError("Build validation failed: Windows Build Support is not installed for this Unity Editor.");
                 passed = false;
             }
 
@@ -289,30 +182,21 @@ namespace Hanger51.EditorTools
             {
                 if (AssetDatabase.LoadAssetAtPath<SceneAsset>(scenePaths[index]) == null)
                 {
-                    Debug.LogError(
-                        $"Build validation failed: build scene does not exist at '{scenePaths[index]}'.");
+                    Debug.LogError($"Build validation failed: build scene does not exist at '{scenePaths[index]}'.");
                     passed = false;
                 }
             }
 
             if (passed && logSuccess)
             {
-                Debug.Log(
-                    $"Build Step 2 passed. {scenePaths.Length} enabled scene(s) are ready for a Windows build.");
+                Debug.Log($"Build Step 2 passed. {scenePaths.Length} enabled scene(s) are ready for a Windows build.");
             }
 
             return passed;
         }
 
-        private static BuildReport BuildWindowsPlayer(
-            string[] scenePaths,
-            string outputPath,
-            string operationName)
+        private static BuildReport BuildWindowsPlayer(string[] scenePaths, string outputPath, string operationName)
         {
-            // CleanBuildCache is intentionally used while the standalone player is under active
-            // development. Deleting Builds/Windows only removes the visible output; Unity can still
-            // reuse internally cached serialized player/scene data. A corrupted cached level0 file
-            // can otherwise survive an apparently "fresh" output-folder build.
             BuildPlayerOptions buildOptions = new BuildPlayerOptions
             {
                 scenes = scenePaths,
@@ -324,9 +208,7 @@ namespace Hanger51.EditorTools
                     | BuildOptions.StrictMode
             };
 
-            Debug.Log(
-                $"{operationName} started. Performing a full clean-cache Windows x64 build of "
-                + $"{scenePaths.Length} scene(s) to '{outputPath}'.");
+            Debug.Log($"{operationName} started. Performing a full clean-cache Windows x64 build of {scenePaths.Length} scene(s) to '{outputPath}'.");
             return BuildPipeline.BuildPlayer(buildOptions);
         }
 
@@ -341,15 +223,11 @@ namespace Hanger51.EditorTools
             BuildSummary summary = report.summary;
             if (summary.result != BuildResult.Succeeded)
             {
-                Debug.LogError(
-                    $"{operationName} failed. Result: {summary.result}. "
-                    + $"Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
+                Debug.LogError($"{operationName} failed. Result: {summary.result}. Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
                 return false;
             }
 
-            Debug.Log(
-                $"{operationName} passed. Build size: {summary.totalSize} bytes. "
-                + $"Duration: {summary.totalTime}.");
+            Debug.Log($"{operationName} passed. Build size: {summary.totalSize} bytes. Duration: {summary.totalTime}.");
             return true;
         }
 
@@ -366,10 +244,7 @@ namespace Hanger51.EditorTools
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    "Could not clean the Windows build folder. "
-                    + "Make sure an older TheHanger51 player is not still running, then try again.\n"
-                    + exception);
+                Debug.LogError("Could not clean the Windows build folder. Make sure an older TheHanger51 player is not still running, then try again.\n" + exception);
                 return false;
             }
         }
@@ -394,9 +269,7 @@ namespace Hanger51.EditorTools
                 }
                 catch (Exception exception)
                 {
-                    Debug.LogWarning(
-                        $"Could not clear the previous Player log at '{logPath}'. "
-                        + $"The new run will still be launched. {exception.Message}");
+                    Debug.LogWarning($"Could not clear the previous Player log at '{logPath}'. The new run will still be launched. {exception.Message}");
                 }
             }
 
@@ -406,7 +279,7 @@ namespace Hanger51.EditorTools
                 {
                     FileName = executablePath,
                     WorkingDirectory = workingDirectory,
-                    Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 0 -screen-width 1600 -screen-height 900",
+                    Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 0 -screen-width {LaunchWidth} -screen-height {LaunchHeight}",
                     UseShellExecute = false,
                     CreateNoWindow = false
                 };
@@ -418,15 +291,11 @@ namespace Hanger51.EditorTools
                     return;
                 }
 
-                Debug.Log(
-                    $"Launched Windows development build (PID {process.Id}). "
-                    + $"Diagnostics are being written to '{logPath}'.");
+                Debug.Log($"Launched Windows development build at {LaunchWidth}x{LaunchHeight} windowed (PID {process.Id}). Diagnostics: '{logPath}'.");
             }
             catch (Exception exception)
             {
-                Debug.LogError(
-                    $"Windows build succeeded but the EXE could not be launched at '{executablePath}'.\n"
-                    + exception);
+                Debug.LogError($"Windows build succeeded but the EXE could not be launched at '{executablePath}'.\n{exception}");
             }
         }
 
@@ -445,8 +314,7 @@ namespace Hanger51.EditorTools
             {
                 EditorUtility.RevealInFinder(folder);
             }
-            Debug.LogWarning(
-                $"No {label} Player log exists yet at '{logPath}'. Run the corresponding build first.");
+            Debug.LogWarning($"No {label} Player log exists yet at '{logPath}'. Run the corresponding build first.");
         }
 
         private static string[] GetEnabledBuildScenePaths()
