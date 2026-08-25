@@ -35,7 +35,11 @@ namespace Hanger51.Aircraft
             for (int index = 0; index < pickups.Length; index++)
             {
                 InventoryPickup pickup = pickups[index];
-                if (pickup == null || pickup.Item == null || !IsP51WheelPart(pickup.Item))
+                if (pickup == null
+                    || !pickup.enabled
+                    || pickup.Item == null
+                    || !IsP51WheelPart(pickup.Item)
+                    || pickup.GetComponentInParent<P51LooseWheelAssembly>() != null)
                 {
                     continue;
                 }
@@ -69,6 +73,15 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            Collider[] existingColliders = root.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < existingColliders.Length; index++)
+            {
+                if (existingColliders[index] != null)
+                {
+                    existingColliders[index].enabled = false;
+                }
+            }
+
             BoxCollider collider = root.GetComponent<BoxCollider>();
             if (collider == null)
             {
@@ -82,7 +95,7 @@ namespace Hanger51.Aircraft
             if (renderers.Length == 0)
             {
                 collider.center = Vector3.zero;
-                collider.size = Vector3.one;
+                collider.size = Vector3.one * 0.45f;
                 return;
             }
 
