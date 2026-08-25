@@ -18,6 +18,9 @@ namespace Hanger51.EditorTools
         private const string BuildFolder = "Builds/Windows";
         private const string ExecutableName = "TheHanger51.exe";
         private const string PlayerLogName = "TheHanger51_Player.log";
+        private const string DiagnosticExecutableName = "TheHanger51_EmptyDiagnostic.exe";
+        private const string DiagnosticLogName = "TheHanger51_EmptyDiagnostic_Player.log";
+        private const string DiagnosticScenePath = "Assets/_Project/Scenes/__Hanger51BuildDiagnostic.unity";
 
         [MenuItem("Hanger 51/Build/1 - Prepare Current Scene for Build")]
         public static void PrepareCurrentSceneForBuildMenu()
@@ -57,37 +60,13 @@ namespace Hanger51.EditorTools
             }
 
             string outputPath = Path.Combine(BuildFolder, ExecutableName);
-
-            // Do not use BuildOptions.AutoRunPlayer here. Unity reports a successful build even if
-            // the standalone player immediately crashes, and AutoRunPlayer gives us no reliable
-            // place to force a diagnostic Player.log. Build first, then launch the completed EXE
-            // ourselves with development-friendly command-line options.
-            BuildPlayerOptions buildOptions = new BuildPlayerOptions
+            BuildReport report = BuildWindowsPlayer(scenePaths, outputPath, "Build Step 3");
+            if (!BuildSucceeded(report, "Build Step 3"))
             {
-                scenes = scenePaths,
-                locationPathName = outputPath,
-                target = BuildTarget.StandaloneWindows64,
-                options = BuildOptions.DetailedBuildReport | BuildOptions.Development
-            };
-
-            Debug.Log($"Build Step 3 started. Building {scenePaths.Length} scene(s) to '{outputPath}'.");
-
-            BuildReport report = BuildPipeline.BuildPlayer(buildOptions);
-            BuildSummary summary = report.summary;
-
-            if (summary.result != BuildResult.Succeeded)
-            {
-                Debug.LogError(
-                    $"Build Step 3 failed. Result: {summary.result}. "
-                    + $"Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
                 return;
             }
 
-            Debug.Log(
-                $"Build Step 3 build passed. Built '{outputPath}'. "
-                + $"Build size: {summary.totalSize} bytes. Duration: {summary.totalTime}.");
-
-            LaunchBuiltPlayer(outputPath, true);
+            LaunchBuiltPlayer(outputPath, PlayerLogName, true);
         }
 
         [MenuItem("Hanger 51/Build/4 - Run Last Windows Build (Diagnostic)")]
@@ -101,28 +80,101 @@ namespace Hanger51.EditorTools
                 return;
             }
 
-            LaunchBuiltPlayer(outputPath, true);
+            LaunchBuiltPlayer(outputPath, PlayerLogName, true);
         }
 
         [MenuItem("Hanger 51/Build/5 - Reveal Last Player Log")]
         public static void RevealLastPlayerLog()
         {
-            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, PlayerLogName));
-            if (File.Exists(logPath))
+            RevealLog(PlayerLogName, "standalone");
+        }
+
+        [MenuItem("Hanger 51/Build/6 - Build Empty Diagnostic Windows")]
+        public static void BuildEmptyDiagnosticWindows()
+        {
+            if (EditorApplication.isPlaying)
             {
-                EditorUtility.RevealInFinder(logPath);
-                Debug.Log($"Last standalone Player log: {logPath}");
+                Debug.LogError("Empty diagnostic build failed. Exit Play mode first.");
                 return;
             }
 
-            string folder = Path.GetFullPath(BuildFolder);
-            if (Directory.Exists(folder))
+            if (EditorApplication.isCompiling)
             {
-                EditorUtility.RevealInFinder(folder);
+                Debug.LogError("Empty diagnostic build failed. Wait for Unity to finish compiling first.");
+                return;
             }
-            Debug.LogWarning(
-                $"No dedicated standalone Player log exists yet at '{logPath}'. "
-                + "Run Build Step 3 or Build Step 4 once, then use this command again.");
+
+            if (!EditorSceneManager.SaveOpenScenes())
+            {
+                Debug.LogError("Empty diagnostic build failed. Unity could not save the currently open scenes.");
+                return;
+            }
+
+            if (!PrepareCleanBuildFolder())
+            {
+                return;
+            }
+
+            Scene diagnosticScene = default;
+            bool createdDiagnosticScene = false;
+            try
+            {
+                if (AssetDatabase.LoadAssetAtPath<SceneAsset>(DiagnosticScenePath) != null)
+                {
+                    AssetDatabase.DeleteAsset(DiagnosticScenePath);
+                }
+
+                diagnosticScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
+                if (!EditorSceneManager.SaveScene(diagnosticScene, DiagnosticScenePath, false))
+                {
+                    Debug.LogError($"Could not create temporary diagnostic scene at '{DiagnosticScenePath}'.");
+                    return;
+                }
+                createdDiagnosticScene = true;
+                EditorSceneManager.CloseScene(diagnosticScene, true);
+                diagnosticScene = default;
+                AssetDatabase.Refresh();
+
+                string outputPath = Path.Combine(BuildFolder, DiagnosticExecutableName);
+                Debug.Log(
+                    "Empty diagnostic build started. This build contains a completely blank scene and uses a full Unity build-cache clean. "
+                    + "If this player stays open, the Windows player pipeline is healthy and the corruption is tied to the real game scene/data.");
+
+                BuildReport report = BuildWindowsPlayer(
+                    new[] { DiagnosticScenePath },
+                    outputPath,
+                    "Empty diagnostic build");
+                if (!BuildSucceeded(report, "Empty diagnostic build"))
+                {
+                    return;
+                }
+
+                LaunchBuiltPlayer(outputPath, DiagnosticLogName, true);
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError("Empty diagnostic build failed unexpectedly.\n" + exception);
+            }
+            finally
+            {
+                if (diagnosticScene.IsValid() && diagnosticScene.isLoaded)
+                {
+                    EditorSceneManager.CloseScene(diagnosticScene, true);
+                }
+
+                if (createdDiagnosticScene
+                    || AssetDatabase.LoadAssetAtPath<SceneAsset>(DiagnosticScenePath) != null)
+                {
+                    AssetDatabase.DeleteAsset(DiagnosticScenePath);
+                    AssetDatabase.Refresh();
+                }
+            }
+        }
+
+        [MenuItem("Hanger 51/Build/7 - Reveal Empty Diagnostic Log")]
+        public static void RevealEmptyDiagnosticLog()
+        {
+            RevealLog(DiagnosticLogName, "empty diagnostic");
         }
 
         public static bool PrepareCurrentSceneForBuild(bool logSuccess)
@@ -252,6 +304,55 @@ namespace Hanger51.EditorTools
             return passed;
         }
 
+        private static BuildReport BuildWindowsPlayer(
+            string[] scenePaths,
+            string outputPath,
+            string operationName)
+        {
+            // CleanBuildCache is intentionally used while the standalone player is under active
+            // development. Deleting Builds/Windows only removes the visible output; Unity can still
+            // reuse internally cached serialized player/scene data. A corrupted cached level0 file
+            // can otherwise survive an apparently "fresh" output-folder build.
+            BuildPlayerOptions buildOptions = new BuildPlayerOptions
+            {
+                scenes = scenePaths,
+                locationPathName = outputPath,
+                target = BuildTarget.StandaloneWindows64,
+                options = BuildOptions.DetailedBuildReport
+                    | BuildOptions.Development
+                    | BuildOptions.CleanBuildCache
+                    | BuildOptions.StrictMode
+            };
+
+            Debug.Log(
+                $"{operationName} started. Performing a full clean-cache Windows x64 build of "
+                + $"{scenePaths.Length} scene(s) to '{outputPath}'.");
+            return BuildPipeline.BuildPlayer(buildOptions);
+        }
+
+        private static bool BuildSucceeded(BuildReport report, string operationName)
+        {
+            if (report == null)
+            {
+                Debug.LogError($"{operationName} failed. Unity returned no BuildReport.");
+                return false;
+            }
+
+            BuildSummary summary = report.summary;
+            if (summary.result != BuildResult.Succeeded)
+            {
+                Debug.LogError(
+                    $"{operationName} failed. Result: {summary.result}. "
+                    + $"Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
+                return false;
+            }
+
+            Debug.Log(
+                $"{operationName} passed. Build size: {summary.totalSize} bytes. "
+                + $"Duration: {summary.totalTime}.");
+            return true;
+        }
+
         private static bool PrepareCleanBuildFolder()
         {
             try
@@ -266,14 +367,14 @@ namespace Hanger51.EditorTools
             catch (Exception exception)
             {
                 Debug.LogError(
-                    "Build Step 3 could not clean the Windows build folder. "
-                    + "Make sure an older TheHanger51.exe is not still running, then try again.\n"
+                    "Could not clean the Windows build folder. "
+                    + "Make sure an older TheHanger51 player is not still running, then try again.\n"
                     + exception);
                 return false;
             }
         }
 
-        private static void LaunchBuiltPlayer(string outputPath, bool resetLog)
+        private static void LaunchBuiltPlayer(string outputPath, string logName, bool resetLog)
         {
             string executablePath = Path.GetFullPath(outputPath);
             if (!File.Exists(executablePath))
@@ -283,7 +384,7 @@ namespace Hanger51.EditorTools
             }
 
             string workingDirectory = Path.GetDirectoryName(executablePath);
-            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, PlayerLogName));
+            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, logName));
 
             if (resetLog && File.Exists(logPath))
             {
@@ -305,9 +406,6 @@ namespace Hanger51.EditorTools
                 {
                     FileName = executablePath,
                     WorkingDirectory = workingDirectory,
-                    // Windowed + D3D11 makes this development launcher less sensitive to a bad
-                    // fullscreen mode or DX12/driver startup problem. The player can still change
-                    // normal display settings later when we move out of diagnostic development.
                     Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 0 -screen-width 1600 -screen-height 900",
                     UseShellExecute = false,
                     CreateNoWindow = false
@@ -322,8 +420,7 @@ namespace Hanger51.EditorTools
 
                 Debug.Log(
                     $"Launched Windows development build (PID {process.Id}). "
-                    + $"Standalone diagnostics are being written to '{logPath}'. "
-                    + "If the game closes or crashes, use Hanger 51 > Build > 5 - Reveal Last Player Log.");
+                    + $"Diagnostics are being written to '{logPath}'.");
             }
             catch (Exception exception)
             {
@@ -331,6 +428,25 @@ namespace Hanger51.EditorTools
                     $"Windows build succeeded but the EXE could not be launched at '{executablePath}'.\n"
                     + exception);
             }
+        }
+
+        private static void RevealLog(string logName, string label)
+        {
+            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, logName));
+            if (File.Exists(logPath))
+            {
+                EditorUtility.RevealInFinder(logPath);
+                Debug.Log($"Last {label} Player log: {logPath}");
+                return;
+            }
+
+            string folder = Path.GetFullPath(BuildFolder);
+            if (Directory.Exists(folder))
+            {
+                EditorUtility.RevealInFinder(folder);
+            }
+            Debug.LogWarning(
+                $"No {label} Player log exists yet at '{logPath}'. Run the corresponding build first.");
         }
 
         private static string[] GetEnabledBuildScenePaths()
