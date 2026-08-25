@@ -50,6 +50,7 @@ namespace Hanger51.Aircraft
             InventoryPickup configuredPickup,
             int configuredOriginWheelIndex = -1)
         {
+            InventoryPickup previousPickup = pickup;
             pickup = configuredPickup != null
                 ? configuredPickup
                 : GetComponent<InventoryPickup>();
@@ -65,7 +66,14 @@ namespace Hanger51.Aircraft
                 condition.SetWheelStationIndex(originWheelIndex);
             }
 
-            mountProgress = 0f;
+            // Do not reset mountProgress on routine runtime refreshes. The wheel-part bootstrap
+            // revisits loose rims several times per second; resetting here made Hold E impossible
+            // to complete. Only a genuinely different pickup starts with a fresh hold.
+            if (previousPickup != null && previousPickup != pickup)
+            {
+                mountProgress = 0f;
+            }
+
             if (pickup != null)
             {
                 // The dedicated P-51 maintenance interactor owns bare-rim pickup/mounting.
