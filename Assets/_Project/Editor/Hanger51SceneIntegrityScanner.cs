@@ -1,4 +1,5 @@
 using System;
+using System.IO;
 using UnityEditor;
 using UnityEngine;
 using UnityEngine.SceneManagement;
@@ -6,9 +7,11 @@ using UnityEngine.SceneManagement;
 namespace Hanger51.EditorTools
 {
     /// <summary>
-    /// Scans the currently open scene for common serialization defects that can survive in the
-    /// Editor but produce a corrupt standalone level0: missing MonoBehaviours, missing prefab assets,
-    /// broken object references, and non-finite numeric values.
+    /// Scans the currently open scene for serialization defects that can survive in the Editor but
+    /// produce a corrupt standalone level0. In addition to missing references and non-finite values,
+    /// this checks MonoBehaviour types that are especially dangerous in player serialization:
+    /// editor-only scripts, nested/local component classes, generic component types, and scripts
+    /// whose runtime class can no longer be resolved.
     /// </summary>
     public static class Hanger51SceneIntegrityScanner
     {
@@ -24,7 +27,9 @@ namespace Hanger51.EditorTools
 
             int gameObjectCount = 0;
             int componentCount = 0;
+            int monoBehaviourCount = 0;
             int problemCount = 0;
+            int warningCount = 0;
 
             GameObject[] roots = scene.GetRootGameObjects();
             for (int rootIndex = 0; rootIndex < roots.Length; rootIndex++)
@@ -73,6 +78,14 @@ namespace Hanger51.EditorTools
                         Component component = components[componentIndex];
                         if (component == null) continue;
                         componentCount++;
+
+                        MonoBehaviour monoBehaviour = component as MonoBehaviour;
+                        if (monoBehaviour != null)
+                        {
+                            monoBehaviourCount++;
+                            problemCount += ScanMonoBehaviourType(monoBehaviour, ref warningCount);
+                        }
+
                         problemCount += ScanComponent(component);
                     }
                 }
@@ -81,16 +94,118 @@ namespace Hanger51.EditorTools
             if (problemCount == 0)
             {
                 Debug.Log(
-                    $"Scene integrity scan PASSED for '{scene.path}'. Checked {gameObjectCount} GameObjects "
-                    + $"and {componentCount} components. No missing scripts/prefabs, broken serialized "
-                    + "object references, or NaN/Infinity values were found.");
+                    $"Scene integrity scan PASSED for '{scene.path}'. Checked {gameObjectCount} GameObjects, "
+                    + $"{componentCount} components and {monoBehaviourCount} MonoBehaviours. No fatal missing "
+                    + "scripts/prefabs, invalid runtime MonoBehaviour types, broken serialized object references, "
+                    + $"or NaN/Infinity values were found. Advisory warnings: {warningCount}.");
             }
             else
             {
                 Debug.LogError(
-                    $"Scene integrity scan FOUND {problemCount} problem(s) in '{scene.path}'. "
-                    + "Search the Console for '[Scene Integrity]' and fix/remove those objects before rebuilding.");
+                    $"Scene integrity scan FOUND {problemCount} fatal problem(s) and {warningCount} advisory "
+                    + $"warning(s) in '{scene.path}'. Search the Console for '[Scene Integrity]'.");
             }
+        }
+
+        private static int ScanMonoBehaviourType(MonoBehaviour behaviour, ref int warningCount)
+        {
+            if (behaviour == null) return 0;
+
+            int problems = 0;
+            string objectPath = GetPath(behaviour.transform);
+            MonoScript script = MonoScript.FromMonoBehaviour(behaviour);
+            if (script == null)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' component '{behaviour.GetType().Name}' has no resolvable MonoScript asset.",
+                    behaviour);
+                return 1;
+            }
+
+            string scriptPath = AssetDatabase.GetAssetPath(script);
+            Type runtimeType = script.GetClass();
+            if (runtimeType == null)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' uses script '{scriptPath}', but Unity cannot resolve a runtime class from that MonoScript.",
+                    behaviour);
+                problems++;
+                return problems;
+            }
+
+            string normalizedPath = (scriptPath ?? string.Empty).Replace('\\', '/');
+            if (normalizedPath.IndexOf("/Editor/", StringComparison.OrdinalIgnoreCase) >= 0)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' has editor-only MonoBehaviour '{runtimeType.FullName}' from '{scriptPath}'. "
+                    + "An Editor-folder component must never be serialized into a runtime scene.",
+                    behaviour);
+                problems++;
+            }
+
+            if (runtimeType.IsNested)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' has nested MonoBehaviour type '{runtimeType.FullName}' from '{scriptPath}'. "
+                    + "Nested/local MonoBehaviour scene types are a known cause of player type-tree/level0 corruption.",
+                    behaviour);
+                problems++;
+            }
+
+            if (runtimeType.IsGenericType || runtimeType.ContainsGenericParameters)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' has generic MonoBehaviour type '{runtimeType.FullName}' from '{scriptPath}'.",
+                    behaviour);
+                problems++;
+            }
+
+            if (runtimeType.IsAbstract)
+            {
+                Debug.LogError(
+                    $"[Scene Integrity] '{objectPath}' has abstract MonoBehaviour type '{runtimeType.FullName}' from '{scriptPath}'.",
+                    behaviour);
+                problems++;
+            }
+
+            // Top-level internal MonoBehaviours can work in Unity, so do not treat visibility alone
+            // as fatal. It is still useful evidence when chasing a standalone type-tree mismatch.
+            if (!runtimeType.IsPublic && !runtimeType.IsNestedPublic)
+            {
+                Debug.LogWarning(
+                    $"[Scene Integrity] Advisory: '{objectPath}' uses non-public MonoBehaviour "
+                    + $"'{runtimeType.FullName}' from '{scriptPath}'.",
+                    behaviour);
+                warningCount++;
+            }
+
+            if (!string.IsNullOrEmpty(scriptPath)
+                && File.Exists(scriptPath))
+            {
+                try
+                {
+                    string source = File.ReadAllText(scriptPath);
+                    if (source.IndexOf("#if UNITY_EDITOR", StringComparison.Ordinal) >= 0
+                        || source.IndexOf("#if !UNITY_EDITOR", StringComparison.Ordinal) >= 0)
+                    {
+                        Debug.LogWarning(
+                            $"[Scene Integrity] Advisory: scene component '{runtimeType.FullName}' on '{objectPath}' "
+                            + $"contains UNITY_EDITOR conditional compilation in '{scriptPath}'. Verify serialized "
+                            + "fields are not conditionally included/excluded between Editor and Player.",
+                            behaviour);
+                        warningCount++;
+                    }
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning(
+                        $"[Scene Integrity] Could not inspect source text for '{scriptPath}': {exception.Message}",
+                        behaviour);
+                    warningCount++;
+                }
+            }
+
+            return problems;
         }
 
         private static int ScanComponent(Component component)
