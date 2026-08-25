@@ -16,6 +16,7 @@ namespace Hanger51.Commerce
 
         private HangarShopTerminal aimedTerminal;
         private ShipmentCrateController aimedCrate;
+        private HangarAircraftSpawnConsole aimedAircraftSpawner;
         private ShipmentCrateController activeUnboxingCrate;
 
         private void Awake()
@@ -49,7 +50,11 @@ namespace Hanger51.Commerce
 
             FindAimedCommerceTarget();
 
-            if (aimedTerminal != null)
+            if (aimedAircraftSpawner != null)
+            {
+                inventoryUI.SetInteractionPrompt(aimedAircraftSpawner.InteractionText);
+            }
+            else if (aimedTerminal != null)
             {
                 inventoryUI.SetInteractionPrompt(aimedTerminal.InteractionText);
             }
@@ -65,6 +70,13 @@ namespace Hanger51.Commerce
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null || !keyboard.eKey.wasPressedThisFrame)
             {
+                return;
+            }
+
+            if (aimedAircraftSpawner != null)
+            {
+                bool spawned = aimedAircraftSpawner.TrySpawn(out string spawnMessage);
+                inventoryUI.ShowStatusMessage(spawnMessage, spawned ? 4f : 3f);
                 return;
             }
 
@@ -100,6 +112,7 @@ namespace Hanger51.Commerce
         {
             aimedTerminal = null;
             aimedCrate = null;
+            aimedAircraftSpawner = null;
 
             Ray ray = new Ray(
                 playerCamera.transform.position,
@@ -124,6 +137,14 @@ namespace Hanger51.Commerce
                 if (crate != null && !crate.IsOpened)
                 {
                     aimedCrate = crate;
+                    return;
+                }
+
+                HangarAircraftSpawnConsole spawner =
+                    hitCollider.GetComponentInParent<HangarAircraftSpawnConsole>();
+                if (spawner != null)
+                {
+                    aimedAircraftSpawner = spawner;
                     return;
                 }
 
