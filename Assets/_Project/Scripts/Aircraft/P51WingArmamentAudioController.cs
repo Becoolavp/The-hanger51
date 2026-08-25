@@ -1,5 +1,4 @@
 using System;
-using System.Collections;
 using UnityEngine;
 
 namespace Hanger51.Aircraft
@@ -20,22 +19,25 @@ namespace Hanger51.Aircraft
         [SerializeField] private Transform[] ammoServicePoints = new Transform[GunCount];
 
         [Header("3D Audio Mix")]
-        [SerializeField, Range(0f, 1f)] private float gunReportVolume = 0.24f;
-        [SerializeField, Range(0f, 1f)] private float gunMechanicalVolume = 0.075f;
-        [SerializeField, Range(0f, 1f)] private float serviceVolume = 0.34f;
-        [SerializeField, Range(0f, 1f)] private float panelVolume = 0.32f;
+        [SerializeField, Range(0f, 1f)] private float gunReportVolume = 0.44f;
+        [SerializeField, Range(0f, 1f)] private float gunMechanicalVolume = 0.12f;
+        [SerializeField, Range(0f, 1f)] private float serviceVolume = 0.44f;
+        [SerializeField, Range(0f, 1f)] private float panelVolume = 0.48f;
 
         private readonly int[] previousAmmo = new int[GunCount];
         private readonly bool[] previousGunInstalled = new bool[GunCount];
         private readonly bool[] previousAmmoInstalled = new bool[GunCount];
         private readonly bool[] previousPanelOpen = new bool[WingCount];
+        private readonly float[] nextGunFastenerTime = new float[GunCount];
+        private readonly float[] nextAmmoFastenerTime = new float[GunCount];
 
         private AudioClip gunReportClip;
         private AudioClip gunMechanicalClip;
         private AudioClip[] casingClips;
-        private AudioClip panelHingeClip;
-        private AudioClip panelLatchClip;
-        private AudioClip boltRatchetClip;
+        private AudioClip panelOpenClip;
+        private AudioClip panelCloseClip;
+        private AudioClip gunFastenerClip;
+        private AudioClip ammoFastenerClip;
         private AudioClip gunInstallThudClip;
         private AudioClip ammoInstallThudClip;
         private float nextCasingScanTime;
@@ -62,8 +64,11 @@ namespace Hanger51.Aircraft
             gunServicePoints = Copy(configuredGunServicePoints, GunCount);
             ammoServicePoints = Copy(configuredAmmoServicePoints, GunCount);
 
-            // Do not synthesize transient AudioClips while an editor setup command is running.
-            // Runtime Awake/OnEnable creates the clips when the actual game starts.
+            // Reapplying Step 40 intentionally updates older scene instances to the current mix.
+            gunReportVolume = 0.44f;
+            gunMechanicalVolume = 0.12f;
+            serviceVolume = 0.44f;
+            panelVolume = 0.48f;
             initialized = false;
         }
 
@@ -107,27 +112,27 @@ namespace Hanger51.Aircraft
                 {
                     Transform muzzle = SafeAt(muzzles, stationIndex);
                     Vector3 position = muzzle != null ? muzzle.position : transform.position;
-                    float pitch = 0.965f
+                    float pitch = 0.955f
                         + stationIndex * 0.012f
-                        + UnityEngine.Random.Range(-0.012f, 0.012f);
+                        + UnityEngine.Random.Range(-0.014f, 0.014f);
 
                     PlayAt(
                         position,
                         gunReportClip,
                         gunReportVolume * Mathf.Clamp(roundsFired, 1, 2),
                         pitch,
-                        3.5f,
-                        420f,
-                        0.30f);
+                        4.5f,
+                        560f,
+                        0.34f);
 
                     PlayAt(
                         position,
                         gunMechanicalClip,
                         gunMechanicalVolume,
-                        UnityEngine.Random.Range(0.96f, 1.05f),
-                        1.5f,
-                        65f,
-                        0.05f);
+                        UnityEngine.Random.Range(0.94f, 1.05f),
+                        1.8f,
+                        80f,
+                        0.08f);
                 }
 
                 previousAmmo[stationIndex] = currentAmmo;
@@ -143,19 +148,18 @@ namespace Hanger51.Aircraft
                 {
                     Transform pivot = SafeAt(panelPivots, wingIndex);
                     Vector3 position = pivot != null ? pivot.position : transform.position;
+                    AudioClip clip = currentOpen ? panelOpenClip : panelCloseClip;
 
                     PlayAt(
                         position,
-                        panelHingeClip,
+                        clip,
                         panelVolume,
                         currentOpen
-                            ? UnityEngine.Random.Range(0.96f, 1.02f)
-                            : UnityEngine.Random.Range(0.90f, 0.97f),
-                        1f,
-                        28f,
+                            ? UnityEngine.Random.Range(0.97f, 1.03f)
+                            : UnityEngine.Random.Range(0.94f, 1.00f),
+                        1.1f,
+                        34f,
                         0f);
-
-                    StartCoroutine(PlayPanelLatchAfter(position, 0.20f, currentOpen));
                 }
 
                 previousPanelOpen[wingIndex] = currentOpen;
@@ -166,72 +170,106 @@ namespace Hanger51.Aircraft
         {
             for (int stationIndex = 0; stationIndex < GunCount; stationIndex++)
             {
+                Transform gunTransform = SafeAt(gunServicePoints, stationIndex);
+                P51WingArmamentServicePoint gunPoint = gunTransform != null
+                    ? gunTransform.GetComponent<P51WingArmamentServicePoint>()
+                    : null;
+                HandleFastenerDuringInteraction(
+                    gunPoint,
+                    gunTransform != null ? gunTransform.position : transform.position,
+                    stationIndex,
+                    true);
+
                 bool gunInstalled = system.IsGunInstalled(stationIndex);
                 if (gunInstalled != previousGunInstalled[stationIndex])
                 {
-                    Transform point = SafeAt(gunServicePoints, stationIndex);
-                    StartCoroutine(PlayServiceSequence(
-                        point != null ? point.position : transform.position,
+                    PlayAt(
+                        gunTransform != null ? gunTransform.position : transform.position,
                         gunInstallThudClip,
-                        gunInstalled ? 1.00f : 0.91f));
+                        serviceVolume,
+                        gunInstalled
+                            ? UnityEngine.Random.Range(0.94f, 1.00f)
+                            : UnityEngine.Random.Range(0.84f, 0.91f),
+                        1.2f,
+                        32f,
+                        0f);
                 }
                 previousGunInstalled[stationIndex] = gunInstalled;
+
+                Transform ammoTransform = SafeAt(ammoServicePoints, stationIndex);
+                P51WingArmamentServicePoint ammoPoint = ammoTransform != null
+                    ? ammoTransform.GetComponent<P51WingArmamentServicePoint>()
+                    : null;
+                HandleFastenerDuringInteraction(
+                    ammoPoint,
+                    ammoTransform != null ? ammoTransform.position : transform.position,
+                    stationIndex,
+                    false);
 
                 bool ammoInstalled = system.IsAmmoInstalled(stationIndex);
                 if (ammoInstalled != previousAmmoInstalled[stationIndex])
                 {
-                    Transform point = SafeAt(ammoServicePoints, stationIndex);
-                    StartCoroutine(PlayServiceSequence(
-                        point != null ? point.position : transform.position,
+                    PlayAt(
+                        ammoTransform != null ? ammoTransform.position : transform.position,
                         ammoInstallThudClip,
-                        ammoInstalled ? 1.05f : 0.95f));
+                        serviceVolume * 0.86f,
+                        ammoInstalled
+                            ? UnityEngine.Random.Range(0.98f, 1.05f)
+                            : UnityEngine.Random.Range(0.90f, 0.97f),
+                        0.9f,
+                        26f,
+                        0f);
                 }
                 previousAmmoInstalled[stationIndex] = ammoInstalled;
             }
         }
 
-        private IEnumerator PlayPanelLatchAfter(Vector3 position, float delay, bool opening)
+        private void HandleFastenerDuringInteraction(
+            P51WingArmamentServicePoint point,
+            Vector3 position,
+            int stationIndex,
+            bool gunFastener)
         {
-            yield return new WaitForSeconds(delay);
-            PlayAt(
-                position,
-                panelLatchClip,
-                panelVolume * 0.82f,
-                opening
-                    ? UnityEngine.Random.Range(1.00f, 1.08f)
-                    : UnityEngine.Random.Range(0.92f, 1.00f),
-                0.8f,
-                22f,
-                0f);
-        }
+            if (point == null || !point.IsInteractionInProgress)
+            {
+                if (gunFastener)
+                    nextGunFastenerTime[stationIndex] = 0f;
+                else
+                    nextAmmoFastenerTime[stationIndex] = 0f;
+                return;
+            }
 
-        private IEnumerator PlayServiceSequence(Vector3 position, AudioClip thudClip, float pitch)
-        {
-            PlayAt(
-                position,
-                boltRatchetClip,
-                serviceVolume * 0.72f,
-                UnityEngine.Random.Range(0.95f, 1.06f),
-                0.8f,
-                20f,
-                0f);
+            float nextTime = gunFastener
+                ? nextGunFastenerTime[stationIndex]
+                : nextAmmoFastenerTime[stationIndex];
+            if (Time.time < nextTime) return;
 
-            yield return new WaitForSeconds(0.12f);
+            AudioClip clip = gunFastener ? gunFastenerClip : ammoFastenerClip;
+            float interval = gunFastener ? 0.115f : 0.145f;
+            float volume = serviceVolume * (gunFastener ? 0.88f : 0.62f);
+            float basePitch = point.IsRemoving
+                ? (gunFastener ? 0.88f : 0.96f)
+                : (gunFastener ? 0.96f : 1.04f);
 
             PlayAt(
                 position,
-                thudClip,
-                serviceVolume,
-                pitch + UnityEngine.Random.Range(-0.025f, 0.025f),
-                1.0f,
-                30f,
+                clip,
+                volume,
+                basePitch + UnityEngine.Random.Range(-0.025f, 0.025f),
+                0.75f,
+                gunFastener ? 25f : 20f,
                 0f);
+
+            if (gunFastener)
+                nextGunFastenerTime[stationIndex] = Time.time + interval;
+            else
+                nextAmmoFastenerTime[stationIndex] = Time.time + interval;
         }
 
         private void AttachCasingImpactAudio()
         {
             if (Time.time < nextCasingScanTime) return;
-            nextCasingScanTime = Time.time + 0.12f;
+            nextCasingScanTime = Time.time + 0.10f;
 
             Rigidbody[] bodies = FindObjectsByType<Rigidbody>(FindObjectsSortMode.None);
             for (int index = 0; index < bodies.Length; index++)
@@ -254,6 +292,8 @@ namespace Hanger51.Aircraft
                 previousAmmo[stationIndex] = system.GetAmmoRemaining(stationIndex);
                 previousGunInstalled[stationIndex] = system.IsGunInstalled(stationIndex);
                 previousAmmoInstalled[stationIndex] = system.IsAmmoInstalled(stationIndex);
+                nextGunFastenerTime[stationIndex] = 0f;
+                nextAmmoFastenerTime[stationIndex] = 0f;
             }
 
             for (int wingIndex = 0; wingIndex < WingCount; wingIndex++)
@@ -277,58 +317,234 @@ namespace Hanger51.Aircraft
             gunMechanicalClip = CreateMechanicalAction();
             casingClips = new[]
             {
-                CreateCasingClink("P51 Casing Clink A", 5101, 2200f, 4100f),
-                CreateCasingClink("P51 Casing Clink B", 5102, 1800f, 3600f),
-                CreateCasingClink("P51 Casing Clink C", 5103, 2500f, 4700f)
+                CreateCasingClink("P51 Brass Impact A", 5201, 3100f, 5350f, 7600f),
+                CreateCasingClink("P51 Brass Impact B", 5202, 2750f, 4800f, 6900f),
+                CreateCasingClink("P51 Brass Impact C", 5203, 3450f, 5750f, 8200f)
             };
-            panelHingeClip = CreatePanelHinge();
-            panelLatchClip = CreatePanelLatch();
-            boltRatchetClip = CreateBoltRatchet();
+            panelOpenClip = CreatePanelOpen();
+            panelCloseClip = CreatePanelClose();
+            gunFastenerClip = CreateGunFastener();
+            ammoFastenerClip = CreateAmmoFastener();
             gunInstallThudClip = CreateInstallThud(
-                "P51 Gun Install Thud", 5110, 82f, 255f, 0.32f);
+                "P51 Gun Mount Seat", 5210, 68f, 230f, 0.34f, 0.92f);
             ammoInstallThudClip = CreateInstallThud(
-                "P51 Ammo Install Thud", 5111, 112f, 510f, 0.25f);
+                "P51 Ammo Box Seat", 5211, 105f, 460f, 0.25f, 0.70f);
         }
 
         private static AudioClip CreateGunReport()
         {
-            const float duration = 0.20f;
+            const float duration = 0.26f;
             float[] data = NewBuffer(duration);
-            System.Random random = new System.Random(5150);
+            System.Random random = new System.Random(5200);
 
             for (int i = 0; i < data.Length; i++)
             {
                 float t = i / (float)SampleRate;
-                float noise = RandomBipolar(random) * Mathf.Exp(-t / 0.018f);
-                float boom = Mathf.Sin(2f * Mathf.PI * 82f * t) * Mathf.Exp(-t / 0.060f);
-                float bark = Mathf.Sin(2f * Mathf.PI * 215f * t) * Mathf.Exp(-t / 0.032f);
-                float crack = t < 0.0035f
-                    ? (1f - t / 0.0035f) * 0.95f
+                float blastNoise = RandomBipolar(random) * Mathf.Exp(-t / 0.022f);
+                float sub = (
+                    Mathf.Sin(2f * Mathf.PI * 62f * t) * 0.62f
+                    + Mathf.Sin(2f * Mathf.PI * 96f * t) * 0.48f)
+                    * Mathf.Exp(-t / 0.095f);
+                float body = (
+                    Mathf.Sin(2f * Mathf.PI * 235f * t) * 0.48f
+                    + Mathf.Sin(2f * Mathf.PI * 430f * t) * 0.24f)
+                    * Mathf.Exp(-t / 0.050f);
+                float pressure = Mathf.Sin(2f * Mathf.PI * 880f * t)
+                    * Mathf.Exp(-t / 0.017f) * 0.24f;
+                float crack = t < 0.0022f
+                    ? (1f - t / 0.0022f) * 1.45f
                     : 0f;
-                data[i] = Saturate(
-                    noise * 0.56f
-                    + boom * 0.46f
-                    + bark * 0.22f
-                    + crack);
+                float secondary = t >= 0.006f && t < 0.010f
+                    ? (1f - (t - 0.006f) / 0.004f) * 0.48f
+                    : 0f;
+
+                data[i] = Saturate((
+                    blastNoise * 0.88f
+                    + sub
+                    + body
+                    + pressure
+                    + crack
+                    + secondary) * 1.18f);
             }
 
-            return CreateClip("P51 Six Gun Heavy Report", data);
+            return CreateClip("P51 Intense Six Gun Report", data);
         }
 
         private static AudioClip CreateMechanicalAction()
         {
-            float[] data = NewBuffer(0.12f);
-            System.Random random = new System.Random(5151);
-            AddMetalImpulse(data, 0.000f, 1450f, 1.00f, random);
-            AddMetalImpulse(data, 0.032f, 930f, 0.65f, random);
-            AddMetalImpulse(data, 0.064f, 1650f, 0.34f, random);
+            float[] data = NewBuffer(0.13f);
+            System.Random random = new System.Random(5204);
+            AddMetalImpulse(data, 0.000f, 720f, 0.78f, random);
+            AddMetalImpulse(data, 0.027f, 1120f, 0.66f, random);
+            AddMetalImpulse(data, 0.057f, 1680f, 0.43f, random);
+            AddLowImpulse(data, 0.000f, 185f, 0.38f);
 
             for (int i = 0; i < data.Length; i++)
             {
-                data[i] = Saturate(data[i] * 0.82f);
+                data[i] = Saturate(data[i] * 0.94f);
             }
 
-            return CreateClip("P51 M2 Mechanical Action", data);
+            return CreateClip("P51 M2 Heavy Mechanical Action", data);
+        }
+
+        private static AudioClip CreateCasingClink(
+            string name,
+            int seed,
+            float firstFrequency,
+            float secondFrequency,
+            float thirdFrequency)
+        {
+            float[] data = NewBuffer(0.23f);
+            System.Random random = new System.Random(seed);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float ring1 = Mathf.Sin(2f * Mathf.PI * firstFrequency * t)
+                    * Mathf.Exp(-t / 0.060f) * 0.58f;
+                float ring2 = Mathf.Sin(2f * Mathf.PI * secondFrequency * t)
+                    * Mathf.Exp(-t / 0.042f) * 0.44f;
+                float ring3 = Mathf.Sin(2f * Mathf.PI * thirdFrequency * t)
+                    * Mathf.Exp(-t / 0.026f) * 0.26f;
+                float body = Mathf.Sin(2f * Mathf.PI * 780f * t)
+                    * Mathf.Exp(-t / 0.022f) * 0.18f;
+                float strike = RandomBipolar(random)
+                    * Mathf.Exp(-t / 0.0045f) * 0.48f;
+
+                data[i] = Saturate((ring1 + ring2 + ring3 + body + strike) * 0.92f);
+            }
+
+            return CreateClip(name, data);
+        }
+
+        private static AudioClip CreatePanelOpen()
+        {
+            const float duration = 0.36f;
+            float[] data = NewBuffer(duration);
+            System.Random random = new System.Random(5220);
+            float filteredNoise = 0f;
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float phase = Mathf.Clamp01(t / duration);
+                filteredNoise = Mathf.Lerp(filteredNoise, RandomBipolar(random), 0.08f);
+                float movementEnvelope = Mathf.Pow(Mathf.Sin(Mathf.PI * phase), 0.78f);
+                float scrape = filteredNoise * movementEnvelope * 0.24f;
+                float sheet = (
+                    Mathf.Sin(2f * Mathf.PI * 168f * t) * 0.17f
+                    + Mathf.Sin(2f * Mathf.PI * 335f * t) * 0.12f
+                    + Mathf.Sin(2f * Mathf.PI * 710f * t) * 0.07f)
+                    * movementEnvelope;
+                float latch = EventRing(t, 0.000f, 920f, 0.030f, 0.62f)
+                    + EventRing(t, 0.004f, 1540f, 0.018f, 0.34f);
+                float hingeKnock = EventRing(t, 0.105f, 420f, 0.026f, 0.22f);
+
+                data[i] = Saturate(scrape + sheet + latch + hingeKnock);
+            }
+
+            return CreateClip("P51 Metal Wing Panel Opening", data);
+        }
+
+        private static AudioClip CreatePanelClose()
+        {
+            const float duration = 0.34f;
+            float[] data = NewBuffer(duration);
+            System.Random random = new System.Random(5221);
+            float filteredNoise = 0f;
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float phase = Mathf.Clamp01(t / duration);
+                filteredNoise = Mathf.Lerp(filteredNoise, RandomBipolar(random), 0.075f);
+                float movementEnvelope = Mathf.Sin(Mathf.PI * phase);
+                float scrape = filteredNoise * movementEnvelope * 0.22f;
+                float sheet = (
+                    Mathf.Sin(2f * Mathf.PI * 150f * t) * 0.16f
+                    + Mathf.Sin(2f * Mathf.PI * 305f * t) * 0.10f)
+                    * movementEnvelope;
+                float seat = EventRing(t, 0.215f, 110f, 0.080f, 0.72f)
+                    + EventRing(t, 0.215f, 335f, 0.050f, 0.50f)
+                    + EventRing(t, 0.218f, 1120f, 0.024f, 0.38f);
+                float latch = EventRing(t, 0.255f, 1420f, 0.020f, 0.48f);
+
+                data[i] = Saturate((scrape + sheet + seat + latch) * 1.05f);
+            }
+
+            return CreateClip("P51 Metal Wing Panel Closing", data);
+        }
+
+        private static AudioClip CreateGunFastener()
+        {
+            float[] data = NewBuffer(0.105f);
+            System.Random random = new System.Random(5230);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float low = Mathf.Sin(2f * Mathf.PI * 178f * t)
+                    * Mathf.Exp(-t / 0.035f) * 0.58f;
+                float torque = Mathf.Sin(2f * Mathf.PI * 470f * t)
+                    * Mathf.Exp(-t / 0.022f) * 0.46f;
+                float click = Mathf.Sin(2f * Mathf.PI * 1160f * t)
+                    * Mathf.Exp(-t / 0.010f) * 0.34f;
+                float noise = RandomBipolar(random)
+                    * Mathf.Exp(-t / 0.009f) * 0.16f;
+                data[i] = Saturate((low + torque + click + noise) * 1.08f);
+            }
+
+            return CreateClip("P51 Deep Gun Mount Fastener", data);
+        }
+
+        private static AudioClip CreateAmmoFastener()
+        {
+            float[] data = NewBuffer(0.09f);
+            System.Random random = new System.Random(5231);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float body = Mathf.Sin(2f * Mathf.PI * 420f * t)
+                    * Mathf.Exp(-t / 0.024f) * 0.36f;
+                float latch = Mathf.Sin(2f * Mathf.PI * 1450f * t)
+                    * Mathf.Exp(-t / 0.012f) * 0.42f;
+                float ring = Mathf.Sin(2f * Mathf.PI * 2600f * t)
+                    * Mathf.Exp(-t / 0.016f) * 0.18f;
+                float noise = RandomBipolar(random)
+                    * Mathf.Exp(-t / 0.008f) * 0.12f;
+                data[i] = Saturate(body + latch + ring + noise);
+            }
+
+            return CreateClip("P51 Ammo Bay Metal Fastener", data);
+        }
+
+        private static AudioClip CreateInstallThud(
+            string name,
+            int seed,
+            float lowFrequency,
+            float highFrequency,
+            float duration,
+            float strength)
+        {
+            float[] data = NewBuffer(duration);
+            System.Random random = new System.Random(seed);
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                float t = i / (float)SampleRate;
+                float low = Mathf.Sin(2f * Mathf.PI * lowFrequency * t)
+                    * Mathf.Exp(-t / 0.080f) * 0.74f;
+                float high = Mathf.Sin(2f * Mathf.PI * highFrequency * t)
+                    * Mathf.Exp(-t / 0.043f) * 0.30f;
+                float knock = Mathf.Sin(2f * Mathf.PI * (highFrequency * 2.15f) * t)
+                    * Mathf.Exp(-t / 0.018f) * 0.16f;
+                float noise = RandomBipolar(random)
+                    * Mathf.Exp(-t / 0.024f) * 0.15f;
+                data[i] = Saturate((low + high + knock + noise) * strength);
+            }
+
+            return CreateClip(name, data);
         }
 
         private static void AddMetalImpulse(
@@ -342,144 +558,38 @@ namespace Hanger51.Aircraft
             for (int i = start; i < data.Length; i++)
             {
                 float t = (i - start) / (float)SampleRate;
-                float envelope = Mathf.Exp(-t / 0.012f);
-                float noise = RandomBipolar(random) * 0.28f;
+                float envelope = Mathf.Exp(-t / 0.013f);
+                float noise = RandomBipolar(random) * 0.22f;
                 data[i] += amplitude * envelope *
                     (Mathf.Sin(2f * Mathf.PI * frequency * t)
-                    + 0.45f * Mathf.Sin(2f * Mathf.PI * frequency * 1.72f * t)
+                    + 0.38f * Mathf.Sin(2f * Mathf.PI * frequency * 1.68f * t)
                     + noise);
             }
         }
 
-        private static AudioClip CreateCasingClink(
-            string name,
-            int seed,
-            float firstFrequency,
-            float secondFrequency)
+        private static void AddLowImpulse(float[] data, float delay, float frequency, float amplitude)
         {
-            float[] data = NewBuffer(0.18f);
-            System.Random random = new System.Random(seed);
-
-            for (int i = 0; i < data.Length; i++)
+            int start = Mathf.RoundToInt(delay * SampleRate);
+            for (int i = start; i < data.Length; i++)
             {
-                float t = i / (float)SampleRate;
-                float envelope = Mathf.Exp(-t / 0.035f);
-                float noise = RandomBipolar(random)
-                    * 0.11f
-                    * Mathf.Exp(-t / 0.018f);
-
-                data[i] = Saturate(
-                    (Mathf.Sin(2f * Mathf.PI * firstFrequency * t)
-                    + 0.42f * Mathf.Sin(2f * Mathf.PI * secondFrequency * t))
-                    * envelope * 0.58f
-                    + noise);
+                float t = (i - start) / (float)SampleRate;
+                data[i] += Mathf.Sin(2f * Mathf.PI * frequency * t)
+                    * Mathf.Exp(-t / 0.045f) * amplitude;
             }
-
-            return CreateClip(name, data);
         }
 
-        private static AudioClip CreatePanelHinge()
+        private static float EventRing(
+            float time,
+            float eventTime,
+            float frequency,
+            float decay,
+            float amplitude)
         {
-            const float duration = 0.62f;
-            float[] data = NewBuffer(duration);
-            System.Random random = new System.Random(5160);
-            float smoothedNoise = 0f;
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                float t = i / (float)SampleRate;
-                float phase = Mathf.Clamp01(t / duration);
-                float envelope = Mathf.Pow(Mathf.Sin(Mathf.PI * phase), 1.35f);
-                smoothedNoise = Mathf.Lerp(
-                    smoothedNoise,
-                    RandomBipolar(random),
-                    0.09f);
-
-                float squeakFrequency = 510f
-                    + 95f * Mathf.Sin(2f * Mathf.PI * 2.1f * t);
-                float squeak = Mathf.Sin(2f * Mathf.PI * squeakFrequency * t);
-                float groan = Mathf.Sin(2f * Mathf.PI * 122f * t);
-                data[i] = (
-                    smoothedNoise * 0.19f
-                    + squeak * 0.11f
-                    + groan * 0.055f)
-                    * envelope;
-            }
-
-            return CreateClip("P51 Wing Panel Hinge", data);
-        }
-
-        private static AudioClip CreatePanelLatch()
-        {
-            float[] data = NewBuffer(0.16f);
-            System.Random random = new System.Random(5161);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                float t = i / (float)SampleRate;
-                float high = Mathf.Sin(2f * Mathf.PI * 1160f * t)
-                    * Mathf.Exp(-t / 0.016f) * 0.68f;
-                float low = Mathf.Sin(2f * Mathf.PI * 285f * t)
-                    * Mathf.Exp(-t / 0.050f) * 0.24f;
-                float noise = RandomBipolar(random)
-                    * Mathf.Exp(-t / 0.009f) * 0.18f;
-                data[i] = Saturate(high + low + noise);
-            }
-
-            return CreateClip("P51 Wing Panel Latch", data);
-        }
-
-        private static AudioClip CreateBoltRatchet()
-        {
-            float[] data = NewBuffer(0.42f);
-            System.Random random = new System.Random(5170);
-
-            for (float delay = 0f; delay < 0.40f; delay += 0.055f)
-            {
-                int start = Mathf.RoundToInt(delay * SampleRate);
-                for (int i = start; i < data.Length; i++)
-                {
-                    float t = (i - start) / (float)SampleRate;
-                    float envelope = Mathf.Exp(-t / 0.009f);
-                    float noise = RandomBipolar(random) * 0.25f;
-                    data[i] += (
-                        Mathf.Sin(2f * Mathf.PI * 1500f * t)
-                        + noise)
-                        * envelope * 0.42f;
-                }
-            }
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                data[i] = Saturate(data[i]);
-            }
-
-            return CreateClip("P51 Armament Bolt Ratchet", data);
-        }
-
-        private static AudioClip CreateInstallThud(
-            string name,
-            int seed,
-            float lowFrequency,
-            float highFrequency,
-            float duration)
-        {
-            float[] data = NewBuffer(duration);
-            System.Random random = new System.Random(seed);
-
-            for (int i = 0; i < data.Length; i++)
-            {
-                float t = i / (float)SampleRate;
-                float low = Mathf.Sin(2f * Mathf.PI * lowFrequency * t)
-                    * Mathf.Exp(-t / 0.070f) * 0.68f;
-                float high = Mathf.Sin(2f * Mathf.PI * highFrequency * t)
-                    * Mathf.Exp(-t / 0.040f) * 0.24f;
-                float noise = RandomBipolar(random)
-                    * Mathf.Exp(-t / 0.022f) * 0.15f;
-                data[i] = Saturate(low + high + noise);
-            }
-
-            return CreateClip(name, data);
+            float t = time - eventTime;
+            if (t < 0f) return 0f;
+            return Mathf.Sin(2f * Mathf.PI * frequency * t)
+                * Mathf.Exp(-t / Mathf.Max(0.001f, decay))
+                * amplitude;
         }
 
         private static float[] NewBuffer(float duration)
@@ -579,9 +689,10 @@ namespace Hanger51.Aircraft
                     DestroyClip(casingClips[index]);
                 }
             }
-            DestroyClip(panelHingeClip);
-            DestroyClip(panelLatchClip);
-            DestroyClip(boltRatchetClip);
+            DestroyClip(panelOpenClip);
+            DestroyClip(panelCloseClip);
+            DestroyClip(gunFastenerClip);
+            DestroyClip(ammoFastenerClip);
             DestroyClip(gunInstallThudClip);
             DestroyClip(ammoInstallThudClip);
         }
