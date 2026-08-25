@@ -141,6 +141,18 @@ namespace Hanger51.Inventory
                 return;
             }
 
+            // Generated wheel prefabs contain primitive child colliders. Those can overlap one
+            // another and make the dropped object inconsistent to raycast. Disable every existing
+            // collider first, then expose exactly one fitted root trigger for interaction.
+            Collider[] existingColliders = pickupObject.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < existingColliders.Length; index++)
+            {
+                if (existingColliders[index] != null)
+                {
+                    existingColliders[index].enabled = false;
+                }
+            }
+
             BoxCollider rootCollider = pickupObject.GetComponent<BoxCollider>();
             if (rootCollider == null)
             {
@@ -186,11 +198,13 @@ namespace Hanger51.Inventory
             float sx = Mathf.Max(0.001f, Mathf.Abs(scale.x));
             float sy = Mathf.Max(0.001f, Mathf.Abs(scale.y));
             float sz = Mathf.Max(0.001f, Mathf.Abs(scale.z));
+            Vector3 fitted = new Vector3(
+                Mathf.Max(0.18f, bounds.size.x / sx),
+                Mathf.Max(0.18f, bounds.size.y / sy),
+                Mathf.Max(0.18f, bounds.size.z / sz));
+
             collider.center = root.transform.InverseTransformPoint(bounds.center);
-            collider.size = new Vector3(
-                Mathf.Max(0.12f, bounds.size.x / sx),
-                Mathf.Max(0.12f, bounds.size.y / sy),
-                Mathf.Max(0.12f, bounds.size.z / sz));
+            collider.size = fitted + Vector3.one * 0.08f;
         }
 
         private static void EnsurePickupCollider(GameObject pickupObject)
