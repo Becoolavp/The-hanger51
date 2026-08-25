@@ -66,9 +66,8 @@ namespace Hanger51.Aircraft
                 condition.SetWheelStationIndex(originWheelIndex);
             }
 
-            // Do not reset mountProgress on routine runtime refreshes. The wheel-part bootstrap
-            // revisits loose rims several times per second; resetting here made Hold E impossible
-            // to complete. Only a genuinely different pickup starts with a fresh hold.
+            // Do not reset mountProgress on routine runtime refreshes. Only a genuinely different
+            // pickup starts with a fresh hold.
             if (previousPickup != null && previousPickup != pickup)
             {
                 mountProgress = 0f;
@@ -76,9 +75,11 @@ namespace Hanger51.Aircraft
 
             if (pickup != null)
             {
-                // The dedicated P-51 maintenance interactor owns bare-rim pickup/mounting.
-                // Blocking the generic interactor prevents both systems from handling E in the same frame.
-                pickup.SetRuntimePickupBlocked(true);
+                // A rim must always remain a valid normal pickup. InventoryInteractor gives this
+                // service target priority while the player is aiming at the rim, so there is no
+                // need to permanently block InventoryPickup. This also gives us a safe pickup
+                // fallback if a special tire-mount interaction is ever unavailable.
+                pickup.SetRuntimePickupBlocked(false);
             }
         }
 
@@ -95,7 +96,7 @@ namespace Hanger51.Aircraft
             }
             if (pickup != null)
             {
-                pickup.SetRuntimePickupBlocked(true);
+                pickup.SetRuntimePickupBlocked(false);
             }
         }
 
@@ -130,7 +131,7 @@ namespace Hanger51.Aircraft
                 return false;
             }
 
-            pickup.SetRuntimePickupBlocked(true);
+            pickup.SetRuntimePickupBlocked(false);
             bool matchingTire = HasCorrectTireEquipped(inventory);
 
             if (matchingTire)
@@ -196,7 +197,6 @@ namespace Hanger51.Aircraft
             bool pickedUp = pickup.TryPickup(inventory);
             if (!pickedUp)
             {
-                pickup.SetRuntimePickupBlocked(true);
                 resultMessage = "Inventory is full; the rim stays on the floor.";
                 return false;
             }
