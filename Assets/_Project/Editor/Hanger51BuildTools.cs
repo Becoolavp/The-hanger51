@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using UnityEditor;
@@ -6,6 +8,8 @@ using UnityEditor.Build.Reporting;
 using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Debug = UnityEngine.Debug;
+using DiagnosticsProcess = System.Diagnostics.Process;
 
 namespace Hanger51.EditorTools
 {
@@ -13,6 +17,7 @@ namespace Hanger51.EditorTools
     {
         private const string BuildFolder = "Builds/Windows";
         private const string ExecutableName = "TheHanger51.exe";
+        private const string PlayerLogName = "TheHanger51_Player.log";
 
         [MenuItem("Hanger 51/Build/1 - Prepare Current Scene for Build")]
         public static void PrepareCurrentSceneForBuildMenu()
@@ -46,15 +51,23 @@ namespace Hanger51.EditorTools
                 return;
             }
 
-            Directory.CreateDirectory(BuildFolder);
+            if (!PrepareCleanBuildFolder())
+            {
+                return;
+            }
+
             string outputPath = Path.Combine(BuildFolder, ExecutableName);
 
+            // Do not use BuildOptions.AutoRunPlayer here. Unity reports a successful build even if
+            // the standalone player immediately crashes, and AutoRunPlayer gives us no reliable
+            // place to force a diagnostic Player.log. Build first, then launch the completed EXE
+            // ourselves with development-friendly command-line options.
             BuildPlayerOptions buildOptions = new BuildPlayerOptions
             {
                 scenes = scenePaths,
                 locationPathName = outputPath,
                 target = BuildTarget.StandaloneWindows64,
-                options = BuildOptions.AutoRunPlayer | BuildOptions.DetailedBuildReport
+                options = BuildOptions.DetailedBuildReport | BuildOptions.Development
             };
 
             Debug.Log($"Build Step 3 started. Building {scenePaths.Length} scene(s) to '{outputPath}'.");
@@ -62,17 +75,54 @@ namespace Hanger51.EditorTools
             BuildReport report = BuildPipeline.BuildPlayer(buildOptions);
             BuildSummary summary = report.summary;
 
-            if (summary.result == BuildResult.Succeeded)
+            if (summary.result != BuildResult.Succeeded)
             {
-                Debug.Log(
-                    $"Build Step 3 passed. Built and launched '{outputPath}'. "
-                    + $"Build size: {summary.totalSize} bytes. Duration: {summary.totalTime}.");
+                Debug.LogError(
+                    $"Build Step 3 failed. Result: {summary.result}. "
+                    + $"Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
                 return;
             }
 
-            Debug.LogError(
-                $"Build Step 3 failed. Result: {summary.result}. "
-                + $"Errors: {summary.totalErrors}. Warnings: {summary.totalWarnings}.");
+            Debug.Log(
+                $"Build Step 3 build passed. Built '{outputPath}'. "
+                + $"Build size: {summary.totalSize} bytes. Duration: {summary.totalTime}.");
+
+            LaunchBuiltPlayer(outputPath, true);
+        }
+
+        [MenuItem("Hanger 51/Build/4 - Run Last Windows Build (Diagnostic)")]
+        public static void RunLastWindowsBuildDiagnostic()
+        {
+            string outputPath = Path.Combine(BuildFolder, ExecutableName);
+            if (!File.Exists(outputPath))
+            {
+                Debug.LogError(
+                    $"No Windows build exists at '{outputPath}'. Run Build Step 3 first.");
+                return;
+            }
+
+            LaunchBuiltPlayer(outputPath, true);
+        }
+
+        [MenuItem("Hanger 51/Build/5 - Reveal Last Player Log")]
+        public static void RevealLastPlayerLog()
+        {
+            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, PlayerLogName));
+            if (File.Exists(logPath))
+            {
+                EditorUtility.RevealInFinder(logPath);
+                Debug.Log($"Last standalone Player log: {logPath}");
+                return;
+            }
+
+            string folder = Path.GetFullPath(BuildFolder);
+            if (Directory.Exists(folder))
+            {
+                EditorUtility.RevealInFinder(folder);
+            }
+            Debug.LogWarning(
+                $"No dedicated standalone Player log exists yet at '{logPath}'. "
+                + "Run Build Step 3 or Build Step 4 once, then use this command again.");
         }
 
         public static bool PrepareCurrentSceneForBuild(bool logSuccess)
@@ -200,6 +250,87 @@ namespace Hanger51.EditorTools
             }
 
             return passed;
+        }
+
+        private static bool PrepareCleanBuildFolder()
+        {
+            try
+            {
+                if (Directory.Exists(BuildFolder))
+                {
+                    Directory.Delete(BuildFolder, true);
+                }
+                Directory.CreateDirectory(BuildFolder);
+                return true;
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    "Build Step 3 could not clean the Windows build folder. "
+                    + "Make sure an older TheHanger51.exe is not still running, then try again.\n"
+                    + exception);
+                return false;
+            }
+        }
+
+        private static void LaunchBuiltPlayer(string outputPath, bool resetLog)
+        {
+            string executablePath = Path.GetFullPath(outputPath);
+            if (!File.Exists(executablePath))
+            {
+                Debug.LogError($"Cannot launch Windows build: EXE not found at '{executablePath}'.");
+                return;
+            }
+
+            string workingDirectory = Path.GetDirectoryName(executablePath);
+            string logPath = Path.GetFullPath(Path.Combine(BuildFolder, PlayerLogName));
+
+            if (resetLog && File.Exists(logPath))
+            {
+                try
+                {
+                    File.Delete(logPath);
+                }
+                catch (Exception exception)
+                {
+                    Debug.LogWarning(
+                        $"Could not clear the previous Player log at '{logPath}'. "
+                        + $"The new run will still be launched. {exception.Message}");
+                }
+            }
+
+            try
+            {
+                ProcessStartInfo startInfo = new ProcessStartInfo
+                {
+                    FileName = executablePath,
+                    WorkingDirectory = workingDirectory,
+                    // Windowed + D3D11 makes this development launcher less sensitive to a bad
+                    // fullscreen mode or DX12/driver startup problem. The player can still change
+                    // normal display settings later when we move out of diagnostic development.
+                    Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 0 -screen-width 1600 -screen-height 900",
+                    UseShellExecute = false,
+                    CreateNoWindow = false
+                };
+
+                DiagnosticsProcess process = DiagnosticsProcess.Start(startInfo);
+                if (process == null)
+                {
+                    Debug.LogError("Windows build was created, but Windows did not return a Player process.");
+                    return;
+                }
+
+                Debug.Log(
+                    $"Launched Windows development build (PID {process.Id}). "
+                    + $"Standalone diagnostics are being written to '{logPath}'. "
+                    + "If the game closes or crashes, use Hanger 51 > Build > 5 - Reveal Last Player Log.");
+            }
+            catch (Exception exception)
+            {
+                Debug.LogError(
+                    $"Windows build succeeded but the EXE could not be launched at '{executablePath}'.\n"
+                    + exception);
+            }
         }
 
         private static string[] GetEnabledBuildScenePaths()
