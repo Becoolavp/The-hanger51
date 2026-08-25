@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hanger51.Aircraft;
 using UnityEngine;
 
 namespace Hanger51.Inventory
@@ -119,7 +120,77 @@ namespace Hanger51.Inventory
             }
 
             EnsurePickupCollider(pickupObject);
+            PrepareP51WheelPartPickup(pickupObject, pickup, item);
             AlignBottomToGround(pickupObject, groundPosition.y);
+        }
+
+        private static void PrepareP51WheelPartPickup(
+            GameObject pickupObject,
+            InventoryPickup pickup,
+            InventoryItemDefinition item)
+        {
+            if (pickupObject == null || pickup == null || item == null)
+            {
+                return;
+            }
+
+            EnginePartConditionKind kind = EnginePartConditionData.InferKind(item);
+            if (kind != EnginePartConditionKind.Tire
+                && kind != EnginePartConditionKind.Rim)
+            {
+                return;
+            }
+
+            BoxCollider rootCollider = pickupObject.GetComponent<BoxCollider>();
+            if (rootCollider == null)
+            {
+                rootCollider = pickupObject.AddComponent<BoxCollider>();
+            }
+            rootCollider.enabled = true;
+            rootCollider.isTrigger = true;
+            FitColliderToRenderers(pickupObject, rootCollider);
+
+            pickup.enabled = true;
+            pickup.SetRuntimePickupBlocked(false);
+
+            if (kind == EnginePartConditionKind.Rim)
+            {
+                // Dropped rims must immediately behave exactly like freshly removed bare rims:
+                // normal E pickup when no matching tire is equipped, or Hold E to mount a tire.
+                P51BareRimServiceTarget.EnsureForPickup(pickup);
+            }
+        }
+
+        private static void FitColliderToRenderers(
+            GameObject root,
+            BoxCollider collider)
+        {
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0)
+            {
+                collider.center = Vector3.zero;
+                collider.size = Vector3.one * 0.45f;
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null)
+                {
+                    bounds.Encapsulate(renderers[index].bounds);
+                }
+            }
+
+            Vector3 scale = root.transform.lossyScale;
+            float sx = Mathf.Max(0.001f, Mathf.Abs(scale.x));
+            float sy = Mathf.Max(0.001f, Mathf.Abs(scale.y));
+            float sz = Mathf.Max(0.001f, Mathf.Abs(scale.z));
+            collider.center = root.transform.InverseTransformPoint(bounds.center);
+            collider.size = new Vector3(
+                Mathf.Max(0.12f, bounds.size.x / sx),
+                Mathf.Max(0.12f, bounds.size.y / sy),
+                Mathf.Max(0.12f, bounds.size.z / sz));
         }
 
         private static void EnsurePickupCollider(GameObject pickupObject)
