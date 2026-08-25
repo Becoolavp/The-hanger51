@@ -23,13 +23,13 @@ namespace Hanger51.Aircraft
 
         private void OnCollisionEnter(Collision collision)
         {
-            if (clips == null || clips.Length == 0 || Time.time < nextAllowedImpactTime || impactsPlayed >= 5)
+            if (clips == null || clips.Length == 0 || Time.time < nextAllowedImpactTime || impactsPlayed >= 4)
             {
                 return;
             }
 
             float speed = collision.relativeVelocity.magnitude;
-            if (speed < 0.75f)
+            if (speed < 0.95f)
             {
                 return;
             }
@@ -41,11 +41,11 @@ namespace Hanger51.Aircraft
             }
 
             EnsureSource();
-            source.pitch = Random.Range(0.88f, 1.16f);
-            float volume = Mathf.Clamp(speed / 8.5f, 0.14f, 0.58f);
-            source.PlayOneShot(clip, volume);
+            source.pitch = Random.Range(0.90f, 1.12f);
+            float impactVolume = Mathf.Clamp(speed / 13f, 0.055f, 0.28f);
+            source.PlayOneShot(clip, impactVolume);
             impactsPlayed++;
-            nextAllowedImpactTime = Time.time + 0.055f;
+            nextAllowedImpactTime = Time.time + Random.Range(0.055f, 0.095f);
         }
 
         private void EnsureSource()
@@ -55,12 +55,16 @@ namespace Hanger51.Aircraft
             if (source == null) source = gameObject.AddComponent<AudioSource>();
             source.playOnAwake = false;
             source.loop = false;
+            source.volume = 0.82f;
             source.spatialBlend = 1f;
-            source.dopplerLevel = 0.08f;
-            source.spread = 18f;
+            source.dopplerLevel = 0.05f;
+            source.spread = 8f;
             source.rolloffMode = AudioRolloffMode.Logarithmic;
-            source.minDistance = 0.65f;
-            source.maxDistance = 24f;
+
+            // Brass impacts are intentionally very local. A casing hitting the ramp should
+            // be audible beside the airplane, but disappear rapidly several metres away.
+            source.minDistance = 0.30f;
+            source.maxDistance = 7.0f;
         }
     }
 }
