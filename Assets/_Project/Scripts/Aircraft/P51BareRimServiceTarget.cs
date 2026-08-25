@@ -1,10 +1,9 @@
 using Hanger51.Inventory;
 using UnityEngine;
-using UnityEngine.InputSystem;
 
 namespace Hanger51.Aircraft
 {
-    [DefaultExecutionOrder(295)]
+    [DefaultExecutionOrder(290)]
     [DisallowMultipleComponent]
     [RequireComponent(typeof(InventoryPickup))]
     [RequireComponent(typeof(Collider))]
@@ -13,12 +12,12 @@ namespace Hanger51.Aircraft
         [SerializeField] private InventoryPickup pickup;
         [SerializeField, Range(-1, 2)] private int originWheelIndex = -1;
         [SerializeField, Min(0.2f)] private float mountHoldSeconds = 1.15f;
-        [SerializeField, Min(1f)] private float interactionDistance = 6f;
 
-        private PlayerInventory inventory;
-        private InventoryUI inventoryUI;
-        private Camera playerCamera;
         private float mountProgress;
+
+        public InventoryPickup Pickup => pickup;
+        public int OriginWheelIndex => originWheelIndex;
+        public bool IsReady => pickup != null && pickup.Item != null;
 
         private bool IsTailRim => pickup != null
             && pickup.Item != null
@@ -55,115 +54,128 @@ namespace Hanger51.Aircraft
                 ? configuredPickup
                 : GetComponent<InventoryPickup>();
 
-            int savedStation = GetRimCondition() != null
-                ? GetRimCondition().WheelStationIndex
-                : -1;
+            EnginePartConditionData condition = GetRimCondition();
+            int savedStation = condition != null ? condition.WheelStationIndex : -1;
             originWheelIndex = configuredOriginWheelIndex >= 0
                 ? Mathf.Clamp(configuredOriginWheelIndex, 0, 2)
                 : savedStation;
 
-            EnginePartConditionData condition = GetRimCondition();
             if (condition != null && originWheelIndex >= 0)
             {
                 condition.SetWheelStationIndex(originWheelIndex);
             }
 
-            ResolvePlayerReferences();
+            mountProgress = 0f;
             if (pickup != null)
             {
+                // The dedicated P-51 maintenance interactor owns bare-rim pickup/mounting.
+                // Blocking the generic interactor prevents both systems from handling E in the same frame.
                 pickup.SetRuntimePickupBlocked(true);
             }
         }
 
         private void Awake()
         {
-            if (pickup == null)
-            {
-                pickup = GetComponent<InventoryPickup>();
-            }
-            Configure(pickup, -1);
+            Configure(GetComponent<InventoryPickup>(), -1);
         }
 
         private void OnEnable()
         {
-            ResolvePlayerReferences();
+            if (pickup == null)
+            {
+                pickup = GetComponent<InventoryPickup>();
+            }
             if (pickup != null)
             {
                 pickup.SetRuntimePickupBlocked(true);
             }
         }
 
-        private void Update()
+        public string GetInteractionText(PlayerInventory inventory)
         {
-            ResolvePlayerReferences();
-            if (pickup == null || inventory == null || inventoryUI == null || playerCamera == null)
+            if (!IsReady)
             {
-                return;
+                return string.Empty;
+            }
+
+            if (HasCorrectTireEquipped(inventory))
+            {
+                int percent = Mathf.RoundToInt(mountProgress * 100f);
+                string progress = mountProgress > 0f ? $" ({percent}%)" : string.Empty;
+                return $"Hold E: mount equipped {inventory.EquippedItem.DisplayName} on this {pickup.Item.DisplayName}{progress} | X inspect";
+            }
+
+            return $"E: pick up {pickup.Item.DisplayName} | Equip {ExpectedTireName()} to mount a tire | X inspect";
+        }
+
+        public bool ProcessInteraction(
+            PlayerInventory inventory,
+            bool installHeld,
+            bool pickupPressed,
+            float deltaTime,
+            out string resultMessage)
+        {
+            resultMessage = string.Empty;
+            if (!IsReady || inventory == null)
+            {
+                CancelHold();
+                return false;
             }
 
             pickup.SetRuntimePickupBlocked(true);
-            if (!IsPlayerAimingAtThisRim())
+            bool matchingTire = HasCorrectTireEquipped(inventory);
+
+            if (matchingTire)
             {
+                if (!installHeld)
+                {
+                    CancelHold();
+                    return false;
+                }
+
+                mountProgress = Mathf.Clamp01(
+                    mountProgress + Mathf.Max(0f, deltaTime)
+                    / Mathf.Max(0.2f, mountHoldSeconds));
+                if (mountProgress < 1f)
+                {
+                    return false;
+                }
+
                 mountProgress = 0f;
-                return;
+                return TryMountEquippedTire(inventory, out resultMessage);
             }
 
-            Keyboard keyboard = Keyboard.current;
-            bool correctTireEquipped = HasCorrectTireEquipped();
-
-            if (keyboard != null && keyboard.xKey.wasPressedThisFrame)
+            CancelHold();
+            if (!pickupPressed)
             {
-                inventoryUI.ShowStatusMessage(Inspect(), 4f);
+                return false;
             }
 
-            if (correctTireEquipped)
-            {
-                bool holdInstall = keyboard != null && keyboard.eKey.isPressed;
-                if (holdInstall)
-                {
-                    mountProgress = Mathf.Clamp01(
-                        mountProgress
-                        + Time.deltaTime / Mathf.Max(0.2f, mountHoldSeconds));
-                    if (mountProgress >= 1f)
-                    {
-                        if (TryMountEquippedTire(out string mountMessage))
-                        {
-                            inventoryUI.ShowStatusMessage(mountMessage, 4f);
-                            return;
-                        }
-
-                        inventoryUI.ShowStatusMessage(mountMessage, 3f);
-                        mountProgress = 0f;
-                    }
-                }
-                else
-                {
-                    mountProgress = 0f;
-                }
-
-                int percent = Mathf.RoundToInt(mountProgress * 100f);
-                string progress = mountProgress > 0f ? $" ({percent}%)" : string.Empty;
-                inventoryUI.SetInteractionPrompt(
-                    $"Hold E: mount equipped {inventory.EquippedItem.DisplayName} on this {pickup.Item.DisplayName}{progress} | X inspect");
-                return;
-            }
-
-            mountProgress = 0f;
-            if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
-            {
-                if (TryPickupRim(out string pickupMessage))
-                {
-                    inventoryUI.ShowStatusMessage(pickupMessage, 2.5f);
-                    return;
-                }
-                inventoryUI.ShowStatusMessage(pickupMessage, 2.5f);
-            }
-
-            inventoryUI.SetInteractionPrompt(
-                $"E: pick up {pickup.Item.DisplayName} | Equip {ExpectedTireName()} to mount a tire | X inspect");
+            return TryPickupRim(inventory, out resultMessage);
         }
 
-        private bool TryPickupRim(out string resultMessage)
+        public string Inspect()
+        {
+            if (!IsReady)
+            {
+                return "Bare rim service target is not ready.";
+            }
+
+            EnginePartConditionData condition = GetRimCondition();
+            string conditionText = condition != null
+                ? condition.GetConditionSummary()
+                : "condition unavailable";
+            return $"Bare {pickup.Item.DisplayName} | {conditionText} | The rim is one complete part. Pick it up with E, or equip {ExpectedTireName()} and hold E to mount that tire directly on this rim.";
+        }
+
+        public void CancelHold()
+        {
+            mountProgress = 0f;
+        }
+
+        private bool TryPickupRim(
+            PlayerInventory inventory,
+            out string resultMessage)
         {
             resultMessage = string.Empty;
             if (pickup == null || inventory == null)
@@ -185,10 +197,12 @@ namespace Hanger51.Aircraft
             return true;
         }
 
-        private bool TryMountEquippedTire(out string resultMessage)
+        private bool TryMountEquippedTire(
+            PlayerInventory inventory,
+            out string resultMessage)
         {
             resultMessage = string.Empty;
-            if (!HasCorrectTireEquipped())
+            if (!HasCorrectTireEquipped(inventory))
             {
                 resultMessage = $"Equip {ExpectedTireName()} first.";
                 return false;
@@ -237,7 +251,7 @@ namespace Hanger51.Aircraft
             }
 
             pickup.SetRuntimePickupBlocked(false);
-            resultMessage = $"Mounted {tireItem.DisplayName} onto the {rimItem.DisplayName}. The complete wheel can now be carried back to the aircraft.";
+            resultMessage = $"Mounted {tireItem.DisplayName} onto the {rimItem.DisplayName}. Pressure is {tireCondition.TirePressurePsi:F1} PSI; pressure does not block physical installation. Press E on the complete wheel to carry it back to the aircraft.";
             Destroy(gameObject);
             return true;
         }
@@ -254,9 +268,12 @@ namespace Hanger51.Aircraft
             return pickup.ConditionInstances[0];
         }
 
-        private bool HasCorrectTireEquipped()
+        private bool HasCorrectTireEquipped(PlayerInventory inventory)
         {
-            if (inventory == null || inventory.EquippedItem == null || pickup == null || pickup.Item == null)
+            if (inventory == null
+                || inventory.EquippedItem == null
+                || pickup == null
+                || pickup.Item == null)
             {
                 return false;
             }
@@ -282,58 +299,13 @@ namespace Hanger51.Aircraft
             return "main";
         }
 
-        private string Inspect()
-        {
-            EnginePartConditionData condition = GetRimCondition();
-            string conditionText = condition != null
-                ? condition.GetConditionSummary()
-                : "condition unavailable";
-            return $"Bare {pickup.Item.DisplayName} | {conditionText} | Mount {ExpectedTireName()} directly on this rim, or press E with no matching tire equipped to pick the rim up.";
-        }
-
-        private bool IsPlayerAimingAtThisRim()
-        {
-            Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-            if (!Physics.Raycast(
-                    ray,
-                    out RaycastHit hit,
-                    interactionDistance,
-                    ~0,
-                    QueryTriggerInteraction.Collide))
-            {
-                return false;
-            }
-
-            P51BareRimServiceTarget target =
-                hit.collider != null
-                    ? hit.collider.GetComponentInParent<P51BareRimServiceTarget>()
-                    : null;
-            return target == this;
-        }
-
-        private void ResolvePlayerReferences()
-        {
-            if (inventory == null)
-            {
-                inventory = FindFirstObjectByType<PlayerInventory>();
-            }
-            if (inventoryUI == null)
-            {
-                inventoryUI = FindFirstObjectByType<InventoryUI>();
-            }
-            if (playerCamera == null && inventory != null)
-            {
-                playerCamera = inventory.GetComponentInChildren<Camera>();
-            }
-        }
-
         private void OnDisable()
         {
             if (pickup != null)
             {
                 pickup.SetRuntimePickupBlocked(false);
             }
-            mountProgress = 0f;
+            CancelHold();
         }
 
         private void OnDestroy()
@@ -348,7 +320,6 @@ namespace Hanger51.Aircraft
         {
             originWheelIndex = Mathf.Clamp(originWheelIndex, -1, 2);
             mountHoldSeconds = Mathf.Max(0.2f, mountHoldSeconds);
-            interactionDistance = Mathf.Max(1f, interactionDistance);
         }
     }
 }
