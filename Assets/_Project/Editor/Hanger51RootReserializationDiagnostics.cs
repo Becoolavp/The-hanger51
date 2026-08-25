@@ -25,12 +25,14 @@ namespace Hanger51.EditorTools
         private const string TempSceneFolder = "Assets/_Project/Scenes";
         private const string TempSourcePath = TempSceneFolder + "/__Hanger51RootReserializeSource.unity";
         private const string DiagnosticsRoot = "Builds/Diagnostics";
+        private const string P51RootName = "P-51D Mustang Test Aircraft";
 
         private sealed class ReferenceRecord
         {
             public Component owner;
             public string propertyPath;
             public Object target;
+            public string description;
         }
 
         [MenuItem("Hanger 51/Build/81 - Report Scene Root Order")]
@@ -76,13 +78,17 @@ namespace Hanger51.EditorTools
         [MenuItem("Hanger 51/Build/89 - Reserialize ALL Roots Control")]
         public static void BuildAllControl() => BuildVariant("All", 0, 1, 1, false, true);
 
+        [MenuItem("Hanger 51/Build/90 - Reserialize ONLY P-51 Aircraft Root")]
+        public static void BuildOnlyP51Root() => BuildVariant("OnlyP51", 0, 0, 1, false, false, P51RootName);
+
         private static void BuildVariant(
             string label,
             int numeratorStart,
             int numeratorEnd,
             int denominator,
             bool forceNone = false,
-            bool forceAll = false)
+            bool forceAll = false,
+            string exactRootName = null)
         {
             if (EditorApplication.isPlaying)
             {
@@ -140,30 +146,44 @@ namespace Hanger51.EditorTools
                 }
 
                 List<ReferenceRecord> crossRootReferences = CollectCrossRootReferences(tempSourceScene);
+                HashSet<GameObject> rootsToClone = new HashSet<GameObject>();
 
-                int startIndex;
-                int endIndex;
-                if (forceNone)
+                if (!string.IsNullOrEmpty(exactRootName))
                 {
-                    startIndex = 0;
-                    endIndex = 0;
-                }
-                else if (forceAll)
-                {
-                    startIndex = 0;
-                    endIndex = roots.Count;
+                    for (int index = 0; index < roots.Count; index++)
+                    {
+                        if (roots[index].name == exactRootName) rootsToClone.Add(roots[index]);
+                    }
+                    if (rootsToClone.Count != 1)
+                    {
+                        Debug.LogError($"Root reserialization '{label}' expected exactly one root named '{exactRootName}', found {rootsToClone.Count}.");
+                        return;
+                    }
                 }
                 else
                 {
-                    startIndex = Mathf.FloorToInt(roots.Count * (numeratorStart / (float)denominator));
-                    endIndex = numeratorEnd == denominator
-                        ? roots.Count
-                        : Mathf.FloorToInt(roots.Count * (numeratorEnd / (float)denominator));
-                    endIndex = Mathf.Clamp(endIndex, startIndex + 1, roots.Count);
+                    int startIndex;
+                    int endIndex;
+                    if (forceNone)
+                    {
+                        startIndex = 0;
+                        endIndex = 0;
+                    }
+                    else if (forceAll)
+                    {
+                        startIndex = 0;
+                        endIndex = roots.Count;
+                    }
+                    else
+                    {
+                        startIndex = Mathf.FloorToInt(roots.Count * (numeratorStart / (float)denominator));
+                        endIndex = numeratorEnd == denominator
+                            ? roots.Count
+                            : Mathf.FloorToInt(roots.Count * (numeratorEnd / (float)denominator));
+                        endIndex = Mathf.Clamp(endIndex, startIndex + 1, roots.Count);
+                    }
+                    for (int index = startIndex; index < endIndex; index++) rootsToClone.Add(roots[index]);
                 }
-
-                HashSet<GameObject> rootsToClone = new HashSet<GameObject>();
-                for (int index = startIndex; index < endIndex; index++) rootsToClone.Add(roots[index]);
 
                 destinationScene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Additive);
                 if (!destinationScene.IsValid() || !destinationScene.isLoaded)
@@ -176,7 +196,6 @@ namespace Hanger51.EditorTools
                 List<string> clonedNames = new List<string>();
                 List<string> preservedNames = new List<string>();
 
-                // First create all selected clones while the complete source graph still exists.
                 for (int index = 0; index < roots.Count; index++)
                 {
                     GameObject sourceRoot = roots[index];
@@ -185,23 +204,22 @@ namespace Hanger51.EditorTools
                     GameObject cloneRoot = Object.Instantiate(sourceRoot);
                     cloneRoot.name = sourceRoot.name;
                     SceneManager.MoveGameObjectToScene(cloneRoot, destinationScene);
-                    MapHierarchy(sourceRoot.transform, cloneRoot.transform, map);
+                    MapHierarchyByStructure(sourceRoot.transform, cloneRoot.transform, map);
                     clonedNames.Add(sourceRoot.name);
                 }
 
-                // Then move all non-selected roots intact and map them to themselves.
                 for (int index = 0; index < roots.Count; index++)
                 {
                     GameObject sourceRoot = roots[index];
                     if (rootsToClone.Contains(sourceRoot)) continue;
 
-                    MapHierarchy(sourceRoot.transform, sourceRoot.transform, map);
+                    MapHierarchyByStructure(sourceRoot.transform, sourceRoot.transform, map);
                     SceneManager.MoveGameObjectToScene(sourceRoot, destinationScene);
                     preservedNames.Add(sourceRoot.name);
                 }
 
-                // Restore every serialized cross-root reference using destination counterparts.
                 int restoredReferences = 0;
+                List<string> failedReferenceLines = new List<string>();
                 for (int index = 0; index < crossRootReferences.Count; index++)
                 {
                     ReferenceRecord record = crossRootReferences[index];
@@ -209,8 +227,7 @@ namespace Hanger51.EditorTools
                         || !(mappedOwnerObject is Component mappedOwner)
                         || !map.TryGetValue(record.target, out Object mappedTarget))
                     {
-                        Debug.LogWarning("Root reserialization could not map one cross-root reference: "
-                            + record.owner + "." + record.propertyPath);
+                        failedReferenceLines.Add("MAP FAIL: " + record.description);
                         continue;
                     }
 
@@ -218,8 +235,7 @@ namespace Hanger51.EditorTools
                     SerializedProperty property = serializedOwner.FindProperty(record.propertyPath);
                     if (property == null || property.propertyType != SerializedPropertyType.ObjectReference)
                     {
-                        Debug.LogWarning("Root reserialization could not restore property '"
-                            + record.propertyPath + "' on " + mappedOwner.GetType().FullName + ".");
+                        failedReferenceLines.Add("PROPERTY FAIL: " + record.description);
                         continue;
                     }
 
@@ -236,6 +252,10 @@ namespace Hanger51.EditorTools
 
                 int missingScripts = CountMissingScripts(destinationScene);
                 int monoCount = CountMonoBehaviours(destinationScene);
+                bool rootCountOk = destinationScene.rootCount == roots.Count;
+                bool scriptsOk = missingScripts == 0;
+                bool refsOk = restoredReferences == crossRootReferences.Count;
+
                 Debug.Log(
                     $"Root reserialization '{label}' prepared {destinationScene.rootCount}/{roots.Count} roots. "
                     + $"Freshly cloned={clonedNames.Count}, preserved intact={preservedNames.Count}, "
@@ -244,10 +264,12 @@ namespace Hanger51.EditorTools
                     + "CLONED ROOTS:\n  " + string.Join("\n  ", clonedNames)
                     + "\nPRESERVED ROOTS:\n  " + string.Join("\n  ", preservedNames));
 
-                if (destinationScene.rootCount != roots.Count || missingScripts != 0
-                    || restoredReferences != crossRootReferences.Count)
+                if (!rootCountOk || !scriptsOk || !refsOk)
                 {
-                    Debug.LogError("Root reserialization diagnostic audit failed. Do not trust this build result.");
+                    Debug.LogError(
+                        $"Root reserialization diagnostic audit failed. RootCountOK={rootCountOk}, "
+                        + $"MissingScriptsOK={scriptsOk}, CrossRootRefsOK={refsOk}.\n"
+                        + string.Join("\n", failedReferenceLines));
                     return;
                 }
 
@@ -333,7 +355,8 @@ namespace Hanger51.EditorTools
                         {
                             owner = owner,
                             propertyPath = iterator.propertyPath,
-                            target = target
+                            target = target,
+                            description = $"{ownerRoot.name}/{GetRelativePath(ownerRoot.transform, owner.transform)} [{owner.GetType().Name}].{iterator.propertyPath} -> {targetRoot.name}"
                         });
                     }
                     while (iterator.Next(true));
@@ -375,7 +398,7 @@ namespace Hanger51.EditorTools
             return roots;
         }
 
-        private static void MapHierarchy(Transform source, Transform destination, Dictionary<Object, Object> map)
+        private static void MapHierarchyByStructure(Transform source, Transform destination, Dictionary<Object, Object> map)
         {
             if (source == null || destination == null) return;
             map[source.gameObject] = destination.gameObject;
@@ -383,26 +406,51 @@ namespace Hanger51.EditorTools
 
             Component[] sourceComponents = source.GetComponents<Component>();
             Component[] destinationComponents = destination.GetComponents<Component>();
-            bool[] used = new bool[destinationComponents.Length];
+            Dictionary<Type, int> sourceTypeOrdinal = new Dictionary<Type, int>();
+
             for (int sourceIndex = 0; sourceIndex < sourceComponents.Length; sourceIndex++)
             {
                 Component sourceComponent = sourceComponents[sourceIndex];
                 if (sourceComponent == null || sourceComponent is Transform) continue;
+
                 Type type = sourceComponent.GetType();
+                sourceTypeOrdinal.TryGetValue(type, out int ordinal);
+                sourceTypeOrdinal[type] = ordinal + 1;
+
+                int destinationOrdinal = 0;
+                Component matched = null;
                 for (int destinationIndex = 0; destinationIndex < destinationComponents.Length; destinationIndex++)
                 {
-                    if (used[destinationIndex]) continue;
                     Component destinationComponent = destinationComponents[destinationIndex];
-                    if (destinationComponent == null || destinationComponent.GetType() != type) continue;
-                    used[destinationIndex] = true;
-                    map[sourceComponent] = destinationComponent;
-                    break;
+                    if (destinationComponent == null || destinationComponent is Transform || destinationComponent.GetType() != type) continue;
+                    if (destinationOrdinal == ordinal)
+                    {
+                        matched = destinationComponent;
+                        break;
+                    }
+                    destinationOrdinal++;
                 }
+
+                if (matched != null) map[sourceComponent] = matched;
             }
 
             int childCount = Mathf.Min(source.childCount, destination.childCount);
             for (int index = 0; index < childCount; index++)
-                MapHierarchy(source.GetChild(index), destination.GetChild(index), map);
+                MapHierarchyByStructure(source.GetChild(index), destination.GetChild(index), map);
+        }
+
+        private static string GetRelativePath(Transform root, Transform target)
+        {
+            if (root == target) return "<root>";
+            List<string> parts = new List<string>();
+            Transform cursor = target;
+            while (cursor != null && cursor != root)
+            {
+                parts.Add(cursor.name);
+                cursor = cursor.parent;
+            }
+            parts.Reverse();
+            return string.Join("/", parts);
         }
 
         private static int CountMissingScripts(Scene scene)
