@@ -9,6 +9,7 @@ namespace Hanger51.Aircraft
     {
         private const string GearSystemRootName = "P-51 Serviceable Retractable Landing Gear";
         private static readonly string[] Labels = { "Left Main", "Right Main", "Tailwheel" };
+        private static readonly float[] MountHeights = { 1.05f, 1.05f, 0.58f };
 
         private P51LandingGearMaintenanceController maintenance;
         private float nextRepairTime;
@@ -32,8 +33,6 @@ namespace Hanger51.Aircraft
 
         private void LateUpdate()
         {
-            // The hierarchy normally needs repairing only once. Keep a slow safety
-            // check so dynamically rebuilt/spawned landing gear is corrected too.
             if (Time.unscaledTime < nextRepairTime)
             {
                 return;
@@ -64,11 +63,14 @@ namespace Hanger51.Aircraft
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
 
-                if (AttachPreservingWorldPose(mountTarget, movingGear))
+                if (AttachAtLocalPose(
+                        mountTarget,
+                        movingGear,
+                        new Vector3(0f, MountHeights[wheelIndex], 0f)))
                 {
                     repairedOrCorrect++;
                 }
-                if (AttachPreservingWorldPose(tireTarget, movingGear))
+                if (AttachAtLocalPose(tireTarget, movingGear, Vector3.zero))
                 {
                     repairedOrCorrect++;
                 }
@@ -97,13 +99,25 @@ namespace Hanger51.Aircraft
 
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
-                if (mountTarget != null && mountTarget.parent == movingGear) count++;
-                if (tireTarget != null && tireTarget.parent == movingGear) count++;
+                if (IsAtLocalPose(
+                        mountTarget,
+                        movingGear,
+                        new Vector3(0f, MountHeights[wheelIndex], 0f)))
+                {
+                    count++;
+                }
+                if (IsAtLocalPose(tireTarget, movingGear, Vector3.zero))
+                {
+                    count++;
+                }
             }
             return count;
         }
 
-        private static bool AttachPreservingWorldPose(Transform target, Transform movingGear)
+        private static bool AttachAtLocalPose(
+            Transform target,
+            Transform movingGear,
+            Vector3 localPosition)
         {
             if (target == null || movingGear == null)
             {
@@ -112,9 +126,23 @@ namespace Hanger51.Aircraft
 
             if (target.parent != movingGear)
             {
-                target.SetParent(movingGear, true);
+                target.SetParent(movingGear, false);
             }
-            return target.parent == movingGear;
+            target.localPosition = localPosition;
+            target.localRotation = Quaternion.identity;
+            target.localScale = Vector3.one;
+            return IsAtLocalPose(target, movingGear, localPosition);
+        }
+
+        private static bool IsAtLocalPose(
+            Transform target,
+            Transform movingGear,
+            Vector3 localPosition)
+        {
+            return target != null
+                && movingGear != null
+                && target.parent == movingGear
+                && Vector3.SqrMagnitude(target.localPosition - localPosition) < 0.000001f;
         }
 
         private static Transform FindDescendant(Transform root, string objectName)
