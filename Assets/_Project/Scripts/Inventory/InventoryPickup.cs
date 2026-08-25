@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hanger51.Aircraft;
 using UnityEngine;
 
 namespace Hanger51.Inventory
@@ -147,6 +148,7 @@ namespace Hanger51.Inventory
             {
                 EnsureConditionCount();
                 ApplyConditionVisual();
+                PrepareP51WheelPartForWorld();
             }
 
             return true;
@@ -158,6 +160,7 @@ namespace Hanger51.Inventory
             EnsureConditionCount();
             name = item != null ? $"{item.DisplayName} Pickup" : "Inventory Pickup";
             ApplyConditionVisual();
+            PrepareP51WheelPartForWorld();
         }
 
         private void EnsureConditionCount()
@@ -247,6 +250,118 @@ namespace Hanger51.Inventory
                     conditionInstances.Count > 0
                         ? conditionInstances[0]
                         : null);
+            }
+        }
+
+        private void PrepareP51WheelPartForWorld()
+        {
+            if (!IsP51WheelPart(item)
+                || GetComponentInParent<P51LooseWheelAssembly>() != null)
+            {
+                return;
+            }
+
+            // P-51 tire/rim prefabs are generated service visuals. They must be interactable no
+            // matter whether they came from the shop, tire removal, or an inventory Drop action.
+            // Give every loose wheel part exactly one root interaction collider at configuration
+            // time instead of relying on a delayed global scanner that can rewrite it later.
+            Collider[] colliders = GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < colliders.Length; index++)
+            {
+                if (colliders[index] != null)
+                {
+                    colliders[index].enabled = false;
+                }
+            }
+
+            BoxCollider rootCollider = GetComponent<BoxCollider>();
+            if (rootCollider == null)
+            {
+                rootCollider = gameObject.AddComponent<BoxCollider>();
+            }
+
+            rootCollider.enabled = true;
+            rootCollider.isTrigger = true;
+            FitRootColliderToVisiblePart(rootCollider);
+
+            // Keep the pickup itself live. Bare-rim service uses InventoryInteractor priority to
+            // decide between E pickup and Hold E mounting; the rim is never permanently disabled.
+            runtimePickupBlocked = false;
+
+            if (EnginePartConditionData.InferKind(item) == EnginePartConditionKind.Rim)
+            {
+                P51BareRimServiceTarget.EnsureForPickup(this);
+            }
+        }
+
+        private void FitRootColliderToVisiblePart(BoxCollider collider)
+        {
+            Renderer[] renderers = GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0)
+            {
+                collider.center = Vector3.zero;
+                collider.size = Vector3.one * 0.50f;
+                return;
+            }
+
+            bool hasBounds = false;
+            Bounds worldBounds = default;
+            for (int index = 0; index < renderers.Length; index++)
+            {
+                Renderer renderer = renderers[index];
+                if (renderer == null || !renderer.enabled)
+                {
+                    continue;
+                }
+
+                if (!hasBounds)
+                {
+                    worldBounds = renderer.bounds;
+                    hasBounds = true;
+                }
+                else
+                {
+                    worldBounds.Encapsulate(renderer.bounds);
+                }
+            }
+
+            if (!hasBounds)
+            {
+                collider.center = Vector3.zero;
+                collider.size = Vector3.one * 0.50f;
+                return;
+            }
+
+            Vector3 scale = transform.lossyScale;
+            float sx = Mathf.Max(0.001f, Mathf.Abs(scale.x));
+            float sy = Mathf.Max(0.001f, Mathf.Abs(scale.y));
+            float sz = Mathf.Max(0.001f, Mathf.Abs(scale.z));
+            collider.center = transform.InverseTransformPoint(worldBounds.center);
+            collider.size = new Vector3(
+                Mathf.Max(0.16f, worldBounds.size.x / sx + 0.08f),
+                Mathf.Max(0.16f, worldBounds.size.y / sy + 0.08f),
+                Mathf.Max(0.16f, worldBounds.size.z / sz + 0.08f));
+        }
+
+        private static bool IsP51WheelPart(InventoryItemDefinition candidate)
+        {
+            if (candidate == null)
+            {
+                return false;
+            }
+
+            string id = candidate.ItemId;
+            return id == P51LandingGearInventoryBridge.MainTireItemId
+                || id == P51LandingGearInventoryBridge.TailTireItemId
+                || id == P51LandingGearInventoryBridge.MainRimItemId
+                || id == P51LandingGearInventoryBridge.TailRimItemId;
+        }
+
+        private void OnEnable()
+        {
+            if (item != null)
+            {
+                PrepareP51WheelPartForWorld();
             }
         }
 
