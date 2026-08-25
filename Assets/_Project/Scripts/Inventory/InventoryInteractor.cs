@@ -57,7 +57,15 @@ namespace Hanger51.Inventory
 
             Keyboard keyboard = Keyboard.current;
 
-            P51BareRimServiceTarget aimedRim = FindBareRimTarget();
+            // P-51 wheel parts deliberately bypass the serialized generic interaction layer mask.
+            // The tire/rim prefabs are generated service parts and can otherwise land on a layer
+            // excluded by an older saved scene mask, leaving a visible dropped part impossible to
+            // pick up. Use the same InventoryInteractor/input path as every other pickup, but scan
+            // all physics layers for these four known service items.
+            FindP51WheelPartTarget(
+                out P51BareRimServiceTarget aimedRim,
+                out InventoryPickup aimedWheelPart);
+
             if (aimedRim != null)
             {
                 if (currentBareRim != aimedRim)
@@ -105,6 +113,35 @@ namespace Hanger51.Inventory
             {
                 CancelCurrentRimHold();
                 currentBareRim = null;
+            }
+
+            if (aimedWheelPart != null)
+            {
+                CancelCurrentAssemblyHold();
+                currentPickup = null;
+                currentAssemblyStation = null;
+                currentAssemblyTarget = null;
+                inventoryUI.SetAssemblyStation(null);
+
+                if (keyboard != null
+                    && keyboard.eKey.wasPressedThisFrame
+                    && !aimedWheelPart.IsPickupBlocked)
+                {
+                    string itemName = aimedWheelPart.Item != null
+                        ? aimedWheelPart.Item.DisplayName
+                        : "wheel part";
+                    if (aimedWheelPart.TryPickup(inventory))
+                    {
+                        inventoryUI.ShowStatusMessage($"Picked up {itemName}");
+                        inventoryUI.SetInteractionPrompt(string.Empty);
+                        return;
+                    }
+
+                    inventoryUI.ShowStatusMessage("Inventory is full");
+                }
+
+                inventoryUI.SetInteractionPrompt(aimedWheelPart.InteractionText);
+                return;
             }
 
             FindInteractionTarget();
@@ -196,22 +233,26 @@ namespace Hanger51.Inventory
             }
         }
 
-        private P51BareRimServiceTarget FindBareRimTarget()
+        private void FindP51WheelPartTarget(
+            out P51BareRimServiceTarget bestRim,
+            out InventoryPickup bestPickup)
         {
+            bestRim = null;
+            bestPickup = null;
             if (playerCamera == null)
             {
-                return null;
+                return;
             }
 
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
             RaycastHit[] hits = Physics.RaycastAll(
                 ray,
                 Mathf.Max(interactionDistance, 6f),
-                interactionLayers,
+                ~0,
                 QueryTriggerInteraction.Collide);
             if (hits == null || hits.Length == 0)
             {
-                return null;
+                return;
             }
 
             Array.Sort(hits, (left, right) => left.distance.CompareTo(right.distance));
@@ -223,15 +264,54 @@ namespace Hanger51.Inventory
                     continue;
                 }
 
-                P51BareRimServiceTarget target =
-                    collider.GetComponentInParent<P51BareRimServiceTarget>();
-                if (target != null && target.IsReady)
+                // Complete wheel assemblies have their own carry/service interaction.
+                if (collider.GetComponentInParent<P51LooseWheelAssembly>() != null)
                 {
-                    return target;
+                    continue;
                 }
+
+                P51BareRimServiceTarget rim =
+                    collider.GetComponentInParent<P51BareRimServiceTarget>();
+                if (rim != null && rim.IsReady)
+                {
+                    bestRim = rim;
+                    return;
+                }
+
+                InventoryPickup pickup = collider.GetComponentInParent<InventoryPickup>();
+                if (pickup == null || pickup.Item == null || !IsP51WheelPart(pickup.Item))
+                {
+                    continue;
+                }
+
+                if (EnginePartConditionData.InferKind(pickup.Item) == EnginePartConditionKind.Rim)
+                {
+                    P51BareRimServiceTarget ensured =
+                        P51BareRimServiceTarget.EnsureForPickup(pickup);
+                    if (ensured != null && ensured.IsReady)
+                    {
+                        bestRim = ensured;
+                        return;
+                    }
+                }
+
+                bestPickup = pickup;
+                return;
+            }
+        }
+
+        private static bool IsP51WheelPart(InventoryItemDefinition item)
+        {
+            if (item == null)
+            {
+                return false;
             }
 
-            return null;
+            string id = item.ItemId;
+            return id == P51LandingGearInventoryBridge.MainTireItemId
+                || id == P51LandingGearInventoryBridge.TailTireItemId
+                || id == P51LandingGearInventoryBridge.MainRimItemId
+                || id == P51LandingGearInventoryBridge.TailRimItemId;
         }
 
         private void FindInteractionTarget()
