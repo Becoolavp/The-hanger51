@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Reflection;
 using Hanger51.Aircraft;
 using Hanger51.EngineAssembly;
@@ -12,7 +13,11 @@ namespace Hanger51.Commerce
     {
         private const BindingFlags PrivateInstance = BindingFlags.Instance | BindingFlags.NonPublic;
 
-        [Header("Full-Service Templates")]
+        [Header("Live Master Sources")]
+        [SerializeField] private GameObject masterAircraftSource;
+        [SerializeField] private EngineAssemblyTransportController masterEngineSource;
+
+        [Header("Fallback Full-Service Templates")]
         [SerializeField] private GameObject aircraftTemplate;
         [SerializeField] private EngineAssemblyTransportController engineStationTemplate;
         [SerializeField] private Transform spawnPoint;
@@ -27,9 +32,13 @@ namespace Hanger51.Commerce
         private float buttonPressedUntil;
 
         public string InteractionText => "E: spawn fully built serviceable P-51";
-        public bool IsConfigured => aircraftTemplate != null
-            && engineStationTemplate != null
-            && engineStationTemplate.TransportRoot != null
+        public GameObject MasterAircraftSource => masterAircraftSource;
+        public EngineAssemblyTransportController MasterEngineSource => ResolveEngineSource();
+        public bool UsesLiveMasterSources => masterAircraftSource != null
+            && ResolveEngineSource() != null;
+        public bool IsConfigured => ResolveAircraftSource() != null
+            && ResolveEngineSource() != null
+            && ResolveEngineSource().TransportRoot != null
             && spawnPoint != null;
 
         private void Awake()
@@ -77,12 +86,22 @@ namespace Hanger51.Commerce
             }
         }
 
+        public void ConfigureLiveMasterSources(
+            GameObject configuredMasterAircraft,
+            EngineAssemblyTransportController configuredMasterEngine)
+        {
+            masterAircraftSource = configuredMasterAircraft;
+            masterEngineSource = configuredMasterEngine;
+        }
+
         public bool TrySpawn(out string resultMessage)
         {
             resultMessage = string.Empty;
-            if (!IsConfigured)
+            GameObject aircraftSource = ResolveAircraftSource();
+            EngineAssemblyTransportController engineSource = ResolveEngineSource();
+            if (!IsConfigured || aircraftSource == null || engineSource == null)
             {
-                resultMessage = "The full-aircraft spawn console is missing its service templates or spawn point.";
+                resultMessage = "The full-aircraft spawn console is missing its master aircraft, Merlin source, or spawn point.";
                 return false;
             }
             if (spawnedAircraftCount >= maximumSpawnedAircraft)
@@ -93,18 +112,24 @@ namespace Hanger51.Commerce
 
             buttonPressedUntil = Time.unscaledTime + 0.18f;
 
-            GameObject aircraft = Instantiate(aircraftTemplate);
-            GameObject engineStationObject = Instantiate(engineStationTemplate.gameObject);
+            string installedEnginePath = GetRelativePath(
+                aircraftSource.transform,
+                engineSource.TransportRoot);
+            GameObject aircraft = Instantiate(aircraftSource);
+            GameObject engineStationObject = CloneEngineStation(engineSource, out string engineCloneError);
             if (aircraft == null || engineStationObject == null)
             {
                 if (aircraft != null) Destroy(aircraft);
                 if (engineStationObject != null) Destroy(engineStationObject);
-                resultMessage = "The serviceable P-51 templates could not be cloned.";
+                resultMessage = string.IsNullOrWhiteSpace(engineCloneError)
+                    ? "The serviceable P-51 master hierarchy could not be cloned."
+                    : engineCloneError;
                 return false;
             }
 
             aircraft.SetActive(false);
             engineStationObject.SetActive(false);
+            RemoveClonedInstalledEngineRoot(aircraft, installedEnginePath);
 
             int number = spawnedAircraftCount + 1;
             aircraft.name = $"Spawned Fully Serviceable P-51 #{number}";
@@ -115,9 +140,9 @@ namespace Hanger51.Commerce
                 spawnPoint.position + lateralOffset,
                 spawnPoint.rotation);
 
-            // The station/controller root must remain alive because all engine service
-            // targets reference it. Keep the controller far below the playable world;
-            // the actual portable engine root is reparented into the airplane below.
+            // The station/controller root remains alive because all engine service
+            // targets reference it. Keep the controller below the playable world;
+            // the cloned portable engine root is mounted into the new airplane.
             engineStationObject.transform.position = new Vector3(
                 spawnPoint.position.x,
                 -900f - number * 15f,
@@ -137,13 +162,23 @@ namespace Hanger51.Commerce
             if (engineTransport == null
                 || engineTransport.TransportRoot == null
                 || engineStation == null
-                || !engineStation.IsComplete
                 || service == null
                 || receiver == null)
             {
                 Destroy(aircraft);
                 Destroy(engineStationObject);
                 resultMessage = "The cloned P-51 or Merlin maintenance hierarchy is incomplete.";
+                return false;
+            }
+
+            // A live master may currently be partly serviced or damaged. Every spawned
+            // airplane is intentionally restored to a complete, healthy baseline while
+            // retaining every current component/script/hierarchy feature from the master.
+            if (!engineStation.SetAssemblyComplete())
+            {
+                Destroy(aircraft);
+                Destroy(engineStationObject);
+                resultMessage = "The cloned Merlin could not be restored to a complete serviceable assembly.";
                 return false;
             }
 
@@ -159,6 +194,8 @@ namespace Hanger51.Commerce
 
             ForceFullyLoadedArmament(aircraft);
             ForceCompleteLandingGear(aircraft);
+            ResetFlightState(aircraft);
+            EnsureLandingGearAttachments(aircraft);
 
             Rigidbody body = aircraft.GetComponent<Rigidbody>();
             if (body != null)
@@ -173,9 +210,159 @@ namespace Hanger51.Commerce
             engineStationObject.SetActive(true);
             aircraft.SetActive(true);
 
+            P51LandingGearServiceAttachmentFollower gearFollower =
+                aircraft.GetComponent<P51LandingGearServiceAttachmentFollower>();
+            gearFollower?.RepairHierarchy();
+
             spawnedAircraftCount++;
-            resultMessage = $"Spawned fully serviceable P-51 #{number}: complete healthy Merlin, cowling and mount hardware, landing gear/tires, six guns, six full ammo boxes, and all maintenance interactions are independent.";
+            resultMessage = $"Spawned fully serviceable P-51 #{number}: current master-aircraft features copied live, independent complete healthy Merlin, cowling/mount hardware, landing gear/tires, six guns and six full ammo boxes.";
             return true;
+        }
+
+        private GameObject ResolveAircraftSource()
+        {
+            return masterAircraftSource != null ? masterAircraftSource : aircraftTemplate;
+        }
+
+        private EngineAssemblyTransportController ResolveEngineSource()
+        {
+            if (masterAircraftSource != null)
+            {
+                AircraftEngineMountReceiver receiver =
+                    masterAircraftSource.GetComponent<AircraftEngineMountReceiver>();
+                if (receiver != null
+                    && receiver.InstalledTransport != null
+                    && receiver.InstalledTransport.TransportRoot != null)
+                {
+                    return receiver.InstalledTransport;
+                }
+            }
+
+            if (masterEngineSource != null && masterEngineSource.TransportRoot != null)
+            {
+                return masterEngineSource;
+            }
+
+            return engineStationTemplate;
+        }
+
+        private static GameObject CloneEngineStation(
+            EngineAssemblyTransportController source,
+            out string error)
+        {
+            error = string.Empty;
+            if (source == null || source.TransportRoot == null)
+            {
+                error = "No complete Merlin source is available for the spawn console.";
+                return null;
+            }
+
+            Transform transportRoot = source.TransportRoot;
+            if (transportRoot.IsChildOf(source.transform))
+            {
+                return Instantiate(source.gameObject);
+            }
+
+            Transform originalParent = transportRoot.parent;
+            int originalSibling = transportRoot.GetSiblingIndex();
+            Vector3 originalWorldPosition = transportRoot.position;
+            Quaternion originalWorldRotation = transportRoot.rotation;
+            Vector3 originalLocalScale = transportRoot.localScale;
+
+            try
+            {
+                // Temporarily put the installed Merlin back underneath its maintenance
+                // controller while cloning. This happens synchronously between frames,
+                // so Unity remaps every current engine-service reference into the clone.
+                transportRoot.SetParent(source.transform, true);
+                return Instantiate(source.gameObject);
+            }
+            catch (Exception exception)
+            {
+                error = $"The live Merlin hierarchy could not be cloned: {exception.Message}";
+                return null;
+            }
+            finally
+            {
+                transportRoot.SetParent(originalParent, true);
+                transportRoot.SetPositionAndRotation(originalWorldPosition, originalWorldRotation);
+                transportRoot.localScale = originalLocalScale;
+                if (originalParent != null)
+                {
+                    transportRoot.SetSiblingIndex(
+                        Mathf.Clamp(originalSibling, 0, Mathf.Max(0, originalParent.childCount - 1)));
+                }
+            }
+        }
+
+        private static void RemoveClonedInstalledEngineRoot(
+            GameObject aircraft,
+            string installedEnginePath)
+        {
+            if (aircraft == null || string.IsNullOrWhiteSpace(installedEnginePath))
+            {
+                return;
+            }
+
+            Transform clonedRoot = aircraft.transform.Find(installedEnginePath);
+            if (clonedRoot == null)
+            {
+                return;
+            }
+
+            clonedRoot.gameObject.SetActive(false);
+            clonedRoot.SetParent(null, true);
+            Destroy(clonedRoot.gameObject);
+        }
+
+        private static string GetRelativePath(Transform root, Transform child)
+        {
+            if (root == null || child == null || child == root || !child.IsChildOf(root))
+            {
+                return string.Empty;
+            }
+
+            List<string> segments = new List<string>();
+            Transform current = child;
+            while (current != null && current != root)
+            {
+                segments.Add(current.name);
+                current = current.parent;
+            }
+            if (current != root)
+            {
+                return string.Empty;
+            }
+
+            segments.Reverse();
+            return string.Join("/", segments);
+        }
+
+        private static void EnsureLandingGearAttachments(GameObject aircraft)
+        {
+            if (aircraft == null || aircraft.GetComponent<P51LandingGearMaintenanceController>() == null)
+            {
+                return;
+            }
+
+            P51LandingGearServiceAttachmentFollower follower =
+                aircraft.GetComponent<P51LandingGearServiceAttachmentFollower>();
+            if (follower == null)
+            {
+                follower = aircraft.AddComponent<P51LandingGearServiceAttachmentFollower>();
+            }
+            follower.RepairHierarchy();
+        }
+
+        private static void ResetFlightState(GameObject aircraft)
+        {
+            P51FlightController flight = aircraft != null
+                ? aircraft.GetComponent<P51FlightController>()
+                : null;
+            if (flight != null)
+            {
+                flight.SetPilotPresent(false);
+            }
         }
 
         private static void ForceFullyLoadedArmament(GameObject aircraft)
