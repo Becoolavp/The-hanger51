@@ -18,8 +18,6 @@ namespace Hanger51.EditorTools
         private const string BuildFolder = "Builds/Windows";
         private const string ExecutableName = "TheHanger51.exe";
         private const string PlayerLogName = "TheHanger51_Player.log";
-        private const int LaunchWidth = 1920;
-        private const int LaunchHeight = 1080;
 
         [MenuItem("Hanger 51/Build/1 - Prepare Current Scene for Build")]
         public static void PrepareCurrentSceneForBuildMenu()
@@ -279,7 +277,7 @@ namespace Hanger51.EditorTools
                 {
                     FileName = executablePath,
                     WorkingDirectory = workingDirectory,
-                    Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 0 -screen-width {LaunchWidth} -screen-height {LaunchHeight}",
+                    Arguments = $"-logFile \"{logPath}\" -force-d3d11 -screen-fullscreen 1",
                     UseShellExecute = false,
                     CreateNoWindow = false
                 };
@@ -291,7 +289,7 @@ namespace Hanger51.EditorTools
                     return;
                 }
 
-                Debug.Log($"Launched Windows development build at {LaunchWidth}x{LaunchHeight} windowed (PID {process.Id}). Diagnostics: '{logPath}'.");
+                Debug.Log($"Launched Windows development build fullscreen (PID {process.Id}). Diagnostics: '{logPath}'.");
             }
             catch (Exception exception)
             {
