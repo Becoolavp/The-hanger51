@@ -3,6 +3,9 @@ using UnityEngine;
 
 namespace Hanger51.Aircraft
 {
+    // Retain the original enum values so existing serialized filler/cap components remain
+    // readable while scenes are migrated to the new single-main-tank layout. Only Fuselage
+    // is a usable station after the conversion.
     public enum P51FuelTankStation
     {
         LeftWing = 0,
@@ -19,21 +22,11 @@ namespace Hanger51.Aircraft
         [Header("References")]
         [SerializeField] private P51FlightController flightController;
 
-        [Header("Tank Capacity - US Gallons")]
-        [SerializeField, Min(0f)] private float leftWingCapacityGallons = 92f;
-        [SerializeField, Min(0f)] private float rightWingCapacityGallons = 92f;
-        [SerializeField, Min(0f)] private float fuselageCapacityGallons = 85f;
-
-        [Header("Starting Fuel - US Gallons")]
-        [SerializeField, Min(0f)] private float startingLeftWingGallons = 35f;
-        [SerializeField, Min(0f)] private float startingRightWingGallons = 35f;
-        [SerializeField, Min(0f)] private float startingFuselageGallons = 15f;
+        [Header("Single Main/Rear Tank - US Gallons")]
+        [SerializeField, Min(0f)] private float mainTankCapacityGallons = 269f;
+        [SerializeField, Min(0f)] private float startingFuelGallons = 85f;
+        [SerializeField, Min(0f)] private float fuelGallons = 85f;
         [SerializeField] private bool resetToStartingFuelOnAwake = true;
-
-        [Header("Current Fuel - US Gallons")]
-        [SerializeField, Min(0f)] private float leftWingGallons = 35f;
-        [SerializeField, Min(0f)] private float rightWingGallons = 35f;
-        [SerializeField, Min(0f)] private float fuselageGallons = 15f;
 
         [Header("Merlin Fuel Burn")]
         [SerializeField, Min(1f)] private float idleGallonsPerHour = 28f;
@@ -44,12 +37,14 @@ namespace Hanger51.Aircraft
         private FieldInfo throttleField;
         private bool reflectionReady;
 
-        public float LeftWingGallons => leftWingGallons;
-        public float RightWingGallons => rightWingGallons;
-        public float FuselageGallons => fuselageGallons;
-        public float TotalFuelGallons => leftWingGallons + rightWingGallons + fuselageGallons;
-        public float TotalCapacityGallons => leftWingCapacityGallons + rightWingCapacityGallons + fuselageCapacityGallons;
-        public bool HasUsableFuel => TotalFuelGallons > unusableFuelGallons;
+        // Legacy properties intentionally report zero for the removed wing tanks so older
+        // callers cannot accidentally treat them as usable fuel storage.
+        public float LeftWingGallons => 0f;
+        public float RightWingGallons => 0f;
+        public float FuselageGallons => fuelGallons;
+        public float TotalFuelGallons => fuelGallons;
+        public float TotalCapacityGallons => mainTankCapacityGallons;
+        public bool HasUsableFuel => fuelGallons > unusableFuelGallons;
         public bool EngineRunning => flightController != null && flightController.EngineRunning;
         public P51FlightController FlightController => flightController;
 
@@ -80,12 +75,12 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // P51FlightController handles the T key earlier in the frame. If it tried to
-            // start with empty tanks, immediately cancel that start before the timed Merlin
-            // lifecycle controller can begin cranking.
+            // P51FlightController processes T earlier in the frame. Cancel an attempted
+            // start immediately when the main tank is dry before the timed Merlin startup
+            // controller can begin its cranking sequence.
             if (flightController.EngineRunning && !HasUsableFuel)
             {
-                ForceEngineOff("Start blocked: no usable fuel in the P-51 tanks.");
+                ForceEngineOff("Start blocked: no usable fuel in the P-51 main tank.");
                 return;
             }
 
@@ -99,57 +94,59 @@ namespace Hanger51.Aircraft
                 fullPowerGallonsPerHour,
                 Mathf.Clamp01(flightController.Throttle));
             float requestedBurn = gallonsPerHour / 3600f * Time.deltaTime;
-            ConsumeFuel(requestedBurn);
+            fuelGallons = Mathf.Max(0f, fuelGallons - requestedBurn);
 
             if (!HasUsableFuel)
             {
-                leftWingGallons = 0f;
-                rightWingGallons = 0f;
-                fuselageGallons = 0f;
-                ForceEngineOff("Merlin stopped: fuel exhausted.");
+                fuelGallons = 0f;
+                ForceEngineOff("Merlin stopped: main fuel tank exhausted.");
             }
         }
 
+        public void Configure(
+            P51FlightController configuredFlightController,
+            float configuredStartingFuelGallons)
+        {
+            flightController = configuredFlightController;
+            mainTankCapacityGallons = 269f;
+            startingFuelGallons = Mathf.Clamp(
+                configuredStartingFuelGallons,
+                0f,
+                mainTankCapacityGallons);
+            resetToStartingFuelOnAwake = true;
+            ResetToStartingFuel();
+            ResolveEngineFields();
+        }
+
+        // Compatibility overload for the original three-tank editor setup. Existing callers
+        // may still pass left/right/fuselage starting quantities; they are simply combined
+        // into the single rear/main tank during migration.
         public void Configure(
             P51FlightController configuredFlightController,
             float configuredStartingLeftGallons,
             float configuredStartingRightGallons,
             float configuredStartingFuselageGallons)
         {
-            flightController = configuredFlightController;
-            startingLeftWingGallons = Mathf.Clamp(configuredStartingLeftGallons, 0f, leftWingCapacityGallons);
-            startingRightWingGallons = Mathf.Clamp(configuredStartingRightGallons, 0f, rightWingCapacityGallons);
-            startingFuselageGallons = Mathf.Clamp(configuredStartingFuselageGallons, 0f, fuselageCapacityGallons);
-            resetToStartingFuelOnAwake = true;
-            ResetToStartingFuel();
-            ResolveEngineFields();
+            Configure(
+                configuredFlightController,
+                Mathf.Max(0f, configuredStartingLeftGallons)
+                    + Mathf.Max(0f, configuredStartingRightGallons)
+                    + Mathf.Max(0f, configuredStartingFuselageGallons));
         }
 
         public void ResetToStartingFuel()
         {
-            leftWingGallons = Mathf.Clamp(startingLeftWingGallons, 0f, leftWingCapacityGallons);
-            rightWingGallons = Mathf.Clamp(startingRightWingGallons, 0f, rightWingCapacityGallons);
-            fuselageGallons = Mathf.Clamp(startingFuselageGallons, 0f, fuselageCapacityGallons);
+            fuelGallons = Mathf.Clamp(startingFuelGallons, 0f, mainTankCapacityGallons);
         }
 
         public float GetTankGallons(P51FuelTankStation station)
         {
-            switch (station)
-            {
-                case P51FuelTankStation.LeftWing: return leftWingGallons;
-                case P51FuelTankStation.RightWing: return rightWingGallons;
-                default: return fuselageGallons;
-            }
+            return station == P51FuelTankStation.Fuselage ? fuelGallons : 0f;
         }
 
         public float GetTankCapacityGallons(P51FuelTankStation station)
         {
-            switch (station)
-            {
-                case P51FuelTankStation.LeftWing: return leftWingCapacityGallons;
-                case P51FuelTankStation.RightWing: return rightWingCapacityGallons;
-                default: return fuselageCapacityGallons;
-            }
+            return station == P51FuelTankStation.Fuselage ? mainTankCapacityGallons : 0f;
         }
 
         public float GetTankFreeSpaceGallons(P51FuelTankStation station)
@@ -159,69 +156,30 @@ namespace Hanger51.Aircraft
 
         public float AddFuel(P51FuelTankStation station, float requestedGallons)
         {
-            float amount = Mathf.Clamp(requestedGallons, 0f, GetTankFreeSpaceGallons(station));
+            if (station != P51FuelTankStation.Fuselage)
+            {
+                return 0f;
+            }
+
+            float amount = Mathf.Clamp(
+                requestedGallons,
+                0f,
+                Mathf.Max(0f, mainTankCapacityGallons - fuelGallons));
             if (amount <= 0f)
             {
                 return 0f;
             }
 
-            switch (station)
-            {
-                case P51FuelTankStation.LeftWing:
-                    leftWingGallons += amount;
-                    break;
-                case P51FuelTankStation.RightWing:
-                    rightWingGallons += amount;
-                    break;
-                default:
-                    fuselageGallons += amount;
-                    break;
-            }
-
+            fuelGallons += amount;
             ClampFuel();
             return amount;
         }
 
         public string GetTankDisplayName(P51FuelTankStation station)
         {
-            switch (station)
-            {
-                case P51FuelTankStation.LeftWing: return "left wing tank";
-                case P51FuelTankStation.RightWing: return "right wing tank";
-                default: return "fuselage tank";
-            }
-        }
-
-        private void ConsumeFuel(float requestedGallons)
-        {
-            float remaining = Mathf.Max(0f, requestedGallons);
-            if (remaining <= 0f)
-            {
-                return;
-            }
-
-            // Burn the fuselage tank first, then keep the wing tanks roughly balanced.
-            float fromFuselage = Mathf.Min(fuselageGallons, remaining);
-            fuselageGallons -= fromFuselage;
-            remaining -= fromFuselage;
-
-            while (remaining > 0.000001f && (leftWingGallons > 0f || rightWingGallons > 0f))
-            {
-                bool useLeft = leftWingGallons >= rightWingGallons;
-                float available = useLeft ? leftWingGallons : rightWingGallons;
-                float draw = Mathf.Min(available, remaining);
-                if (useLeft)
-                {
-                    leftWingGallons -= draw;
-                }
-                else
-                {
-                    rightWingGallons -= draw;
-                }
-                remaining -= draw;
-            }
-
-            ClampFuel();
+            return station == P51FuelTankStation.Fuselage
+                ? "main rear fuel tank"
+                : "removed wing tank";
         }
 
         private void ForceEngineOff(string message)
@@ -264,16 +222,14 @@ namespace Hanger51.Aircraft
 
         private void ClampFuel()
         {
-            leftWingGallons = Mathf.Clamp(leftWingGallons, 0f, leftWingCapacityGallons);
-            rightWingGallons = Mathf.Clamp(rightWingGallons, 0f, rightWingCapacityGallons);
-            fuselageGallons = Mathf.Clamp(fuselageGallons, 0f, fuselageCapacityGallons);
+            mainTankCapacityGallons = Mathf.Max(0f, mainTankCapacityGallons);
+            startingFuelGallons = Mathf.Clamp(startingFuelGallons, 0f, mainTankCapacityGallons);
+            fuelGallons = Mathf.Clamp(fuelGallons, 0f, mainTankCapacityGallons);
         }
 
         private void OnValidate()
         {
-            leftWingCapacityGallons = Mathf.Max(0f, leftWingCapacityGallons);
-            rightWingCapacityGallons = Mathf.Max(0f, rightWingCapacityGallons);
-            fuselageCapacityGallons = Mathf.Max(0f, fuselageCapacityGallons);
+            mainTankCapacityGallons = Mathf.Max(0f, mainTankCapacityGallons);
             idleGallonsPerHour = Mathf.Max(1f, idleGallonsPerHour);
             fullPowerGallonsPerHour = Mathf.Max(idleGallonsPerHour, fullPowerGallonsPerHour);
             unusableFuelGallons = Mathf.Max(0.001f, unusableFuelGallons);
