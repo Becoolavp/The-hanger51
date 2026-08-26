@@ -8,11 +8,15 @@ namespace Hanger51.Aircraft
     {
         [SerializeField] private Camera playerCamera;
         [SerializeField, Min(1f)] private float interactionDistance = 3.2f;
+        [SerializeField, Range(0.01f, 0.20f)] private float interactionSphereRadius = 0.075f;
         [SerializeField] private LayerMask interactionLayers = ~0;
         [SerializeField] private Vector3 carriedCanLocalPosition = new Vector3(0.42f, -0.34f, 0.78f);
         [SerializeField] private Vector3 carriedCanLocalEuler = new Vector3(8f, -15f, 5f);
 
+        private readonly RaycastHit[] interactionHits = new RaycastHit[24];
+
         private P51FuelCan carriedCan;
+        private RigidbodyInterpolation carriedCanOriginalInterpolation;
         private string interactionPrompt = string.Empty;
         private string statusMessage = string.Empty;
         private float statusUntil;
@@ -50,12 +54,7 @@ namespace Hanger51.Aircraft
             }
 
             Ray ray = playerCamera.ViewportPointToRay(new Vector3(0.5f, 0.5f, 0f));
-            if (!Physics.Raycast(
-                    ray,
-                    out RaycastHit hit,
-                    interactionDistance,
-                    interactionLayers,
-                    QueryTriggerInteraction.Collide))
+            if (!TryFindNearestFuelInteraction(ray, out RaycastHit hit))
             {
                 if (carriedCan != null)
                 {
@@ -86,42 +85,7 @@ namespace Hanger51.Aircraft
             P51FuelFiller filler = hit.collider.GetComponentInParent<P51FuelFiller>();
             if (filler != null)
             {
-                P51FuelSystem system = filler.FuelSystem;
-                string tankName = system != null
-                    ? system.GetTankDisplayName(filler.TankStation)
-                    : "fuel tank";
-
-                if (!filler.IsOpen)
-                {
-                    interactionPrompt = $"{tankName}: remove fuel cap first";
-                }
-                else if (carriedCan == null)
-                {
-                    interactionPrompt = $"{tankName}: pick up a fuel can";
-                }
-                else if (!carriedCan.HasFuel)
-                {
-                    interactionPrompt = $"Fuel can empty | F: set down";
-                }
-                else
-                {
-                    float current = system != null ? system.GetTankGallons(filler.TankStation) : 0f;
-                    float capacity = system != null ? system.GetTankCapacityGallons(filler.TankStation) : 0f;
-                    interactionPrompt = $"Hold E: pour fuel into {tankName} ({current:F1}/{capacity:F0} gal) | Can {carriedCan.GallonsRemaining:F1} gal | F: set down";
-                }
-
-                if (keyboard.eKey.isPressed && carriedCan != null)
-                {
-                    if (filler.TryPourFromCan(carriedCan, Time.deltaTime, out string result))
-                    {
-                        statusMessage = result;
-                        statusUntil = Time.unscaledTime + 0.35f;
-                    }
-                    else if (keyboard.eKey.wasPressedThisFrame)
-                    {
-                        SetStatus(result);
-                    }
-                }
+                HandleFillerInteraction(filler, keyboard);
                 return;
             }
 
@@ -130,7 +94,7 @@ namespace Hanger51.Aircraft
             {
                 interactionPrompt = carriedCan == null
                     ? $"E: pick up 5-gal fuel can ({can.GallonsRemaining:F1} gal remaining)"
-                    : $"Already carrying a fuel can | F: set current can down";
+                    : "Already carrying a fuel can | F: set current can down";
                 if (keyboard.eKey.wasPressedThisFrame && carriedCan == null)
                 {
                     PickupCan(can);
@@ -145,6 +109,134 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private void LateUpdate()
+        {
+            if (carriedCan == null || playerCamera == null)
+            {
+                return;
+            }
+
+            // A Rigidbody parented under the camera can visibly lag because the physics
+            // interpolation step keeps trying to present an older world pose. While carried,
+            // make the can a pure camera-relative object and hard-apply the pose every frame.
+            Transform canTransform = carriedCan.transform;
+            if (canTransform.parent != playerCamera.transform)
+            {
+                canTransform.SetParent(playerCamera.transform, false);
+            }
+
+            canTransform.localPosition = carriedCanLocalPosition;
+            canTransform.localRotation = Quaternion.Euler(carriedCanLocalEuler);
+
+            Rigidbody body = carriedCan.GetComponent<Rigidbody>();
+            if (body != null)
+            {
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+            }
+        }
+
+        private void HandleFillerInteraction(P51FuelFiller filler, Keyboard keyboard)
+        {
+            P51FuelSystem system = filler.FuelSystem;
+            P51FuelCap cap = filler.FuelCap;
+            string tankName = system != null
+                ? system.GetTankDisplayName(filler.TankStation)
+                : "fuel tank";
+
+            // The filler collider can sit slightly above/around the cap and become the first
+            // thing the camera ray sees. Route E through to the cap so the player can always
+            // remove it even when the filler collider wins the hit test.
+            if (!filler.IsOpen)
+            {
+                interactionPrompt = $"E: remove {tankName} cap";
+                AppendCarriedCanPrompt();
+                if (keyboard.eKey.wasPressedThisFrame && cap != null)
+                {
+                    cap.TryToggle(out string result);
+                    SetStatus(result);
+                }
+                return;
+            }
+
+            if (carriedCan == null)
+            {
+                interactionPrompt = $"E: reinstall {tankName} cap | Pick up a fuel can to refuel";
+                if (keyboard.eKey.wasPressedThisFrame && cap != null)
+                {
+                    cap.TryToggle(out string result);
+                    SetStatus(result);
+                }
+                return;
+            }
+
+            if (!carriedCan.HasFuel)
+            {
+                interactionPrompt = $"Fuel can empty | E: reinstall {tankName} cap | F: set down";
+                if (keyboard.eKey.wasPressedThisFrame && cap != null)
+                {
+                    cap.TryToggle(out string result);
+                    SetStatus(result);
+                }
+                return;
+            }
+
+            float current = system != null ? system.GetTankGallons(filler.TankStation) : 0f;
+            float capacity = system != null ? system.GetTankCapacityGallons(filler.TankStation) : 0f;
+            interactionPrompt = $"Hold E: pour fuel into {tankName} ({current:F1}/{capacity:F0} gal) | Can {carriedCan.GallonsRemaining:F1} gal | F: set down";
+
+            if (keyboard.eKey.isPressed)
+            {
+                if (filler.TryPourFromCan(carriedCan, Time.deltaTime, out string result))
+                {
+                    statusMessage = result;
+                    statusUntil = Time.unscaledTime + 0.35f;
+                }
+                else if (keyboard.eKey.wasPressedThisFrame)
+                {
+                    SetStatus(result);
+                }
+            }
+        }
+
+        private bool TryFindNearestFuelInteraction(Ray ray, out RaycastHit bestHit)
+        {
+            bestHit = default;
+            int hitCount = Physics.SphereCastNonAlloc(
+                ray,
+                interactionSphereRadius,
+                interactionHits,
+                interactionDistance,
+                interactionLayers,
+                QueryTriggerInteraction.Collide);
+
+            float nearestDistance = float.PositiveInfinity;
+            bool found = false;
+            for (int index = 0; index < hitCount; index++)
+            {
+                RaycastHit candidate = interactionHits[index];
+                Collider collider = candidate.collider;
+                if (collider == null)
+                {
+                    continue;
+                }
+
+                bool isFuelInteraction = collider.GetComponentInParent<P51FuelCap>() != null
+                    || collider.GetComponentInParent<P51FuelFiller>() != null
+                    || collider.GetComponentInParent<P51FuelCan>() != null;
+                if (!isFuelInteraction || candidate.distance >= nearestDistance)
+                {
+                    continue;
+                }
+
+                nearestDistance = candidate.distance;
+                bestHit = candidate;
+                found = true;
+            }
+
+            return found;
+        }
+
         private void PickupCan(P51FuelCan can)
         {
             if (can == null || playerCamera == null)
@@ -157,11 +249,16 @@ namespace Hanger51.Aircraft
             Collider[] colliders = can.GetComponentsInChildren<Collider>(true);
             if (body != null)
             {
+                carriedCanOriginalInterpolation = body.interpolation;
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
+                body.interpolation = RigidbodyInterpolation.None;
+                body.detectCollisions = false;
                 body.isKinematic = true;
                 body.useGravity = false;
+                body.Sleep();
             }
+
             for (int index = 0; index < colliders.Length; index++)
             {
                 colliders[index].enabled = false;
@@ -182,11 +279,13 @@ namespace Hanger51.Aircraft
             P51FuelCan can = carriedCan;
             carriedCan = null;
             Transform cameraTransform = playerCamera != null ? playerCamera.transform : transform;
-            can.transform.SetParent(null, true);
-            can.transform.position = cameraTransform.position
+            Vector3 dropPosition = cameraTransform.position
                 + cameraTransform.forward * 0.85f
                 - Vector3.up * 0.35f;
-            can.transform.rotation = Quaternion.Euler(0f, cameraTransform.eulerAngles.y, 0f);
+            Quaternion dropRotation = Quaternion.Euler(0f, cameraTransform.eulerAngles.y, 0f);
+
+            can.transform.SetParent(null, true);
+            can.transform.SetPositionAndRotation(dropPosition, dropRotation);
 
             Collider[] colliders = can.GetComponentsInChildren<Collider>(true);
             for (int index = 0; index < colliders.Length; index++)
@@ -197,8 +296,14 @@ namespace Hanger51.Aircraft
             Rigidbody body = can.GetComponent<Rigidbody>();
             if (body != null)
             {
+                body.position = dropPosition;
+                body.rotation = dropRotation;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
+                body.detectCollisions = true;
                 body.isKinematic = false;
                 body.useGravity = true;
+                body.interpolation = carriedCanOriginalInterpolation;
                 body.WakeUp();
             }
         }
@@ -267,6 +372,12 @@ namespace Hanger51.Aircraft
                     normal = { textColor = Color.white }
                 };
             }
+        }
+
+        private void OnValidate()
+        {
+            interactionDistance = Mathf.Max(1f, interactionDistance);
+            interactionSphereRadius = Mathf.Clamp(interactionSphereRadius, 0.01f, 0.20f);
         }
     }
 }
