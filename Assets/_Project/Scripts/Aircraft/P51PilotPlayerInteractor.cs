@@ -20,6 +20,7 @@ namespace Hanger51.Aircraft
         [SerializeField] private InventoryInteractor inventoryInteractor;
         [SerializeField] private InventoryUI inventoryUI;
         [SerializeField] private AircraftServicePlayerInteractor aircraftServiceInteractor;
+        [SerializeField] private P51FuelPlayerInteractor fuelInteractor;
         [SerializeField] private EngineHoistPlayerInteractor engineHoistInteractor;
         [SerializeField] private EngineConditionPlayerInteractor engineConditionInteractor;
         [SerializeField] private EquippedItemView equippedItemView;
@@ -97,6 +98,17 @@ namespace Hanger51.Aircraft
         private void HandleEntryInteraction()
         {
             if (playerCamera == null || inventoryUI == null || inventoryUI.IsOpen)
+            {
+                ClearOwnedPrompt();
+                aimedSeat = null;
+                return;
+            }
+
+            // Fuel servicing gets first priority over cockpit entry. P51FuelPlayerInteractor
+            // executes earlier in the frame, so one E press can never both move a fuel cap
+            // and occupy the pilot seat. Suppressing this block also removes the overlapping
+            // "enter aircraft" prompt while the player is aimed at fuel hardware.
+            if (fuelInteractor != null && fuelInteractor.HasActiveFuelInteraction)
             {
                 ClearOwnedPrompt();
                 aimedSeat = null;
@@ -237,6 +249,7 @@ namespace Hanger51.Aircraft
             DisableForCockpit(cameraSmoother);
             DisableForCockpit(inventoryInteractor);
             DisableForCockpit(aircraftServiceInteractor);
+            DisableForCockpit(fuelInteractor);
             DisableForCockpit(engineHoistInteractor);
             DisableForCockpit(engineConditionInteractor);
             DisableForCockpit(equippedItemView);
@@ -375,6 +388,11 @@ namespace Hanger51.Aircraft
             if (aircraftServiceInteractor == null)
             {
                 aircraftServiceInteractor = GetComponent<AircraftServicePlayerInteractor>();
+            }
+
+            if (fuelInteractor == null)
+            {
+                fuelInteractor = GetComponent<P51FuelPlayerInteractor>();
             }
 
             if (engineHoistInteractor == null)
