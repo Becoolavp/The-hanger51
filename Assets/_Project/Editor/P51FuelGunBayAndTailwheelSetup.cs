@@ -14,9 +14,12 @@ namespace Hanger51.EditorTools
         private const string FuelRootName = "P-51 Fuel System Visuals";
         private const string FuelCanRootName = "Hanger 51 Fuel Cans";
         private const string TailwheelMarkerName = "P-51 Tailwheel Raised Marker";
+        private const string AirportComplexName = "Hanger 51 Airport Complex";
         private const float TailwheelRaiseMeters = 0.20f;
         private const float BayFrontZ = 0.50f;
         private const float BayRearZ = -0.78f;
+        private const float MainTankCapacityGallons = 269f;
+        private const float StartingFuelGallons = 85f;
 
         private const string AluminumPath = "Assets/_Project/Aircraft/P51/Materials/PolishedAluminum.mat";
         private const string HardwarePath = "Assets/_Project/Aircraft/P51/Materials/ServiceHardware.mat";
@@ -67,7 +70,7 @@ namespace Hanger51.EditorTools
                 }
 
                 baysFinished += FinishGunBays(flight.gameObject, bayDark, hardware);
-                InstallFuelSystem(flight.gameObject, flight, aluminum, hardware, bayDark);
+                InstallSingleRearFuelSystem(flight.gameObject, flight, aluminum, hardware, bayDark);
                 fuelAircraft++;
             }
 
@@ -88,9 +91,9 @@ namespace Hanger51.EditorTools
 
             Debug.Log(
                 $"P-51 Step 53 complete. Fuel-equipped aircraft={fuelAircraft}, tailwheel stations newly raised={tailwheelsRaised}, "
-                + $"gun bays fitted with shallow internal false bottoms={baysFinished}. Added three independent tanks per P-51 (92/92/85 gal), "
-                + "removable filler caps, portable 5-gal fuel cans, throttle-dependent Merlin fuel burn, and fuel-starvation shutdown. "
-                + "The live-master hangar spawner will copy this complete fuel hierarchy into future spawned P-51s automatically.",
+                + $"gun bays fitted with shallow internal false bottoms={baysFinished}. Removed all wing fuel tanks/caps/fillers and installed "
+                + $"one {MainTankCapacityGallons:F0}-gal main rear tank per P-51 with one removable exterior cap/filler. Portable fuel cans, "
+                + "Merlin fuel burn, fuel-starvation shutdown, and live-master spawn inheritance remain active.",
                 master != null ? master.gameObject : null);
         }
 
@@ -110,23 +113,45 @@ namespace Hanger51.EditorTools
             int validFuelAircraft = 0;
             int validBays = 0;
             int raisedTailwheels = 0;
+
             for (int index = 0; index < aircraft.Length; index++)
             {
                 P51FlightController flight = aircraft[index];
-                if (flight == null || !flight.gameObject.scene.IsValid()) continue;
+                if (flight == null || !flight.gameObject.scene.IsValid())
+                {
+                    continue;
+                }
 
                 P51FuelSystem fuel = flight.GetComponent<P51FuelSystem>();
                 P51FuelCap[] caps = flight.GetComponentsInChildren<P51FuelCap>(true);
                 P51FuelFiller[] fillers = flight.GetComponentsInChildren<P51FuelFiller>(true);
                 Transform fuelRoot = FindChildRecursive(flight.transform, FuelRootName);
-                if (fuel == null || caps.Length != 3 || fillers.Length != 3 || fuelRoot == null)
+                Transform mainTank = FindChildRecursive(flight.transform, "Main Rear 269 Gallon Fuel Tank");
+
+                if (fuel == null
+                    || fuelRoot == null
+                    || mainTank == null
+                    || caps.Length != 1
+                    || fillers.Length != 1)
                 {
-                    Debug.LogError($"P-51 Step 54 failed: '{flight.name}' fuel hierarchy is incomplete. FuelSystem={(fuel != null)}, caps={caps.Length}, fillers={fillers.Length}.", flight);
+                    Debug.LogError(
+                        $"P-51 Step 54 failed: '{flight.name}' single rear fuel hierarchy is incomplete. "
+                        + $"FuelSystem={(fuel != null)}, rearTank={(mainTank != null)}, caps={caps.Length}, fillers={fillers.Length}.",
+                        flight);
                     passed = false;
                 }
-                else if (Mathf.Abs(fuel.TotalCapacityGallons - 269f) > 0.1f)
+                else if (Mathf.Abs(fuel.TotalCapacityGallons - MainTankCapacityGallons) > 0.1f)
                 {
-                    Debug.LogError($"P-51 Step 54 failed: '{flight.name}' total fuel capacity is {fuel.TotalCapacityGallons:F1} gal instead of 269 gal.", fuel);
+                    Debug.LogError(
+                        $"P-51 Step 54 failed: '{flight.name}' main tank capacity is {fuel.TotalCapacityGallons:F1} gal instead of {MainTankCapacityGallons:F0} gal.",
+                        fuel);
+                    passed = false;
+                }
+                else if (ContainsAnyWingFuelHardware(fuelRoot))
+                {
+                    Debug.LogError(
+                        $"P-51 Step 54 failed: '{flight.name}' still contains wing fuel tank/cap/filler geometry.",
+                        flight);
                     passed = false;
                 }
                 else
@@ -153,7 +178,9 @@ namespace Hanger51.EditorTools
                         : null;
                     if (floor == null || floor.GetComponent<BoxCollider>() != null || floor.localScale.y > 0.025f)
                     {
-                        Debug.LogError($"P-51 Step 54 failed: '{flight.name}' {wingName.ToLowerInvariant()} gun bay does not have the shallow collider-free internal floor.", flight);
+                        Debug.LogError(
+                            $"P-51 Step 54 failed: '{flight.name}' {wingName.ToLowerInvariant()} gun bay does not have the shallow collider-free internal floor.",
+                            flight);
                         passed = false;
                     }
                     else
@@ -170,7 +197,9 @@ namespace Hanger51.EditorTools
                 passed = false;
             }
 
-            P51FuelCan[] cans = Object.FindObjectsByType<P51FuelCan>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            P51FuelCan[] cans = Object.FindObjectsByType<P51FuelCan>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
             if (cans.Length < 2)
             {
                 Debug.LogError($"P-51 Step 54 failed: expected at least two portable fuel cans, found {cans.Length}.");
@@ -180,9 +209,9 @@ namespace Hanger51.EditorTools
             if (passed)
             {
                 Debug.Log(
-                    $"P-51 Step 54 passed. Fuel aircraft={validFuelAircraft}, raised tailwheel stations={raisedTailwheels}, "
-                    + $"shallow enclosed gun bays={validBays}, portable fuel cans={cans.Length}. "
-                    + "Each P-51 has 269 gal total capacity and the Merlin cannot continue running without usable fuel.");
+                    $"P-51 Step 54 passed. Single-rear-tank aircraft={validFuelAircraft}, raised tailwheel stations={raisedTailwheels}, "
+                    + $"shallow enclosed gun bays={validBays}, portable fuel cans={cans.Length}. Each P-51 has one removable fuel cap and "
+                    + $"one {MainTankCapacityGallons:F0}-gal main rear tank; no wing fuel hardware remains.");
             }
         }
 
@@ -217,6 +246,7 @@ namespace Hanger51.EditorTools
                 position.y += TailwheelRaiseMeters;
                 value.vector3Value = position;
             }
+
             if (retracted != null && retracted.arraySize > 2)
             {
                 SerializedProperty value = retracted.GetArrayElementAtIndex(2);
@@ -224,6 +254,7 @@ namespace Hanger51.EditorTools
                 position.y += TailwheelRaiseMeters;
                 value.vector3Value = position;
             }
+
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(maintenance);
 
@@ -242,7 +273,10 @@ namespace Hanger51.EditorTools
             }
 
             P51LandingGearServiceAttachmentFollower follower = aircraft.GetComponent<P51LandingGearServiceAttachmentFollower>();
-            follower?.RepairHierarchy();
+            if (follower != null)
+            {
+                follower.RepairHierarchy();
+            }
 
             GameObject marker = new GameObject(TailwheelMarkerName);
             Undo.RegisterCreatedObjectUndo(marker, "Mark P-51 tailwheel raise");
@@ -253,27 +287,33 @@ namespace Hanger51.EditorTools
 
         private static int FinishGunBays(GameObject aircraft, Material bayDark, Material hardware)
         {
-            if (aircraft == null) return 0;
+            if (aircraft == null)
+            {
+                return 0;
+            }
+
             int fixedCount = 0;
             for (int wing = 0; wing < 2; wing++)
             {
                 string wingName = wing == 0 ? "Left" : "Right";
                 Transform interior = FindChildRecursive(aircraft.transform, $"{wingName} Wing Armament Bay Interior");
-                if (interior == null) continue;
+                if (interior == null)
+                {
+                    continue;
+                }
 
                 DestroyChildByName(interior, $"{wingName} Armament Bay Floor");
                 DestroyChildByName(interior, $"{wingName} Armament Bay Cross Brace A");
                 DestroyChildByName(interior, $"{wingName} Armament Bay Cross Brace B");
 
                 float centerZ = (BayFrontZ + BayRearZ) * 0.5f;
-                GameObject floor = CreateCube(
+                CreateCube(
                     interior,
                     $"{wingName} Armament Bay Floor",
                     new Vector3(0f, 0.082f, centerZ),
                     new Vector3(2.46f, 0.018f, 1.12f),
                     bayDark,
                     false);
-                floor.GetComponent<Renderer>().shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.On;
 
                 CreateCube(
                     interior,
@@ -289,12 +329,14 @@ namespace Hanger51.EditorTools
                     new Vector3(2.36f, 0.025f, 0.035f),
                     hardware,
                     false);
+
                 fixedCount++;
             }
+
             return fixedCount;
         }
 
-        private static void InstallFuelSystem(
+        private static void InstallSingleRearFuelSystem(
             GameObject aircraft,
             P51FlightController flight,
             Material aluminum,
@@ -306,7 +348,8 @@ namespace Hanger51.EditorTools
             {
                 fuel = Undo.AddComponent<P51FuelSystem>(aircraft);
             }
-            fuel.Configure(flight, 35f, 35f, 15f);
+
+            fuel.Configure(flight, StartingFuelGallons);
             EditorUtility.SetDirty(fuel);
 
             Transform oldRoot = aircraft.transform.Find(FuelRootName);
@@ -316,32 +359,34 @@ namespace Hanger51.EditorTools
             }
 
             GameObject rootObject = new GameObject(FuelRootName);
-            Undo.RegisterCreatedObjectUndo(rootObject, "Create P-51 fuel system visuals");
+            Undo.RegisterCreatedObjectUndo(rootObject, "Create single P-51 rear fuel system");
             rootObject.transform.SetParent(aircraft.transform, false);
             Transform root = rootObject.transform;
 
-            CreateCube(root, "Left Wing 92 Gallon Fuel Tank",
-                new Vector3(-2.35f, 1.31f, -0.10f),
-                new Vector3(1.35f, 0.090f, 0.74f), bayDark, false);
-            CreateCube(root, "Right Wing 92 Gallon Fuel Tank",
-                new Vector3(2.35f, 1.31f, -0.10f),
-                new Vector3(1.35f, 0.090f, 0.74f), bayDark, false);
-            CreateCube(root, "Fuselage 85 Gallon Fuel Tank",
-                new Vector3(0f, 1.55f, -1.45f),
-                new Vector3(0.82f, 0.74f, 0.88f), bayDark, false);
+            // The visual tank lives entirely in the rear fuselage, well inboard of both
+            // armament bays. It is intentionally larger than the previous 85-gal visual
+            // because it now represents the complete 269-gal game fuel supply.
+            CreateCube(
+                root,
+                "Main Rear 269 Gallon Fuel Tank",
+                new Vector3(0f, 1.52f, -1.72f),
+                new Vector3(0.98f, 0.82f, 1.46f),
+                bayDark,
+                false);
 
-            CreateFillerAssembly(root, fuel, P51FuelTankStation.LeftWing,
-                "Left Wing", new Vector3(-2.58f, 1.438f, -0.34f), new Vector3(-0.24f, 0.06f, -0.08f), aluminum, hardware);
-            CreateFillerAssembly(root, fuel, P51FuelTankStation.RightWing,
-                "Right Wing", new Vector3(2.58f, 1.438f, -0.34f), new Vector3(0.24f, 0.06f, -0.08f), aluminum, hardware);
-            CreateFillerAssembly(root, fuel, P51FuelTankStation.Fuselage,
-                "Fuselage", new Vector3(-0.47f, 2.08f, -1.48f), new Vector3(-0.26f, 0.04f, -0.08f), aluminum, hardware);
+            CreateFillerAssembly(
+                root,
+                fuel,
+                "Main Rear",
+                new Vector3(-0.46f, 2.09f, -1.58f),
+                new Vector3(-0.28f, 0.05f, -0.10f),
+                aluminum,
+                hardware);
         }
 
         private static void CreateFillerAssembly(
             Transform root,
             P51FuelSystem fuel,
-            P51FuelTankStation station,
             string label,
             Vector3 fillerLocalPosition,
             Vector3 capRemovalOffset,
@@ -349,33 +394,46 @@ namespace Hanger51.EditorTools
             Material neckMaterial)
         {
             GameObject neck = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Undo.RegisterCreatedObjectUndo(neck, "Create P-51 fuel filler neck");
+            Undo.RegisterCreatedObjectUndo(neck, "Create P-51 main fuel filler neck");
             neck.name = $"{label} Fuel Filler";
             neck.transform.SetParent(root, false);
             neck.transform.localPosition = fillerLocalPosition;
             neck.transform.localRotation = Quaternion.identity;
-            neck.transform.localScale = new Vector3(0.105f, 0.025f, 0.105f);
-            neck.GetComponent<Renderer>().sharedMaterial = neckMaterial;
-            Collider neckCollider = neck.GetComponent<Collider>();
-            if (neckCollider != null) Undo.DestroyObjectImmediate(neckCollider);
+            neck.transform.localScale = new Vector3(0.11f, 0.025f, 0.11f);
+            Renderer neckRenderer = neck.GetComponent<Renderer>();
+            if (neckRenderer != null)
+            {
+                neckRenderer.sharedMaterial = neckMaterial;
+            }
+
+            Collider originalNeckCollider = neck.GetComponent<Collider>();
+            if (originalNeckCollider != null)
+            {
+                Undo.DestroyObjectImmediate(originalNeckCollider);
+            }
+
             BoxCollider fillerCollider = neck.AddComponent<BoxCollider>();
             fillerCollider.center = Vector3.zero;
-            fillerCollider.size = new Vector3(2.5f, 3.5f, 2.5f);
+            fillerCollider.size = new Vector3(2.7f, 3.8f, 2.7f);
 
             GameObject capObject = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
-            Undo.RegisterCreatedObjectUndo(capObject, "Create P-51 fuel cap");
+            Undo.RegisterCreatedObjectUndo(capObject, "Create P-51 main fuel cap");
             capObject.name = $"{label} Fuel Cap";
             capObject.transform.SetParent(root, false);
-            Vector3 installedPosition = fillerLocalPosition + Vector3.up * 0.045f;
+            Vector3 installedPosition = fillerLocalPosition + Vector3.up * 0.046f;
             capObject.transform.localPosition = installedPosition;
             capObject.transform.localRotation = Quaternion.identity;
-            capObject.transform.localScale = new Vector3(0.125f, 0.025f, 0.125f);
-            capObject.GetComponent<Renderer>().sharedMaterial = capMaterial;
+            capObject.transform.localScale = new Vector3(0.13f, 0.026f, 0.13f);
+            Renderer capRenderer = capObject.GetComponent<Renderer>();
+            if (capRenderer != null)
+            {
+                capRenderer.sharedMaterial = capMaterial;
+            }
 
             P51FuelCap cap = capObject.AddComponent<P51FuelCap>();
             cap.Configure(
                 fuel,
-                station,
+                P51FuelTankStation.Fuselage,
                 capObject.transform,
                 installedPosition,
                 Vector3.zero,
@@ -383,7 +441,8 @@ namespace Hanger51.EditorTools
                 new Vector3(70f, 20f, 12f));
 
             P51FuelFiller filler = neck.AddComponent<P51FuelFiller>();
-            filler.Configure(fuel, cap, station, 1.35f);
+            filler.Configure(fuel, cap, P51FuelTankStation.Fuselage, 1.35f);
+
             EditorUtility.SetDirty(cap);
             EditorUtility.SetDirty(filler);
         }
@@ -402,6 +461,7 @@ namespace Hanger51.EditorTools
             {
                 interactor = Undo.AddComponent<P51FuelPlayerInteractor>(player.gameObject);
             }
+
             EditorUtility.SetDirty(interactor);
         }
 
@@ -415,6 +475,13 @@ namespace Hanger51.EditorTools
 
             GameObject root = new GameObject(FuelCanRootName);
             Undo.RegisterCreatedObjectUndo(root, "Create P-51 fuel cans");
+
+            GameObject airportComplex = GameObject.Find(AirportComplexName);
+            if (airportComplex != null)
+            {
+                root.transform.SetParent(airportComplex.transform, true);
+            }
+
             root.transform.position = master.transform.position
                 + master.transform.right * 5.0f
                 - master.transform.forward * 2.0f;
@@ -430,14 +497,13 @@ namespace Hanger51.EditorTools
                     hardware,
                     true);
 
-                GameObject handle = CreateCube(
+                CreateCube(
                     can.transform,
                     "Fuel Can Carry Handle",
                     new Vector3(0f, 0.62f, 0f),
                     new Vector3(0.12f, 0.08f, 0.14f),
                     aluminum,
                     false);
-                handle.transform.localRotation = Quaternion.identity;
 
                 Rigidbody body = can.AddComponent<Rigidbody>();
                 body.mass = 16f;
@@ -449,6 +515,33 @@ namespace Hanger51.EditorTools
                 fuelCan.Configure(5f, 5f);
                 EditorUtility.SetDirty(fuelCan);
             }
+        }
+
+        private static bool ContainsAnyWingFuelHardware(Transform fuelRoot)
+        {
+            if (fuelRoot == null)
+            {
+                return false;
+            }
+
+            Transform[] all = fuelRoot.GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < all.Length; index++)
+            {
+                Transform item = all[index];
+                if (item == null)
+                {
+                    continue;
+                }
+
+                string name = item.name ?? string.Empty;
+                if (name.IndexOf("Left Wing", StringComparison.OrdinalIgnoreCase) >= 0
+                    || name.IndexOf("Right Wing", StringComparison.OrdinalIgnoreCase) >= 0)
+                {
+                    return true;
+                }
+            }
+
+            return false;
         }
 
         private static P51FlightController FindMasterAircraft(P51FlightController[] aircraft)
@@ -464,6 +557,7 @@ namespace Hanger51.EditorTools
                     return candidate;
                 }
             }
+
             return aircraft.Length > 0 ? aircraft[0] : null;
         }
 
@@ -482,13 +576,19 @@ namespace Hanger51.EditorTools
             cube.transform.localPosition = localPosition;
             cube.transform.localRotation = Quaternion.identity;
             cube.transform.localScale = localScale;
+
             Renderer renderer = cube.GetComponent<Renderer>();
-            if (renderer != null) renderer.sharedMaterial = material;
+            if (renderer != null)
+            {
+                renderer.sharedMaterial = material;
+            }
+
             Collider collider = cube.GetComponent<Collider>();
             if (!keepCollider && collider != null)
             {
                 Undo.DestroyObjectImmediate(collider);
             }
+
             return cube;
         }
 
@@ -503,15 +603,21 @@ namespace Hanger51.EditorTools
 
         private static Transform FindChildRecursive(Transform root, string name)
         {
-            if (root == null) return null;
+            if (root == null)
+            {
+                return null;
+            }
+
             Transform[] all = root.GetComponentsInChildren<Transform>(true);
             for (int index = 0; index < all.Length; index++)
             {
-                if (all[index] != null && all[index].name == name)
+                Transform item = all[index];
+                if (item != null && item.name == name)
                 {
-                    return all[index];
+                    return item;
                 }
             }
+
             return null;
         }
 
@@ -523,16 +629,19 @@ namespace Hanger51.EditorTools
                 Debug.LogError("P-51 Step 53 failed. Exit Play mode first.");
                 return false;
             }
+
             if (EditorApplication.isCompiling)
             {
                 Debug.LogError("P-51 Step 53 failed. Wait for Unity to finish compiling.");
                 return false;
             }
+
             if (!scene.IsValid() || !scene.isLoaded || string.IsNullOrWhiteSpace(scene.path))
             {
-                Debug.LogError("P-51 Step 53 failed. Open and save the current hangar scene first.");
+                Debug.LogError("P-51 Step 53 failed. Open and save the main hangar scene first.");
                 return false;
             }
+
             return true;
         }
     }
