@@ -3,6 +3,7 @@ using UnityEngine.InputSystem;
 
 namespace Hanger51.Aircraft
 {
+    [DefaultExecutionOrder(250)]
     [DisallowMultipleComponent]
     public sealed class P51FuelPlayerInteractor : MonoBehaviour
     {
@@ -24,6 +25,7 @@ namespace Hanger51.Aircraft
         private GUIStyle statusStyle;
 
         public P51FuelCan CarriedCan => carriedCan;
+        public bool HasActiveFuelInteraction { get; private set; }
 
         private void Awake()
         {
@@ -39,6 +41,7 @@ namespace Hanger51.Aircraft
         {
             ResolveCamera();
             interactionPrompt = string.Empty;
+            HasActiveFuelInteraction = false;
 
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null || playerCamera == null)
@@ -62,6 +65,10 @@ namespace Hanger51.Aircraft
                 }
                 return;
             }
+
+            // Fuel servicing owns the interaction key for this frame. The cockpit interactor
+            // runs later and uses this flag to suppress both its E action and its prompt.
+            HasActiveFuelInteraction = true;
 
             P51FuelCap cap = hit.collider.GetComponentInParent<P51FuelCap>();
             if (cap != null)
