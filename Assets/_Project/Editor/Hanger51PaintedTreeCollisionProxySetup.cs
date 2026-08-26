@@ -11,7 +11,7 @@ namespace Hanger51.EditorTools
     {
         private const string TerrainObjectName = "Hanger 51 Editable Terrain";
         private const string ProxyRootName = "Hanger 51 Painted Tree Collision Proxies";
-        private const string PackRoot = "Assets/Supercyan Free Forest Sample/Prefabs/High Quality/Tree";
+        private const string TreePackRoot = "Assets/Supercyan Free Forest Sample/Prefabs/High Quality/Tree";
 
         [MenuItem("Hanger 51/Environment/11 - Rebuild Painted Tree Hitboxes")]
         public static void RebuildPaintedTreeHitboxes()
@@ -34,7 +34,7 @@ namespace Hanger51.EditorTools
             }
 
             Scene scene = SceneManager.GetActiveScene();
-            if (scene.IsValid() && scene.isLoaded)
+            if (scene.IsValid() && scene.isLoaded && !string.IsNullOrWhiteSpace(scene.path))
             {
                 EditorSceneManager.MarkSceneDirty(scene);
                 EditorSceneManager.SaveScene(scene);
@@ -53,6 +53,7 @@ namespace Hanger51.EditorTools
 
             int expected = CountPaintedLivingTrees(terrain);
             Transform root = terrain.transform.Find(ProxyRootName);
+
             if (expected <= 0)
             {
                 Debug.LogWarning("Environment Step 12 found no painted fir/leaf tree instances to validate.", terrain);
@@ -61,7 +62,7 @@ namespace Hanger51.EditorTools
 
             if (root == null)
             {
-                Debug.LogError($"Environment Step 12 failed: expected {expected} painted-tree hitboxes, but '{ProxyRootName}' is missing.", terrain);
+                Debug.LogError($"Environment Step 12 failed: expected {expected} painted-tree hitboxes, but '{ProxyRootName}' is missing. Run Step 11.", terrain);
                 return;
             }
 
@@ -70,31 +71,25 @@ namespace Hanger51.EditorTools
             for (int index = 0; index < colliders.Length; index++)
             {
                 CapsuleCollider collider = colliders[index];
-                if (collider != null && collider.enabled && !collider.isTrigger && collider.radius > 0.02f && collider.height >= collider.radius * 2f)
+                if (collider != null
+                    && collider.enabled
+                    && !collider.isTrigger
+                    && collider.radius > 0.02f
+                    && collider.height >= collider.radius * 2f)
                 {
                     valid++;
                 }
             }
 
-            TerrainCollider terrainCollider = terrain.GetComponent<TerrainCollider>();
-            bool customSystemIsAuthoritative = terrainCollider != null && terrainCollider.enabled && !terrainCollider.isTrigger;
-
             if (valid != expected)
             {
-                Debug.LogError($"Environment Step 12 failed: painted living trees={expected}, valid explicit trunk hitboxes={valid}. Run Environment Step 11 again.", terrain);
-                return;
-            }
-
-            if (!customSystemIsAuthoritative)
-            {
-                Debug.LogError("Environment Step 12 failed: the TerrainCollider is missing, disabled, or configured as a trigger.", terrain);
+                Debug.LogError($"Environment Step 12 failed: painted living trees={expected}, valid explicit trunk hitboxes={valid}. Run Step 11 again.", terrain);
                 return;
             }
 
             Debug.Log(
                 $"Environment Step 12 passed. {valid}/{expected} currently painted fir/leaf trees have explicit scene CapsuleCollider trunk hitboxes. "
-                + "These hitboxes do not depend on Unity's generated Terrain-tree collision path and will block CharacterController movement and normal physics colliders. "
-                + "Build Step 1/3 now rebuilds them automatically before every build.",
+                + "These are ordinary Unity physics colliders and do not depend on TerrainCollider tree-collider support.",
                 terrain);
         }
 
@@ -103,7 +98,7 @@ namespace Hanger51.EditorTools
             Terrain terrain = FindTerrain();
             if (terrain == null || terrain.terrainData == null)
             {
-                // Some utility scenes may legitimately have no world Terrain.
+                // Utility scenes can legitimately have no world Terrain.
                 return true;
             }
 
@@ -122,7 +117,6 @@ namespace Hanger51.EditorTools
             rootObject.transform.localPosition = Vector3.zero;
             rootObject.transform.localRotation = Quaternion.identity;
             rootObject.transform.localScale = Vector3.one;
-            GameObjectUtility.SetStaticEditorFlags(rootObject, StaticEditorFlags.BatchingStatic);
 
             Dictionary<GameObject, CapsuleTemplate> templates = new Dictionary<GameObject, CapsuleTemplate>();
             int livingTreeInstances = 0;
@@ -146,7 +140,8 @@ namespace Hanger51.EditorTools
 
                 livingTreeInstances++;
 
-                if (!templates.TryGetValue(prefab, out CapsuleTemplate template))
+                CapsuleTemplate template;
+                if (!templates.TryGetValue(prefab, out template))
                 {
                     if (!TryCreateCapsuleTemplate(prefab, out template))
                     {
@@ -154,6 +149,7 @@ namespace Hanger51.EditorTools
                         templates[prefab] = CapsuleTemplate.Invalid;
                         continue;
                     }
+
                     templates[prefab] = template;
                 }
 
@@ -162,26 +158,26 @@ namespace Hanger51.EditorTools
                     continue;
                 }
 
-                CreateProxy(rootObject.transform, terrain, data, instance, template, prefab.name, index);
+                CreateProxy(rootObject.transform, data, instance, template, prefab.name, index, terrain.gameObject.layer);
                 proxiesCreated++;
             }
 
+            // Keep the normal TerrainCollider active for the ground itself. The painted-tree
+            // proxies above are independent ordinary colliders and require no TerrainCollider
+            // tree-specific API or serialized setting.
             TerrainCollider terrainCollider = terrain.GetComponent<TerrainCollider>();
             if (terrainCollider == null)
             {
                 terrainCollider = terrain.gameObject.AddComponent<TerrainCollider>();
-                terrainCollider.terrainData = data;
             }
+            terrainCollider.terrainData = data;
             terrainCollider.enabled = true;
             terrainCollider.isTrigger = false;
-
-            // The explicit proxy colliders are authoritative. Turning Unity's generated tree
-            // colliders off avoids duplicate contacts if Unity happens to generate them too.
-            terrainCollider.enableTreeColliders = false;
 
             EditorUtility.SetDirty(terrain);
             EditorUtility.SetDirty(terrainCollider);
             EditorUtility.SetDirty(rootObject);
+            Physics.SyncTransforms();
 
             Scene scene = terrain.gameObject.scene;
             if (scene.IsValid() && scene.isLoaded)
@@ -202,7 +198,8 @@ namespace Hanger51.EditorTools
             {
                 Debug.Log(
                     $"Environment Step 11 complete. Built {proxiesCreated} explicit CapsuleCollider trunk hitbox(es) for {livingTreeInstances} currently painted fir/leaf tree instance(s). "
-                    + "The custom hitboxes are now authoritative, so already-painted trees should block the Player immediately in Play mode. Future Build Step 1/3 runs resync these hitboxes automatically after additional tree painting.",
+                    + "These are real scene colliders, so the Player and physics-driven aircraft should collide with the painted trunks in Play mode. "
+                    + "Future builds resync the hitboxes automatically.",
                     terrain);
             }
 
@@ -211,17 +208,16 @@ namespace Hanger51.EditorTools
 
         private static void CreateProxy(
             Transform parent,
-            Terrain terrain,
             TerrainData data,
             TreeInstance instance,
             CapsuleTemplate template,
             string prefabName,
-            int treeIndex)
+            int treeIndex,
+            int layer)
         {
-            Vector3 instanceScale = new Vector3(
-                Mathf.Max(0.01f, instance.widthScale),
-                Mathf.Max(0.01f, instance.heightScale),
-                Mathf.Max(0.01f, instance.widthScale));
+            float widthScale = Mathf.Max(0.01f, instance.widthScale);
+            float heightScale = Mathf.Max(0.01f, instance.heightScale);
+            Vector3 instanceScale = new Vector3(widthScale, heightScale, widthScale);
 
             Quaternion treeRotation = Quaternion.Euler(0f, instance.rotation * Mathf.Rad2Deg, 0f);
             Vector3 instanceLocalPosition = new Vector3(
@@ -237,9 +233,8 @@ namespace Hanger51.EditorTools
             proxy.transform.localPosition = colliderLocalPosition;
             proxy.transform.localRotation = treeRotation * template.rotationInPrefabRoot;
             proxy.transform.localScale = Vector3.one;
-            proxy.layer = terrain.gameObject.layer;
+            proxy.layer = layer;
             proxy.isStatic = true;
-            proxy.hideFlags = HideFlags.HideInHierarchy;
 
             CapsuleCollider collider = proxy.AddComponent<CapsuleCollider>();
             collider.center = Vector3.zero;
@@ -269,6 +264,7 @@ namespace Hanger51.EditorTools
                 {
                     continue;
                 }
+
                 source = candidate;
                 if (candidate.enabled)
                 {
@@ -299,6 +295,7 @@ namespace Hanger51.EditorTools
                 radius = Mathf.Max(0.04f, source.radius * radialScale),
                 height = Mathf.Max(source.radius * radialScale * 2f, source.height * axisScale)
             };
+
             return true;
         }
 
@@ -312,7 +309,9 @@ namespace Hanger51.EditorTools
 
         private static float SafeDivide(float numerator, float denominator)
         {
-            return Mathf.Abs(denominator) > 0.0001f ? Mathf.Abs(numerator / denominator) : Mathf.Abs(numerator);
+            return Mathf.Abs(denominator) > 0.0001f
+                ? Mathf.Abs(numerator / denominator)
+                : Mathf.Abs(numerator);
         }
 
         private static float GetAxisScale(Vector3 scale, int direction)
@@ -345,6 +344,7 @@ namespace Hanger51.EditorTools
             TreePrototype[] prototypes = terrain.terrainData.treePrototypes ?? Array.Empty<TreePrototype>();
             TreeInstance[] instances = terrain.terrainData.treeInstances ?? Array.Empty<TreeInstance>();
             int count = 0;
+
             for (int index = 0; index < instances.Length; index++)
             {
                 int prototypeIndex = instances[index].prototypeIndex;
@@ -352,12 +352,14 @@ namespace Hanger51.EditorTools
                 {
                     continue;
                 }
+
                 TreePrototype prototype = prototypes[prototypeIndex];
                 if (prototype != null && IsLivingForestTree(prototype.prefab))
                 {
                     count++;
                 }
             }
+
             return count;
         }
 
@@ -370,7 +372,7 @@ namespace Hanger51.EditorTools
 
             string path = AssetDatabase.GetAssetPath(prefab);
             if (string.IsNullOrWhiteSpace(path)
-                || !path.StartsWith(PackRoot + "/", StringComparison.OrdinalIgnoreCase))
+                || !path.StartsWith(TreePackRoot + "/", StringComparison.OrdinalIgnoreCase))
             {
                 return false;
             }
@@ -390,6 +392,7 @@ namespace Hanger51.EditorTools
                     return terrain;
                 }
             }
+
             return Terrain.activeTerrain;
         }
 
@@ -402,7 +405,10 @@ namespace Hanger51.EditorTools
             public float radius;
             public float height;
 
-            public static CapsuleTemplate Invalid => new CapsuleTemplate { valid = false };
+            public static CapsuleTemplate Invalid
+            {
+                get { return new CapsuleTemplate { valid = false }; }
+            }
         }
     }
 }
