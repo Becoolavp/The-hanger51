@@ -7,6 +7,7 @@ namespace Hanger51.Aircraft
     public sealed class P51LandingGearVisualSuspensionFollower : MonoBehaviour
     {
         private const string TailwheelStrutName = "Tailwheel Oleo Strut";
+        private const string TailwheelRimRootName = "Tailwheel Rim Visual";
 
         [SerializeField] private P51LandingGearMaintenanceController maintenance;
         [SerializeField] private Transform[] tireRoots = new Transform[3];
@@ -14,6 +15,7 @@ namespace Hanger51.Aircraft
 
         private Transform tailwheelStrut;
         private Transform tailwheelGearRoot;
+        private Transform tailwheelRimRoot;
         private float tailwheelStrutTopLocalY;
         private float tailwheelStrutLocalX;
         private float tailwheelStrutLocalZ;
@@ -26,6 +28,9 @@ namespace Hanger51.Aircraft
             && tireRoots.Length > 2
             && tireRoots[2] != null;
 
+        public bool TailwheelWheelHardwareConnected => TailwheelStrutConnected
+            && tailwheelRimRoot != null;
+
         public void Configure(
             P51LandingGearMaintenanceController configuredMaintenance,
             Transform[] configuredTires,
@@ -35,13 +40,15 @@ namespace Hanger51.Aircraft
             tireRoots = Copy(configuredTires);
             physicsVisualProxies = Copy(configuredProxies);
             tailwheelStrutGeometryCaptured = false;
-            ResolveTailwheelStrut();
+            tailwheelRimRoot = null;
+            ResolveTailwheelGeometry();
         }
 
         private void OnEnable()
         {
             tailwheelStrutGeometryCaptured = false;
-            ResolveTailwheelStrut();
+            tailwheelRimRoot = null;
+            ResolveTailwheelGeometry();
         }
 
         private void LateUpdate()
@@ -74,18 +81,26 @@ namespace Hanger51.Aircraft
 
                 if (wheelIndex == 2)
                 {
+                    ResolveTailwheelGeometry();
+
+                    // The rim/hub hierarchy was originally a sibling of the tire, so moving
+                    // only the tire made the metal wheel center appear to float above it.
+                    // Drive the rim from the same raycast proxy as the tire. The bolt and
+                    // valve service targets are parented to the tire by the service-attachment
+                    // follower and therefore travel with this complete lower wheel assembly.
+                    if (tailwheelRimRoot != null
+                        && !tailwheelRimRoot.IsChildOf(tire))
+                    {
+                        tailwheelRimRoot.SetPositionAndRotation(proxy.position, proxy.rotation);
+                    }
+
                     StretchTailwheelStrutToGroundedWheel(tire);
                 }
             }
         }
 
-        private void ResolveTailwheelStrut()
+        private void ResolveTailwheelGeometry()
         {
-            if (tailwheelStrutGeometryCaptured)
-            {
-                return;
-            }
-
             Transform tailTire = tireRoots != null && tireRoots.Length > 2
                 ? tireRoots[2]
                 : null;
@@ -99,14 +114,24 @@ namespace Hanger51.Aircraft
             for (int index = 0; index < all.Length; index++)
             {
                 Transform candidate = all[index];
-                if (candidate != null && candidate.name == TailwheelStrutName)
+                if (candidate == null)
+                {
+                    continue;
+                }
+
+                if (tailwheelStrut == null && candidate.name == TailwheelStrutName)
                 {
                     tailwheelStrut = candidate;
-                    break;
+                }
+                else if (tailwheelRimRoot == null && candidate.name == TailwheelRimRootName)
+                {
+                    tailwheelRimRoot = candidate;
                 }
             }
 
-            if (tailwheelStrut == null || tailwheelStrut.parent != tailwheelGearRoot)
+            if (tailwheelStrutGeometryCaptured
+                || tailwheelStrut == null
+                || tailwheelStrut.parent != tailwheelGearRoot)
             {
                 return;
             }
@@ -127,7 +152,7 @@ namespace Hanger51.Aircraft
 
         private void StretchTailwheelStrutToGroundedWheel(Transform tailTire)
         {
-            ResolveTailwheelStrut();
+            ResolveTailwheelGeometry();
             if (!tailwheelStrutGeometryCaptured
                 || tailwheelStrut == null
                 || tailwheelGearRoot == null
