@@ -61,17 +61,17 @@ namespace Hanger51.Aircraft
                 }
 
                 Transform tireVisual = FindDescendant(movingGear, $"{label} Tire Visual");
+                Transform rimVisual = FindDescendant(movingGear, $"{label} Rim Visual");
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
 
-                // The main-gear mount bolts represent the upper gear-to-airframe attachment,
-                // so they remain at the top of each strut. On the tailwheel, the visible bolt
-                // is part of the little wheel/hub assembly the player services. Keep that bolt
-                // with the grounded tire so it cannot float above the rim when the raycast
-                // suspension moves the tailwheel below the retracting gear root.
-                if (wheelIndex == 2 && tireVisual != null)
+                // Main-gear mount bolts stay at the upper strut attachment. The tailwheel's
+                // visible bolt is part of the little rim/hub assembly, so keep it on the rim.
+                // Using the rim rather than the rubber tire also keeps the bolt available for
+                // service after the tire itself has been removed.
+                if (wheelIndex == 2 && rimVisual != null)
                 {
-                    if (AttachAtLocalPose(mountTarget, tireVisual, Vector3.zero))
+                    if (AttachAtLocalPose(mountTarget, rimVisual, Vector3.zero))
                     {
                         repairedOrCorrect++;
                     }
@@ -84,9 +84,7 @@ namespace Hanger51.Aircraft
                     repairedOrCorrect++;
                 }
 
-                // Tire/valve interaction belongs to the wheel, not to the unsprung gear root.
-                // Parenting it to the visual tire also keeps its trigger and valve stem exactly
-                // aligned with suspension travel on all three stations.
+                // Tire/valve interaction belongs to the tire and follows suspension travel.
                 Transform tireParent = tireVisual != null ? tireVisual : movingGear;
                 if (AttachAtLocalPose(tireTarget, tireParent, Vector3.zero))
                 {
@@ -116,12 +114,13 @@ namespace Hanger51.Aircraft
                 }
 
                 Transform tireVisual = FindDescendant(movingGear, $"{label} Tire Visual");
+                Transform rimVisual = FindDescendant(movingGear, $"{label} Rim Visual");
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
 
-                if (wheelIndex == 2 && tireVisual != null)
+                if (wheelIndex == 2 && rimVisual != null)
                 {
-                    if (IsAtLocalPose(mountTarget, tireVisual, Vector3.zero))
+                    if (IsAtLocalPose(mountTarget, rimVisual, Vector3.zero))
                     {
                         count++;
                     }
