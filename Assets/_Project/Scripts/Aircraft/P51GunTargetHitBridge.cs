@@ -80,6 +80,16 @@ namespace Hanger51.Aircraft
                 Collider collider = hits[index].collider;
                 if (collider == null || collider.transform.IsChildOf(transform)) continue;
 
+                P51RadiatorDamageReceiver radiator =
+                    collider.GetComponentInParent<P51RadiatorDamageReceiver>();
+                if (radiator != null)
+                {
+                    radiator.RegisterProjectileHit(
+                        hits[index].point,
+                        damagePerRound * Mathf.Max(1, rounds));
+                    break;
+                }
+
                 P51GunTestTarget target = collider.GetComponentInParent<P51GunTestTarget>();
                 if (target != null)
                 {
