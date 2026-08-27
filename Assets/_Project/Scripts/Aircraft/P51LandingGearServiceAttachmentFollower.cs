@@ -60,17 +60,35 @@ namespace Hanger51.Aircraft
                     continue;
                 }
 
+                Transform tireVisual = FindDescendant(movingGear, $"{label} Tire Visual");
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
 
-                if (AttachAtLocalPose(
-                        mountTarget,
-                        movingGear,
-                        new Vector3(0f, MountHeights[wheelIndex], 0f)))
+                // The main-gear mount bolts represent the upper gear-to-airframe attachment,
+                // so they remain at the top of each strut. On the tailwheel, the visible bolt
+                // is part of the little wheel/hub assembly the player services. Keep that bolt
+                // with the grounded tire so it cannot float above the rim when the raycast
+                // suspension moves the tailwheel below the retracting gear root.
+                if (wheelIndex == 2 && tireVisual != null)
+                {
+                    if (AttachAtLocalPose(mountTarget, tireVisual, Vector3.zero))
+                    {
+                        repairedOrCorrect++;
+                    }
+                }
+                else if (AttachAtLocalPose(
+                             mountTarget,
+                             movingGear,
+                             new Vector3(0f, MountHeights[wheelIndex], 0f)))
                 {
                     repairedOrCorrect++;
                 }
-                if (AttachAtLocalPose(tireTarget, movingGear, Vector3.zero))
+
+                // Tire/valve interaction belongs to the wheel, not to the unsprung gear root.
+                // Parenting it to the visual tire also keeps its trigger and valve stem exactly
+                // aligned with suspension travel on all three stations.
+                Transform tireParent = tireVisual != null ? tireVisual : movingGear;
+                if (AttachAtLocalPose(tireTarget, tireParent, Vector3.zero))
                 {
                     repairedOrCorrect++;
                 }
@@ -97,16 +115,27 @@ namespace Hanger51.Aircraft
                     continue;
                 }
 
+                Transform tireVisual = FindDescendant(movingGear, $"{label} Tire Visual");
                 Transform mountTarget = FindDescendant(systemRoot, $"{label} Large Mount Bolt Service Target");
                 Transform tireTarget = FindDescendant(systemRoot, $"{label} Tire and Valve Service Target");
-                if (IsAtLocalPose(
-                        mountTarget,
-                        movingGear,
-                        new Vector3(0f, MountHeights[wheelIndex], 0f)))
+
+                if (wheelIndex == 2 && tireVisual != null)
+                {
+                    if (IsAtLocalPose(mountTarget, tireVisual, Vector3.zero))
+                    {
+                        count++;
+                    }
+                }
+                else if (IsAtLocalPose(
+                             mountTarget,
+                             movingGear,
+                             new Vector3(0f, MountHeights[wheelIndex], 0f)))
                 {
                     count++;
                 }
-                if (IsAtLocalPose(tireTarget, movingGear, Vector3.zero))
+
+                Transform tireParent = tireVisual != null ? tireVisual : movingGear;
+                if (IsAtLocalPose(tireTarget, tireParent, Vector3.zero))
                 {
                     count++;
                 }
