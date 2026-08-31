@@ -110,7 +110,7 @@ namespace Hanger51.Aircraft
                 Collider collider = colliders[index];
                 if (collider == null
                     || trackedColliders.Contains(collider)
-                    || !BelongsToEngineServiceTarget(collider.transform))
+                    || !BelongsToInternalEngineServiceTarget(collider.transform))
                 {
                     continue;
                 }
@@ -139,7 +139,7 @@ namespace Hanger51.Aircraft
             lockActive = false;
         }
 
-        private bool BelongsToEngineServiceTarget(Transform candidate)
+        private bool BelongsToInternalEngineServiceTarget(Transform candidate)
         {
             Transform cursor = candidate;
             while (cursor != null && cursor != transform)
@@ -151,6 +151,14 @@ namespace Hanger51.Aircraft
                     if (component == null)
                     {
                         continue;
+                    }
+
+                    AircraftServiceInteractionTarget aircraftTarget =
+                        component as AircraftServiceInteractionTarget;
+                    if (aircraftTarget != null
+                        && aircraftTarget.InteractionKind == AircraftServiceInteractionKind.EngineMountBolt)
+                    {
+                        return true;
                     }
 
                     Type type = component.GetType();
