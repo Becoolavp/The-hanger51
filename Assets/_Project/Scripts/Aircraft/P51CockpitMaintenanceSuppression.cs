@@ -42,17 +42,24 @@ namespace Hanger51.Aircraft
 
         private void Update()
         {
-            if (!suppressionActive && Time.unscaledTime >= nextResolveTime)
+            if (Time.unscaledTime >= nextResolveTime)
             {
-                ResolveReferences();
+                if (suppressionActive)
+                {
+                    CaptureLateRuntimeInteractors();
+                }
+                else
+                {
+                    ResolveReferences();
+                }
             }
 
             ApplyPilotState();
 
             if (suppressionActive)
             {
-                // Runtime bootstraps can re-enable or add service interactors after cockpit
-                // entry. Keep the seated state authoritative for the entire frame.
+                // Runtime bootstraps can re-enable service interactors after cockpit entry.
+                // Keep the seated state authoritative for the entire frame.
                 for (int index = 0; index < suppressedInteractors.Length; index++)
                 {
                     Behaviour target = suppressedInteractors[index];
@@ -92,6 +99,28 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private void CaptureLateRuntimeInteractors()
+        {
+            for (int index = 0; index < suppressedInteractors.Length; index++)
+            {
+                if (suppressedInteractors[index] != null)
+                {
+                    continue;
+                }
+
+                Behaviour target = FindInteractor(index);
+                if (target == null)
+                {
+                    continue;
+                }
+
+                suppressedInteractors[index] = target;
+                previouslyEnabled[index] = target.enabled;
+                target.enabled = false;
+            }
+            nextResolveTime = Time.unscaledTime + 0.5f;
+        }
+
         private void RestoreInteractors()
         {
             suppressionActive = false;
@@ -114,11 +143,23 @@ namespace Hanger51.Aircraft
                 pilotInteractor = GetComponent<P51PilotPlayerInteractor>();
             }
 
-            suppressedInteractors[0] = GetComponent<P51LandingGearServicePlayerInteractor>();
-            suppressedInteractors[1] = GetComponent<P51WingArmamentServicePointInteractor>();
-            suppressedInteractors[2] = GetComponent<P51CoolantPlayerInteractor>();
-            suppressedInteractors[3] = GetComponent<P51TowBarPlayerInteractor>();
+            for (int index = 0; index < suppressedInteractors.Length; index++)
+            {
+                suppressedInteractors[index] = FindInteractor(index);
+            }
             nextResolveTime = Time.unscaledTime + 0.5f;
+        }
+
+        private Behaviour FindInteractor(int slot)
+        {
+            switch (slot)
+            {
+                case 0: return GetComponent<P51LandingGearServicePlayerInteractor>();
+                case 1: return GetComponent<P51WingArmamentServicePointInteractor>();
+                case 2: return GetComponent<P51CoolantPlayerInteractor>();
+                case 3: return GetComponent<P51TowBarPlayerInteractor>();
+                default: return null;
+            }
         }
 
         private void OnDisable()
