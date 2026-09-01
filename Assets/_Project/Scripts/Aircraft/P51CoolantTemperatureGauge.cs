@@ -86,7 +86,7 @@ namespace Hanger51.Aircraft
                 statusReadout.text = "OVERHEAT";
                 statusReadout.color = Color.red;
             }
-            else if (temperature >= 108f || coolingSystem.CoolantIsHot)
+            else if (temperature >= 108f || coolingSystem.IsOverheating)
             {
                 statusReadout.text = "HOT";
                 statusReadout.color = new Color(1f, 0.55f, 0.05f);
