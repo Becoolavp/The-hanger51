@@ -114,7 +114,8 @@ namespace Hanger51.Aircraft
             if (heldPanel != null)
             {
                 P51AftEquipmentBay bay = hasHit ? hit.collider.GetComponentInParent<P51AftEquipmentBay>() : null;
-                if (bay == null && heldPanel.Bay != null && Vector3.Distance(heldPanel.Bay.transform.position, interactionCamera.transform.position) < 4.5f)
+                if (bay == null && heldPanel.Bay != null
+                    && Vector3.Distance(heldPanel.Bay.transform.position, interactionCamera.transform.position) < 4.5f)
                 {
                     bay = heldPanel.Bay;
                 }
@@ -127,8 +128,11 @@ namespace Hanger51.Aircraft
                 {
                     heldPanel.InstallOnAircraft(bay);
                     heldPanel.SetHeld(false);
+                    int released = heldPanel.FastenerCount - heldPanel.SecuredFastenerCount;
                     heldPanel = null;
-                    SetStatus("Reinstalled aft fuselage access panel.");
+                    SetStatus(released > 0
+                        ? $"Panel positioned. Secure the {released} released fastener{(released == 1 ? string.Empty : "s")} before flight."
+                        : "Reinstalled and secured aft fuselage access panel.");
                 }
                 return;
             }
@@ -138,20 +142,47 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            // Fasteners deliberately get priority over the parent panel collider.
+            P51AftPanelFastener fastener = hit.collider.GetComponentInParent<P51AftPanelFastener>();
+            if (fastener != null)
+            {
+                prompt = fastener.IsSecured
+                    ? $"E: release aft-panel fastener {fastener.FastenerIndex + 1}"
+                    : $"E: secure aft-panel fastener {fastener.FastenerIndex + 1}";
+                if (keyboard.eKey.wasPressedThisFrame && fastener.TryToggle(out string fastenerMessage))
+                {
+                    SetStatus(fastenerMessage);
+                }
+                return;
+            }
+
             P51AftAccessPanel panel = hit.collider.GetComponentInParent<P51AftAccessPanel>();
             if (panel != null)
             {
-                prompt = panel.IsInstalled
-                    ? "E: remove aft fuselage access panel"
-                    : "E: pick up aft fuselage access panel";
-                if (keyboard.eKey.wasPressedThisFrame)
+                if (panel.IsInstalled)
                 {
-                    if (panel.IsInstalled)
+                    int remaining = panel.SecuredFastenerCount;
+                    prompt = remaining > 0
+                        ? $"Release {remaining} aft-panel fastener{(remaining == 1 ? string.Empty : "s")} before removing the panel."
+                        : "E: remove aft fuselage access panel";
+
+                    if (keyboard.eKey.wasPressedThisFrame && remaining == 0)
                     {
-                        panel.RemoveFromAircraft();
+                        if (panel.TryRemoveFromAircraft(out string removeMessage))
+                        {
+                            HoldPanel(panel);
+                        }
+                        SetStatus(removeMessage);
                     }
-                    HoldPanel(panel);
-                    SetStatus("Aft equipment bay opened.");
+                }
+                else
+                {
+                    prompt = "E: pick up aft fuselage access panel";
+                    if (keyboard.eKey.wasPressedThisFrame)
+                    {
+                        HoldPanel(panel);
+                        SetStatus("Picked up aft fuselage access panel.");
+                    }
                 }
                 return;
             }
@@ -190,7 +221,9 @@ namespace Hanger51.Aircraft
             P51AftEquipmentItem looseItem = hit.collider.GetComponentInParent<P51AftEquipmentItem>();
             if (looseItem != null)
             {
-                prompt = looseItem.IsInstalled ? $"E: remove {looseItem.DisplayName}" : $"E: pick up {looseItem.DisplayName}";
+                prompt = looseItem.IsInstalled
+                    ? $"E: remove {looseItem.DisplayName}"
+                    : $"E: pick up {looseItem.DisplayName}";
                 if (keyboard.eKey.wasPressedThisFrame)
                 {
                     if (looseItem.IsInstalled)
@@ -311,7 +344,8 @@ namespace Hanger51.Aircraft
         private static bool IsAftInteractionTarget(Collider collider)
         {
             return collider != null
-                && (collider.GetComponentInParent<P51AftAccessPanel>() != null
+                && (collider.GetComponentInParent<P51AftPanelFastener>() != null
+                    || collider.GetComponentInParent<P51AftAccessPanel>() != null
                     || collider.GetComponentInParent<P51AftEquipmentSlot>() != null
                     || collider.GetComponentInParent<P51AftEquipmentItem>() != null
                     || collider.GetComponentInParent<P51BatteryTester>() != null);
@@ -360,6 +394,18 @@ namespace Hanger51.Aircraft
             if (!string.IsNullOrWhiteSpace(statusMessage) && Time.unscaledTime <= statusUntil)
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330f, 70f, 660f, 44f), statusMessage, promptStyle);
+            }
+        }
+
+        private void ResolveCamera()
+        {
+            if (interactionCamera == null)
+            {
+                interactionCamera = GetComponent<Camera>();
+            }
+            if (interactionCamera == null)
+            {
+                interactionCamera = Camera.main;
             }
         }
 
