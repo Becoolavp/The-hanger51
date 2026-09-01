@@ -26,14 +26,15 @@ namespace Hanger51.Aircraft
             bay = configuredBay;
             acceptedKind = kind;
             slotIndex = Mathf.Max(0, index);
+            NormalizePlacementHighlight();
         }
 
         public void ConfigurePlacementHighlight(GameObject configuredRoot)
         {
             placementHighlightRoot = configuredRoot;
+            NormalizePlacementHighlight();
             if (placementHighlightRoot != null)
             {
-                highlightBaseScale = placementHighlightRoot.transform.localScale;
                 placementHighlightRoot.SetActive(false);
             }
             placementHighlighted = false;
@@ -58,6 +59,14 @@ namespace Hanger51.Aircraft
             }
         }
 
+        private void OnEnable()
+        {
+            // Step 94 originally built oxygen guides with their long dimension on local Y even
+            // though the actual bottle capsule and cradle run fore/aft on local Z. Normalize old
+            // saved scenes as soon as the slot loads, and also normalize newly configured guides.
+            NormalizePlacementHighlight();
+        }
+
         private void Update()
         {
             if (!placementHighlighted || placementHighlightRoot == null)
@@ -72,6 +81,20 @@ namespace Hanger51.Aircraft
         private void OnDisable()
         {
             SetPlacementHighlighted(false);
+        }
+
+        private void NormalizePlacementHighlight()
+        {
+            if (placementHighlightRoot == null)
+            {
+                return;
+            }
+
+            Transform highlightTransform = placementHighlightRoot.transform;
+            highlightTransform.localRotation = acceptedKind == P51AftEquipmentKind.OxygenBottle
+                ? Quaternion.Euler(90f, 0f, 0f)
+                : Quaternion.identity;
+            highlightBaseScale = highlightTransform.localScale;
         }
     }
 }
