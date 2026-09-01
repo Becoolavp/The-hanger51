@@ -98,29 +98,88 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // The removable panel is thin on local X. Its exterior skin is on the negative-X face,
-            // so all four quarter-turn fasteners sit just outside that face and point through the
-            // skin along the panel normal. This also repairs legacy scenes where Fastener 1 was
-            // left rotated or displaced away from the panel.
-            BoxCollider panelCollider = panel.GetComponent<BoxCollider>();
-            Vector3 center = panelCollider != null ? panelCollider.center : Vector3.zero;
-            Vector3 size = panelCollider != null ? panelCollider.size : Vector3.one;
+            MeshFilter filter = panel.GetComponent<MeshFilter>();
+            Mesh mesh = filter != null ? filter.sharedMesh : null;
+            if (mesh == null || mesh.vertexCount == 0)
+            {
+                // The normal P-51 aft panel is a curved mesh. If a future replacement panel has no
+                // mesh, preserve its authored transform rather than guessing at a panel axis.
+                CaptureCurrentRotation();
+                return;
+            }
 
-            float ySign = fastenerIndex < 2 ? 1f : -1f;
-            float zSign = (fastenerIndex & 1) == 0 ? -1f : 1f;
-            Vector3 panelLocalPosition = new Vector3(
-                center.x - size.x * 0.56f,
-                center.y + size.y * 0.40f * ySign,
-                center.z + size.z * 0.42f * zSign);
+            // Match the canonical layout used by Step 92: four captive fasteners near the curved
+            // panel corners, each sampled directly from the actual exterior skin. Using the mesh
+            // instead of a BoxCollider avoids the axis assumption that could throw the fasteners
+            // away from the fuselage on a curved/rotated panel.
+            Bounds bounds = mesh.bounds;
+            float topY = bounds.max.y - Mathf.Min(0.07f, bounds.size.y * 0.10f);
+            float bottomY = bounds.min.y + Mathf.Min(0.07f, bounds.size.y * 0.10f);
+            float frontZ = bounds.max.z - Mathf.Min(0.08f, bounds.size.z * 0.08f);
+            float rearZ = bounds.min.z + Mathf.Min(0.08f, bounds.size.z * 0.08f);
 
-            transform.position = panel.transform.TransformPoint(panelLocalPosition);
+            int normalizedIndex = Mathf.Clamp(fastenerIndex, 0, 3);
+            float targetY = normalizedIndex < 2 ? topY : bottomY;
+            float targetZ = (normalizedIndex & 1) == 0 ? rearZ : frontZ;
 
-            Quaternion panelLocalMountRotation = Quaternion.Euler(0f, 0f, -90f);
-            Quaternion worldSecuredRotation = panel.transform.rotation * panelLocalMountRotation;
+            FindOuterSurfacePoint(
+                mesh.vertices,
+                mesh.normals,
+                targetY,
+                targetZ,
+                out Vector3 panelLocalPosition,
+                out Vector3 panelLocalNormal);
+
+            panelLocalPosition += panelLocalNormal * 0.014f;
+            Quaternion panelLocalRotation = Quaternion.FromToRotation(Vector3.up, panelLocalNormal);
+
+            Vector3 worldPosition = panel.transform.TransformPoint(panelLocalPosition);
+            Quaternion worldRotation = panel.transform.rotation * panelLocalRotation;
+            transform.position = worldPosition;
+
             securedRotation = transform.parent != null
-                ? Quaternion.Inverse(transform.parent.rotation) * worldSecuredRotation
-                : worldSecuredRotation;
+                ? Quaternion.Inverse(transform.parent.rotation) * worldRotation
+                : worldRotation;
             rotationCaptured = true;
+        }
+
+        private static void FindOuterSurfacePoint(
+            Vector3[] vertices,
+            Vector3[] normals,
+            float targetY,
+            float targetZ,
+            out Vector3 position,
+            out Vector3 normal)
+        {
+            int best = 0;
+            float bestScore = float.PositiveInfinity;
+            bool hasNormals = normals != null && normals.Length == vertices.Length;
+
+            for (int index = 0; index < vertices.Length; index++)
+            {
+                Vector3 candidateNormal = hasNormals ? normals[index] : Vector3.left;
+                float outwardPenalty = candidateNormal.x < -0.12f ? 0f : 2.0f;
+                float dy = vertices[index].y - targetY;
+                float dz = vertices[index].z - targetZ;
+                float score = dy * dy + dz * dz + outwardPenalty;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = index;
+                }
+            }
+
+            position = vertices[best];
+            normal = hasNormals && normals[best].sqrMagnitude > 0.0001f
+                ? normals[best].normalized
+                : Vector3.left;
+
+            // The aft access panel's exterior is on the negative local-X side. Keep the sampled
+            // fastener normal pointing out of the fuselage, just like the original Step 92 builder.
+            if (normal.x > 0f)
+            {
+                normal = -normal;
+            }
         }
 
         private void CaptureCurrentRotation()
@@ -136,8 +195,9 @@ namespace Hanger51.Aircraft
                 NormalizeMountTransform();
             }
 
-            // Twist around the fastener's own cylinder axis. The base mount rotation remains fixed
-            // normal to the panel, so releasing a fastener turns it without tipping it sideways.
+            // The Unity cylinder's local Y axis is its shaft. The canonical mount rotation maps
+            // that Y axis to the sampled panel normal, so the release animation twists the fastener
+            // in place rather than tipping it away from the skin.
             targetRotation = secured
                 ? securedRotation
                 : securedRotation * Quaternion.AngleAxis(90f, Vector3.up);
