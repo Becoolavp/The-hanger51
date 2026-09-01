@@ -51,8 +51,8 @@ namespace Hanger51.Aircraft
             }
 
             Ray ray = new Ray(interactionCamera.transform.position, interactionCamera.transform.forward);
-            bool hasHit = Physics.Raycast(ray, out RaycastHit hit, interactionDistance, ~0, QueryTriggerInteraction.Collide);
-            if (hasHit && IsAftInteractionTarget(hit.collider))
+            bool hasHit = TryFindAftInteractionHit(ray, out RaycastHit hit);
+            if (hasHit)
             {
                 HasActiveAftInteraction = true;
             }
@@ -218,6 +218,33 @@ namespace Hanger51.Aircraft
                     SetStatus("Picked up battery tester. Aim at an aircraft battery and press E to connect the leads.");
                 }
             }
+        }
+
+        private bool TryFindAftInteractionHit(Ray ray, out RaycastHit bestHit)
+        {
+            bestHit = new RaycastHit();
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                interactionDistance,
+                ~0,
+                QueryTriggerInteraction.Collide);
+            float nearest = float.PositiveInfinity;
+            bool found = false;
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit candidate = hits[i];
+                if (candidate.collider == null
+                    || candidate.distance >= nearest
+                    || !IsAftInteractionTarget(candidate.collider))
+                {
+                    continue;
+                }
+
+                nearest = candidate.distance;
+                bestHit = candidate;
+                found = true;
+            }
+            return found;
         }
 
         private void LateUpdate()
