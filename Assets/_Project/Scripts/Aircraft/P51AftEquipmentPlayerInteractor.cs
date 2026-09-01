@@ -59,9 +59,7 @@ namespace Hanger51.Aircraft
 
             if (heldTester != null)
             {
-                P51AftEquipmentItem battery = hasHit
-                    ? hit.collider.GetComponentInParent<P51AftEquipmentItem>()
-                    : null;
+                P51AftEquipmentItem battery = hasHit ? hit.collider.GetComponentInParent<P51AftEquipmentItem>() : null;
                 if (battery == null && hasHit)
                 {
                     P51AftEquipmentSlot testerSlot = hit.collider.GetComponentInParent<P51AftEquipmentSlot>();
@@ -142,7 +140,6 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // Fasteners deliberately get priority over the parent panel collider.
             P51AftPanelFastener fastener = hit.collider.GetComponentInParent<P51AftPanelFastener>();
             if (fastener != null)
             {
@@ -256,11 +253,7 @@ namespace Hanger51.Aircraft
         private bool TryFindAftInteractionHit(Ray ray, out RaycastHit bestHit)
         {
             bestHit = new RaycastHit();
-            RaycastHit[] hits = Physics.RaycastAll(
-                ray,
-                interactionDistance,
-                ~0,
-                QueryTriggerInteraction.Collide);
+            RaycastHit[] hits = Physics.RaycastAll(ray, interactionDistance, ~0, QueryTriggerInteraction.Collide);
             float nearest = float.PositiveInfinity;
             bool found = false;
             for (int i = 0; i < hits.Length; i++)
@@ -394,18 +387,6 @@ namespace Hanger51.Aircraft
             if (!string.IsNullOrWhiteSpace(statusMessage) && Time.unscaledTime <= statusUntil)
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330f, 70f, 660f, 44f), statusMessage, promptStyle);
-            }
-        }
-
-        private void ResolveCamera()
-        {
-            if (interactionCamera == null)
-            {
-                interactionCamera = GetComponent<Camera>();
-            }
-            if (interactionCamera == null)
-            {
-                interactionCamera = Camera.main;
             }
         }
 
