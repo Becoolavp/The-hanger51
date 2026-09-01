@@ -9,6 +9,7 @@ namespace Hanger51.Aircraft
         private const float SurfaceStandOff = 0.024f;
         private const float BottomRowInsetFraction = 0.24f;
         private const float BottomRowInsetMaximum = 0.16f;
+        private const int CurvedLowerFastenerIndex = 2;
 
         [SerializeField] private P51AftAccessPanel panel;
         [SerializeField] private int fastenerIndex;
@@ -113,14 +114,8 @@ namespace Hanger51.Aircraft
 
             Bounds bounds = mesh.bounds;
             float topY = bounds.max.y - Mathf.Min(0.07f, bounds.size.y * 0.10f);
-
-            // The lower edge of the curved panel rolls underneath the fuselage. Targeting only
-            // ten percent above bounds.min.y can therefore select a legitimate exterior vertex on
-            // the belly instead of the side access-panel skin. Pull only the lower fastener row
-            // farther upward; the already-correct upper row is intentionally left unchanged.
             float bottomInset = Mathf.Min(BottomRowInsetMaximum, bounds.size.y * BottomRowInsetFraction);
             float bottomY = bounds.min.y + bottomInset;
-
             float frontZ = bounds.max.z - Mathf.Min(0.08f, bounds.size.z * 0.08f);
             float rearZ = bounds.min.z + Mathf.Min(0.08f, bounds.size.z * 0.08f);
 
@@ -128,18 +123,30 @@ namespace Hanger51.Aircraft
             float targetY = normalizedIndex < 2 ? topY : bottomY;
             float targetZ = (normalizedIndex & 1) == 0 ? rearZ : frontZ;
 
+            Vector3[] vertices = mesh.vertices;
+            Vector3[] normals = mesh.normals;
             FindStableOuterSurfacePoint(
-                mesh.vertices,
-                mesh.normals,
+                vertices,
+                normals,
                 bounds,
                 targetY,
                 targetZ,
                 out Vector3 panelLocalPosition,
                 out Vector3 panelLocalNormal);
 
-            // Keep the head fully proud of the curved skin. Step 94 makes the service fasteners
-            // slightly larger for visibility, so the old 14 mm offset could leave the head visibly
-            // buried even when the center point itself was technically outside the mesh.
+            // Fastener 3 is on the lower curved transition. Its shaft should follow the real
+            // curved-skin normal instead of being forced toward panel-local -X. The -X clamp is
+            // what produced the roughly 90-degree sideways rotation visible in the Inspector.
+            // Keep the established position and correct only this fastener's mount direction.
+            if (normalizedIndex == CurvedLowerFastenerIndex)
+            {
+                panelLocalNormal = FindNaturalCurvedSurfaceNormal(
+                    vertices,
+                    normals,
+                    bounds,
+                    panelLocalPosition);
+            }
+
             panelLocalPosition += panelLocalNormal * SurfaceStandOff;
             Quaternion panelLocalRotation = Quaternion.FromToRotation(Vector3.up, panelLocalNormal);
 
@@ -166,9 +173,6 @@ namespace Hanger51.Aircraft
             int best = -1;
             float bestScore = float.PositiveInfinity;
 
-            // First pass deliberately ignores edge/tangent vertices. The exterior of this panel is
-            // on negative local X, so a useful mounting patch must have a meaningful negative-X
-            // component instead of a normal that points mostly up/down or fore/aft.
             if (hasNormals)
             {
                 for (int index = 0; index < vertices.Length; index++)
@@ -196,9 +200,6 @@ namespace Hanger51.Aircraft
                 }
             }
 
-            // Fallback for a future mesh whose imported normals are missing/unusual: choose the
-            // closest Y/Z vertex on the most-negative-X side of the mesh rather than accepting an
-            // arbitrary inward face.
             if (best < 0)
             {
                 float exteriorBand = bounds.min.x + Mathf.Max(0.01f, bounds.size.x * 0.30f);
@@ -227,8 +228,6 @@ namespace Hanger51.Aircraft
 
             position = vertices[best];
 
-            // Smooth the normal using nearby outward-facing vertices. This prevents one seam or
-            // corner vertex from tipping an otherwise correctly positioned fastener into the skin.
             Vector3 accumulatedNormal = Vector3.zero;
             float normalWeight = 0f;
             float patchY = Mathf.Max(0.04f, bounds.size.y * 0.16f);
@@ -272,13 +271,95 @@ namespace Hanger51.Aircraft
                 normal = -normal;
             }
 
-            // Final safety clamp: even after smoothing, do not allow a nearly tangent normal to
-            // aim the cylinder shaft sideways through the aircraft skin.
             if (normal.x > MinimumStrongOutwardX)
             {
                 normal.x = MinimumStrongOutwardX;
                 normal.Normalize();
             }
+        }
+
+        private static Vector3 FindNaturalCurvedSurfaceNormal(
+            Vector3[] vertices,
+            Vector3[] normals,
+            Bounds bounds,
+            Vector3 surfacePosition)
+        {
+            // Use the panel's local X/Y cross-section to establish which way is out from the
+            // curved fuselage. This lets a lower fastener point down/out naturally instead of
+            // treating local -X as the only legal exterior direction.
+            Vector3 outwardRadial = new Vector3(
+                surfacePosition.x - bounds.center.x,
+                surfacePosition.y - bounds.center.y,
+                0f);
+            if (outwardRadial.sqrMagnitude < 0.0001f)
+            {
+                outwardRadial = Vector3.down;
+            }
+            outwardRadial.Normalize();
+
+            bool hasNormals = normals != null && normals.Length == vertices.Length;
+            if (!hasNormals)
+            {
+                return outwardRadial;
+            }
+
+            float patchX = Mathf.Max(0.035f, bounds.size.x * 0.18f);
+            float patchY = Mathf.Max(0.045f, bounds.size.y * 0.18f);
+            float patchZ = Mathf.Max(0.045f, bounds.size.z * 0.12f);
+            Vector3 accumulatedNormal = Vector3.zero;
+            float totalWeight = 0f;
+
+            for (int index = 0; index < vertices.Length; index++)
+            {
+                float dx = Mathf.Abs(vertices[index].x - surfacePosition.x);
+                float dy = Mathf.Abs(vertices[index].y - surfacePosition.y);
+                float dz = Mathf.Abs(vertices[index].z - surfacePosition.z);
+                if (dx > patchX || dy > patchY || dz > patchZ)
+                {
+                    continue;
+                }
+
+                Vector3 candidateNormal = normals[index];
+                if (candidateNormal.sqrMagnitude < 0.0001f)
+                {
+                    continue;
+                }
+                candidateNormal.Normalize();
+
+                // Imported seam normals can have opposite winding. Flip only their sign so the
+                // shape information is retained while every sample points away from the fuselage.
+                if (Vector3.Dot(candidateNormal, outwardRadial) < 0f)
+                {
+                    candidateNormal = -candidateNormal;
+                }
+
+                float alignment = Vector3.Dot(candidateNormal, outwardRadial);
+                if (alignment < 0.12f)
+                {
+                    continue;
+                }
+
+                float weight = alignment / (0.01f + dx + dy + dz);
+                accumulatedNormal += candidateNormal * weight;
+                totalWeight += weight;
+            }
+
+            Vector3 result = totalWeight > 0f && accumulatedNormal.sqrMagnitude > 0.0001f
+                ? accumulatedNormal.normalized
+                : outwardRadial;
+
+            if (Vector3.Dot(result, outwardRadial) < 0f)
+            {
+                result = -result;
+            }
+
+            float finalAlignment = Vector3.Dot(result, outwardRadial);
+            if (finalAlignment < 0.55f)
+            {
+                result = Vector3.Slerp(result, outwardRadial, 0.65f).normalized;
+            }
+
+            return result;
         }
 
         private void CaptureCurrentRotation()
