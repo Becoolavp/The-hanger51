@@ -7,6 +7,8 @@ namespace Hanger51.Aircraft
     {
         private const float MinimumStrongOutwardX = -0.35f;
         private const float SurfaceStandOff = 0.024f;
+        private const float BottomRowInsetFraction = 0.24f;
+        private const float BottomRowInsetMaximum = 0.16f;
 
         [SerializeField] private P51AftAccessPanel panel;
         [SerializeField] private int fastenerIndex;
@@ -111,7 +113,14 @@ namespace Hanger51.Aircraft
 
             Bounds bounds = mesh.bounds;
             float topY = bounds.max.y - Mathf.Min(0.07f, bounds.size.y * 0.10f);
-            float bottomY = bounds.min.y + Mathf.Min(0.07f, bounds.size.y * 0.10f);
+
+            // The lower edge of the curved panel rolls underneath the fuselage. Targeting only
+            // ten percent above bounds.min.y can therefore select a legitimate exterior vertex on
+            // the belly instead of the side access-panel skin. Pull only the lower fastener row
+            // farther upward; the already-correct upper row is intentionally left unchanged.
+            float bottomInset = Mathf.Min(BottomRowInsetMaximum, bounds.size.y * BottomRowInsetFraction);
+            float bottomY = bounds.min.y + bottomInset;
+
             float frontZ = bounds.max.z - Mathf.Min(0.08f, bounds.size.z * 0.08f);
             float rearZ = bounds.min.z + Mathf.Min(0.08f, bounds.size.z * 0.08f);
 
