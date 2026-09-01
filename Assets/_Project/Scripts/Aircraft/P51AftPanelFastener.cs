@@ -5,6 +5,9 @@ namespace Hanger51.Aircraft
     [DisallowMultipleComponent]
     public sealed class P51AftPanelFastener : MonoBehaviour
     {
+        private const float MinimumStrongOutwardX = -0.35f;
+        private const float SurfaceStandOff = 0.024f;
+
         [SerializeField] private P51AftAccessPanel panel;
         [SerializeField] private int fastenerIndex;
         [SerializeField] private bool secured = true;
@@ -102,16 +105,10 @@ namespace Hanger51.Aircraft
             Mesh mesh = filter != null ? filter.sharedMesh : null;
             if (mesh == null || mesh.vertexCount == 0)
             {
-                // The normal P-51 aft panel is a curved mesh. If a future replacement panel has no
-                // mesh, preserve its authored transform rather than guessing at a panel axis.
                 CaptureCurrentRotation();
                 return;
             }
 
-            // Match the canonical layout used by Step 92: four captive fasteners near the curved
-            // panel corners, each sampled directly from the actual exterior skin. Using the mesh
-            // instead of a BoxCollider avoids the axis assumption that could throw the fasteners
-            // away from the fuselage on a curved/rotated panel.
             Bounds bounds = mesh.bounds;
             float topY = bounds.max.y - Mathf.Min(0.07f, bounds.size.y * 0.10f);
             float bottomY = bounds.min.y + Mathf.Min(0.07f, bounds.size.y * 0.10f);
@@ -122,15 +119,19 @@ namespace Hanger51.Aircraft
             float targetY = normalizedIndex < 2 ? topY : bottomY;
             float targetZ = (normalizedIndex & 1) == 0 ? rearZ : frontZ;
 
-            FindOuterSurfacePoint(
+            FindStableOuterSurfacePoint(
                 mesh.vertices,
                 mesh.normals,
+                bounds,
                 targetY,
                 targetZ,
                 out Vector3 panelLocalPosition,
                 out Vector3 panelLocalNormal);
 
-            panelLocalPosition += panelLocalNormal * 0.014f;
+            // Keep the head fully proud of the curved skin. Step 94 makes the service fasteners
+            // slightly larger for visibility, so the old 14 mm offset could leave the head visibly
+            // buried even when the center point itself was technically outside the mesh.
+            panelLocalPosition += panelLocalNormal * SurfaceStandOff;
             Quaternion panelLocalRotation = Quaternion.FromToRotation(Vector3.up, panelLocalNormal);
 
             Vector3 worldPosition = panel.transform.TransformPoint(panelLocalPosition);
@@ -143,42 +144,131 @@ namespace Hanger51.Aircraft
             rotationCaptured = true;
         }
 
-        private static void FindOuterSurfacePoint(
+        private static void FindStableOuterSurfacePoint(
             Vector3[] vertices,
             Vector3[] normals,
+            Bounds bounds,
             float targetY,
             float targetZ,
             out Vector3 position,
             out Vector3 normal)
         {
-            int best = 0;
-            float bestScore = float.PositiveInfinity;
             bool hasNormals = normals != null && normals.Length == vertices.Length;
+            int best = -1;
+            float bestScore = float.PositiveInfinity;
 
-            for (int index = 0; index < vertices.Length; index++)
+            // First pass deliberately ignores edge/tangent vertices. The exterior of this panel is
+            // on negative local X, so a useful mounting patch must have a meaningful negative-X
+            // component instead of a normal that points mostly up/down or fore/aft.
+            if (hasNormals)
             {
-                Vector3 candidateNormal = hasNormals ? normals[index] : Vector3.left;
-                float outwardPenalty = candidateNormal.x < -0.12f ? 0f : 2.0f;
-                float dy = vertices[index].y - targetY;
-                float dz = vertices[index].z - targetZ;
-                float score = dy * dy + dz * dz + outwardPenalty;
-                if (score < bestScore)
+                for (int index = 0; index < vertices.Length; index++)
                 {
-                    bestScore = score;
-                    best = index;
+                    Vector3 candidateNormal = normals[index];
+                    if (candidateNormal.sqrMagnitude < 0.0001f)
+                    {
+                        continue;
+                    }
+
+                    candidateNormal.Normalize();
+                    if (candidateNormal.x > MinimumStrongOutwardX)
+                    {
+                        continue;
+                    }
+
+                    float dy = vertices[index].y - targetY;
+                    float dz = vertices[index].z - targetZ;
+                    float score = dy * dy + dz * dz;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        best = index;
+                    }
                 }
             }
 
+            // Fallback for a future mesh whose imported normals are missing/unusual: choose the
+            // closest Y/Z vertex on the most-negative-X side of the mesh rather than accepting an
+            // arbitrary inward face.
+            if (best < 0)
+            {
+                float exteriorBand = bounds.min.x + Mathf.Max(0.01f, bounds.size.x * 0.30f);
+                for (int index = 0; index < vertices.Length; index++)
+                {
+                    if (vertices[index].x > exteriorBand)
+                    {
+                        continue;
+                    }
+
+                    float dy = vertices[index].y - targetY;
+                    float dz = vertices[index].z - targetZ;
+                    float score = dy * dy + dz * dz;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        best = index;
+                    }
+                }
+            }
+
+            if (best < 0)
+            {
+                best = 0;
+            }
+
             position = vertices[best];
-            normal = hasNormals && normals[best].sqrMagnitude > 0.0001f
-                ? normals[best].normalized
+
+            // Smooth the normal using nearby outward-facing vertices. This prevents one seam or
+            // corner vertex from tipping an otherwise correctly positioned fastener into the skin.
+            Vector3 accumulatedNormal = Vector3.zero;
+            float normalWeight = 0f;
+            float patchY = Mathf.Max(0.04f, bounds.size.y * 0.16f);
+            float patchZ = Mathf.Max(0.04f, bounds.size.z * 0.12f);
+
+            if (hasNormals)
+            {
+                for (int index = 0; index < vertices.Length; index++)
+                {
+                    Vector3 candidateNormal = normals[index];
+                    if (candidateNormal.sqrMagnitude < 0.0001f)
+                    {
+                        continue;
+                    }
+
+                    candidateNormal.Normalize();
+                    if (candidateNormal.x > MinimumStrongOutwardX)
+                    {
+                        continue;
+                    }
+
+                    float dy = Mathf.Abs(vertices[index].y - position.y);
+                    float dz = Mathf.Abs(vertices[index].z - position.z);
+                    if (dy > patchY || dz > patchZ)
+                    {
+                        continue;
+                    }
+
+                    float weight = 1f / (0.01f + dy + dz);
+                    accumulatedNormal += candidateNormal * weight;
+                    normalWeight += weight;
+                }
+            }
+
+            normal = normalWeight > 0f && accumulatedNormal.sqrMagnitude > 0.0001f
+                ? accumulatedNormal.normalized
                 : Vector3.left;
 
-            // The aft access panel's exterior is on the negative local-X side. Keep the sampled
-            // fastener normal pointing out of the fuselage, just like the original Step 92 builder.
             if (normal.x > 0f)
             {
                 normal = -normal;
+            }
+
+            // Final safety clamp: even after smoothing, do not allow a nearly tangent normal to
+            // aim the cylinder shaft sideways through the aircraft skin.
+            if (normal.x > MinimumStrongOutwardX)
+            {
+                normal.x = MinimumStrongOutwardX;
+                normal.Normalize();
             }
         }
 
@@ -195,9 +285,6 @@ namespace Hanger51.Aircraft
                 NormalizeMountTransform();
             }
 
-            // The Unity cylinder's local Y axis is its shaft. The canonical mount rotation maps
-            // that Y axis to the sampled panel normal, so the release animation twists the fastener
-            // in place rather than tipping it away from the skin.
             targetRotation = secured
                 ? securedRotation
                 : securedRotation * Quaternion.AngleAxis(90f, Vector3.up);
