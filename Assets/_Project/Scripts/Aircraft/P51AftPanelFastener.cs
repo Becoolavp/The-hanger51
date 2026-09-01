@@ -8,9 +8,11 @@ namespace Hanger51.Aircraft
         [SerializeField] private P51AftAccessPanel panel;
         [SerializeField] private int fastenerIndex;
         [SerializeField] private bool secured = true;
+        [SerializeField, Min(90f)] private float turnSpeedDegreesPerSecond = 540f;
 
         private Quaternion securedRotation;
         private bool rotationCaptured;
+        private Quaternion targetRotation;
 
         public P51AftAccessPanel Panel => panel;
         public int FastenerIndex => fastenerIndex;
@@ -22,7 +24,7 @@ namespace Hanger51.Aircraft
             fastenerIndex = Mathf.Max(0, configuredIndex);
             secured = startsSecured;
             CaptureRotation();
-            RefreshVisual();
+            RefreshTarget(true);
         }
 
         public bool TryToggle(out string message)
@@ -40,7 +42,7 @@ namespace Hanger51.Aircraft
             }
 
             secured = !secured;
-            RefreshVisual();
+            RefreshTarget(false);
             int remaining = panel.SecuredFastenerCount;
             message = secured
                 ? $"Secured aft-panel fastener {fastenerIndex + 1}. {remaining} fastener{(remaining == 1 ? string.Empty : "s")} secured."
@@ -53,13 +55,28 @@ namespace Hanger51.Aircraft
         private void Awake()
         {
             CaptureRotation();
-            RefreshVisual();
+            RefreshTarget(true);
         }
 
         private void OnEnable()
         {
             CaptureRotation();
-            RefreshVisual();
+            RefreshTarget(true);
+        }
+
+        private void Update()
+        {
+            if (!rotationCaptured)
+            {
+                CaptureRotation();
+                RefreshTarget(true);
+                return;
+            }
+
+            transform.localRotation = Quaternion.RotateTowards(
+                transform.localRotation,
+                targetRotation,
+                turnSpeedDegreesPerSecond * Time.deltaTime);
         }
 
         private void CaptureRotation()
@@ -72,12 +89,21 @@ namespace Hanger51.Aircraft
             rotationCaptured = true;
         }
 
-        private void RefreshVisual()
+        private void RefreshTarget(bool snap)
         {
             CaptureRotation();
-            transform.localRotation = secured
+            targetRotation = secured
                 ? securedRotation
                 : securedRotation * Quaternion.AngleAxis(90f, Vector3.up);
+            if (snap)
+            {
+                transform.localRotation = targetRotation;
+            }
+        }
+
+        private void OnValidate()
+        {
+            turnSpeedDegreesPerSecond = Mathf.Max(90f, turnSpeedDegreesPerSecond);
         }
     }
 }
