@@ -20,6 +20,7 @@ namespace Hanger51.Aircraft
         private GUIStyle promptStyle;
 
         public bool IsHoldingSomething => heldItem != null || heldPanel != null || heldTester != null;
+        public bool HasActiveAftInteraction { get; private set; }
 
         public void Configure(Camera configuredCamera)
         {
@@ -35,6 +36,7 @@ namespace Hanger51.Aircraft
         {
             ResolveCamera();
             prompt = string.Empty;
+            HasActiveAftInteraction = IsHoldingSomething;
             Keyboard keyboard = Keyboard.current;
             if (keyboard == null || interactionCamera == null)
             {
@@ -50,6 +52,10 @@ namespace Hanger51.Aircraft
 
             Ray ray = new Ray(interactionCamera.transform.position, interactionCamera.transform.forward);
             bool hasHit = Physics.Raycast(ray, out RaycastHit hit, interactionDistance, ~0, QueryTriggerInteraction.Collide);
+            if (hasHit && IsAftInteractionTarget(hit.collider))
+            {
+                HasActiveAftInteraction = true;
+            }
 
             if (heldTester != null)
             {
@@ -242,6 +248,7 @@ namespace Hanger51.Aircraft
             heldItem = item;
             heldItem.transform.SetParent(null, true);
             heldItem.SetHeld(true);
+            HasActiveAftInteraction = true;
         }
 
         private void HoldPanel(P51AftAccessPanel panel)
@@ -249,6 +256,7 @@ namespace Hanger51.Aircraft
             heldPanel = panel;
             heldPanel.transform.SetParent(null, true);
             heldPanel.SetHeld(true);
+            HasActiveAftInteraction = true;
         }
 
         private void DropHeldObject()
@@ -271,6 +279,15 @@ namespace Hanger51.Aircraft
                 heldTester.SetHeld(false);
                 heldTester = null;
             }
+        }
+
+        private static bool IsAftInteractionTarget(Collider collider)
+        {
+            return collider != null
+                && (collider.GetComponentInParent<P51AftAccessPanel>() != null
+                    || collider.GetComponentInParent<P51AftEquipmentSlot>() != null
+                    || collider.GetComponentInParent<P51AftEquipmentItem>() != null
+                    || collider.GetComponentInParent<P51BatteryTester>() != null);
         }
 
         private void SetStatus(string message)
@@ -317,6 +334,11 @@ namespace Hanger51.Aircraft
             {
                 GUI.Box(new Rect(Screen.width * 0.5f - 330f, 70f, 660f, 44f), statusMessage, promptStyle);
             }
+        }
+
+        private void OnDisable()
+        {
+            HasActiveAftInteraction = false;
         }
     }
 }
