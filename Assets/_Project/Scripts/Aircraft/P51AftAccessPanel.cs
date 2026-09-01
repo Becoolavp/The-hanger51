@@ -119,17 +119,22 @@ namespace Hanger51.Aircraft
                 transform.localRotation = Quaternion.identity;
             }
 
-            // This panel is a hand-serviced part, not a physics projectile. Keeping it kinematic
-            // and using trigger-only interaction colliders prevents a removed panel from shoving
-            // the CharacterController or launching the player while it is picked up.
+            bool loose = !installed && !held;
             if (body != null)
             {
-                body.isKinematic = true;
-                body.useGravity = false;
+                body.isKinematic = !loose;
+                body.useGravity = loose;
+                body.collisionDetectionMode = CollisionDetectionMode.ContinuousSpeculative;
                 body.linearVelocity = Vector3.zero;
                 body.angularVelocity = Vector3.zero;
             }
 
+            // While installed, the panel and its fastener helpers stay trigger-only so they cannot
+            // fight the aircraft Rigidbody. While held, every collider is disabled. Once dropped,
+            // only the panel's root collider becomes solid; the large fastener-assist triggers stay
+            // out of physics so the loose panel falls and lands normally instead of floating or
+            // colliding through an oversized service target.
+            Collider rootCollider = GetComponent<Collider>();
             Collider[] colliders = GetComponentsInChildren<Collider>(true);
             for (int i = 0; i < colliders.Length; i++)
             {
@@ -138,13 +143,29 @@ namespace Hanger51.Aircraft
                 {
                     continue;
                 }
+
                 MeshCollider mesh = collider as MeshCollider;
                 if (mesh != null)
                 {
                     mesh.convex = true;
                 }
-                collider.isTrigger = true;
-                collider.enabled = !held;
+
+                if (held)
+                {
+                    collider.enabled = false;
+                    continue;
+                }
+
+                if (installed)
+                {
+                    collider.enabled = true;
+                    collider.isTrigger = true;
+                    continue;
+                }
+
+                bool isRootPhysicalCollider = collider == rootCollider;
+                collider.enabled = isRootPhysicalCollider;
+                collider.isTrigger = !isRootPhysicalCollider;
             }
         }
 
