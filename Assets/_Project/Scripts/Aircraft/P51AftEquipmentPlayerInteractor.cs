@@ -53,7 +53,18 @@ namespace Hanger51.Aircraft
 
             if (heldTester != null)
             {
-                P51AftEquipmentItem battery = hasHit ? hit.collider.GetComponentInParent<P51AftEquipmentItem>() : null;
+                P51AftEquipmentItem battery = hasHit
+                    ? hit.collider.GetComponentInParent<P51AftEquipmentItem>()
+                    : null;
+                if (battery == null && hasHit)
+                {
+                    P51AftEquipmentSlot testerSlot = hit.collider.GetComponentInParent<P51AftEquipmentSlot>();
+                    if (testerSlot != null)
+                    {
+                        battery = testerSlot.InstalledItem;
+                    }
+                }
+
                 if (battery != null && battery.EquipmentKind == P51AftEquipmentKind.Battery)
                 {
                     prompt = "E: connect battery tester leads   |   F: drop tester";
