@@ -18,7 +18,7 @@ namespace Hanger51.Aircraft
 
         public P51FlightController FlightController => flightController;
         public P51RadiatorCoolingSystem CoolingSystem => coolingSystem;
-        public EngineConditionController InstalledEngineCondition => coolingSystem != null ? coolingSystem.InstalledEngineCondition : null;
+        public EngineConditionController InstalledEngineCondition => ResolveInstalledEngineCondition();
         public float DisplayedPressurePsi => CalculateOilPressurePsi();
         public bool IsConfigured => flightController != null && coolingSystem != null && needlePivot != null && pressureReadout != null;
 
@@ -120,6 +120,19 @@ namespace Hanger51.Aircraft
                 : Mathf.Pow(oilToSafeRatio, 1.55f);
 
             return Mathf.Clamp(basePressure * oilFactor, 0f, maximumDisplayedPsi);
+        }
+
+        private EngineConditionController ResolveInstalledEngineCondition()
+        {
+            if (flightController == null
+                || flightController.EngineReceiver == null
+                || flightController.EngineReceiver.InstalledTransport == null)
+            {
+                return null;
+            }
+
+            return flightController.EngineReceiver.InstalledTransport
+                .GetComponent<EngineConditionController>();
         }
 
         private void ResolveReferences()
