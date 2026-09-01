@@ -36,7 +36,13 @@ namespace Hanger51.Aircraft
             stickPivot = configuredStickPivot;
             throttlePivot = configuredThrottlePivot;
             CaptureNeutralRotations();
-            ApplyImmediateVisuals();
+
+            // Keep the saved scene at the true mechanical neutral. Runtime applies the
+            // actual throttle position after Awake so the idle angle can never be counted twice.
+            if (Application.isPlaying)
+            {
+                ApplyImmediateVisuals();
+            }
         }
 
         private void Awake()
@@ -48,7 +54,10 @@ namespace Hanger51.Aircraft
         private void OnEnable()
         {
             ResolveReferences();
-            CaptureNeutralRotations();
+            if (!neutralCaptured)
+            {
+                CaptureNeutralRotations();
+            }
         }
 
         private void LateUpdate()
