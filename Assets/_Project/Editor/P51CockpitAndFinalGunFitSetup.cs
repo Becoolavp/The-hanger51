@@ -189,7 +189,7 @@ namespace Hanger51.EditorTools
                 for (int gaugeIndex = 0; gaugeIndex < gauges.Length; gaugeIndex++)
                 {
                     P51FuelQuantityGauge gauge = gauges[gaugeIndex];
-                    if (gauge == null || !gauge.gameObject.activeInHierarchy)
+                    if (gauge == null || !IsLocallyEnabledUnderAircraft(gauge.transform, flight.transform))
                     {
                         continue;
                     }
@@ -760,6 +760,30 @@ namespace Hanger51.EditorTools
                 }
             }
             return count;
+        }
+
+        private static bool IsLocallyEnabledUnderAircraft(Transform child, Transform aircraftRoot)
+        {
+            if (child == null || aircraftRoot == null)
+            {
+                return false;
+            }
+
+            // Spawn/template aircraft are intentionally inactive scene objects. Ignore the
+            // aircraft root's own active state, but still reject a gauge that has been
+            // deliberately disabled itself or placed beneath a disabled child hierarchy.
+            Transform current = child;
+            while (current != null && current != aircraftRoot)
+            {
+                if (!current.gameObject.activeSelf)
+                {
+                    return false;
+                }
+
+                current = current.parent;
+            }
+
+            return current == aircraftRoot;
         }
 
         private static bool Approximately(Vector3 a, Vector3 b, float tolerance)
