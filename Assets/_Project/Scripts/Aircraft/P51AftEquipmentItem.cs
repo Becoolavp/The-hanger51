@@ -19,6 +19,7 @@ namespace Hanger51.Aircraft
 
         private Rigidbody body;
         private Collider interactionCollider;
+        private bool held;
 
         public P51AftEquipmentKind EquipmentKind => equipmentKind;
         public float BatteryVoltage => batteryVoltage;
@@ -32,11 +33,13 @@ namespace Hanger51.Aircraft
         private void Awake()
         {
             ResolvePhysics();
+            ApplyPhysicsState();
         }
 
         private void OnEnable()
         {
             ResolvePhysics();
+            ApplyPhysicsState();
         }
 
         public void Configure(P51AftEquipmentKind kind, float configuredBatteryVoltage = 25.2f)
@@ -47,14 +50,16 @@ namespace Hanger51.Aircraft
                 : 0f;
             installedBay = null;
             installedSlotIndex = -1;
+            held = false;
             ResolvePhysics();
-            SetLoosePhysics(true);
+            ApplyPhysicsState();
         }
 
         public void SetInstalled(P51AftEquipmentBay bay, int slotIndex, Transform slotAnchor)
         {
             installedBay = bay;
             installedSlotIndex = slotIndex;
+            held = false;
             ResolvePhysics();
 
             if (slotAnchor != null)
@@ -64,15 +69,17 @@ namespace Hanger51.Aircraft
                 transform.localRotation = Quaternion.identity;
             }
 
-            SetLoosePhysics(false);
+            ApplyPhysicsState();
         }
 
         public void SetRemovedFromBay()
         {
             installedBay = null;
             installedSlotIndex = -1;
+            held = false;
             transform.SetParent(null, true);
-            SetLoosePhysics(true);
+            ResolvePhysics();
+            ApplyPhysicsState();
         }
 
         public bool CanSupplyStarter(float minimumVoltage)
@@ -99,26 +106,26 @@ namespace Hanger51.Aircraft
             }
         }
 
-        public void SetHeld(bool held)
+        public void SetHeld(bool isHeld)
         {
+            held = isHeld;
             ResolvePhysics();
-            if (body != null)
-            {
-                body.isKinematic = held || IsInstalled;
-                body.useGravity = !held && !IsInstalled;
-                body.linearVelocity = Vector3.zero;
-                body.angularVelocity = Vector3.zero;
-            }
-
-            if (interactionCollider != null)
-            {
-                interactionCollider.enabled = !held;
-            }
+            ApplyPhysicsState();
         }
 
-        private void SetLoosePhysics(bool loose)
+        // Editor setup/migration tools use this to repair previously saved aft equipment whose
+        // installed collider was left solid. It is also safe to call at runtime.
+        public void RefreshPhysicsState()
         {
             ResolvePhysics();
+            ApplyPhysicsState();
+        }
+
+        private void ApplyPhysicsState()
+        {
+            bool installed = IsInstalled;
+            bool loose = !held && !installed;
+
             if (body != null)
             {
                 body.isKinematic = !loose;
@@ -127,9 +134,34 @@ namespace Hanger51.Aircraft
                 body.angularVelocity = Vector3.zero;
             }
 
-            if (interactionCollider != null)
+            Collider[] colliders = GetComponentsInChildren<Collider>(true);
+            if (interactionCollider == null && colliders.Length > 0)
             {
-                interactionCollider.enabled = true;
+                interactionCollider = colliders[0];
+            }
+
+            for (int i = 0; i < colliders.Length; i++)
+            {
+                Collider itemCollider = colliders[i];
+                if (itemCollider == null)
+                {
+                    continue;
+                }
+
+                bool isInteractionCollider = itemCollider == interactionCollider;
+                if (held)
+                {
+                    itemCollider.enabled = false;
+                    continue;
+                }
+
+                // Installed service items live inside the aircraft's own dynamic Rigidbody.
+                // A solid child Rigidbody collider can collide with the parent aircraft's broad
+                // fuselage/rack colliders and inject huge impulses into the airplane. Keep only
+                // one trigger collider for raycast interaction while installed. Loose equipment
+                // gets that same primary collider back as a normal physical collider.
+                itemCollider.enabled = isInteractionCollider;
+                itemCollider.isTrigger = installed;
             }
         }
 
@@ -142,6 +174,14 @@ namespace Hanger51.Aircraft
             if (interactionCollider == null)
             {
                 interactionCollider = GetComponent<Collider>();
+                if (interactionCollider == null)
+                {
+                    Collider[] colliders = GetComponentsInChildren<Collider>(true);
+                    if (colliders.Length > 0)
+                    {
+                        interactionCollider = colliders[0];
+                    }
+                }
             }
         }
     }
