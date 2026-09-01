@@ -13,6 +13,7 @@ namespace Hanger51.Aircraft
         [SerializeField, Min(0.5f)] private float shutdownSeconds = 2.2f;
 
         private P51FlightController flightController;
+        private P51BatteryStartInterlock batteryStartInterlock;
         private FieldInfo engineRunningField;
         private FieldInfo throttleField;
         private int phase; // 0 stopped, 1 starting, 2 running, 3 stopping
@@ -83,10 +84,21 @@ namespace Hanger51.Aircraft
             if (phase == 0)
             {
                 // P51FlightController processes T earlier in the frame. Intercept its instant
-                // start and replace it with a real cranking/ignition sequence.
+                // start and replace it with a real battery-authorized cranking/ignition sequence.
                 if (startStopPressed && flightController.EngineRunning)
                 {
-                    BeginStartup();
+                    string batteryMessage = string.Empty;
+                    if (batteryStartInterlock != null
+                        && !batteryStartInterlock.TryAuthorizeStarter(out batteryMessage))
+                    {
+                        ForceEngineState(false, 0f);
+                        phase = 0;
+                        phaseTime = 0f;
+                        flightController.ShowCockpitMessage(batteryMessage, 4.5f);
+                        return;
+                    }
+
+                    BeginStartup(batteryMessage);
                 }
                 else if (flightController.EngineRunning)
                 {
@@ -177,14 +189,18 @@ namespace Hanger51.Aircraft
                 transitionPropellerAngle);
         }
 
-        private void BeginStartup()
+        private void BeginStartup(string batteryMessage)
         {
             phase = 1;
             phaseTime = 0f;
             shutdownThrottle = 0f;
             ForceEngineState(false, 0f);
+
+            string message = string.IsNullOrWhiteSpace(batteryMessage)
+                ? "Starter engaged — Merlin cranking..."
+                : $"Starter engaged — Merlin cranking... {batteryMessage}";
             flightController.ShowCockpitMessage(
-                "Starter engaged — Merlin cranking...",
+                message,
                 StartupDuration + 0.5f);
         }
 
@@ -215,6 +231,10 @@ namespace Hanger51.Aircraft
             if (flightController == null)
             {
                 flightController = GetComponent<P51FlightController>();
+            }
+            if (batteryStartInterlock == null)
+            {
+                batteryStartInterlock = GetComponent<P51BatteryStartInterlock>();
             }
 
             if (reflectionReady || flightController == null)
