@@ -31,6 +31,23 @@ namespace Hanger51.EditorTools
                 return;
             }
 
+            FirstPersonController player = Object.FindFirstObjectByType<FirstPersonController>(FindObjectsInactive.Include);
+            if (player == null)
+            {
+                Debug.LogError("P-51 Step 94 could not find the FirstPersonController.");
+                return;
+            }
+
+            P51AftEquipmentPlayerInteractor aftInteractor = FindAftEquipmentInteractor(player);
+            if (aftInteractor == null)
+            {
+                Debug.LogError(
+                    "P-51 Step 94 could not find a P51AftEquipmentPlayerInteractor associated with the Player hierarchy. "
+                    + "Run the earlier aft-equipment setup step first, then run Step 94 again.",
+                    player);
+                return;
+            }
+
             Material highlightMaterial = GetOrCreateHighlightMaterial();
             if (highlightMaterial == null)
             {
@@ -93,22 +110,10 @@ namespace Hanger51.EditorTools
                 configuredAircraft++;
             }
 
-            FirstPersonController player = Object.FindFirstObjectByType<FirstPersonController>(FindObjectsInactive.Include);
-            if (player == null)
-            {
-                Debug.LogError("P-51 Step 94 could not find the FirstPersonController.");
-                return;
-            }
             Undo.RecordObject(player, "Configure Hanger 51 crouch servicing");
             player.ConfigureCrouch(1.05f, 2.7f, 0.62f, 10f);
             EditorUtility.SetDirty(player);
 
-            P51AftEquipmentPlayerInteractor aftInteractor = player.GetComponent<P51AftEquipmentPlayerInteractor>();
-            if (aftInteractor == null)
-            {
-                Debug.LogError("P-51 Step 94 could not find the aft-equipment player interactor.", player);
-                return;
-            }
             Undo.RecordObject(aftInteractor, "Configure easier aft service reach");
             aftInteractor.ConfigureServiceReach(4.25f, 0.9f);
             EditorUtility.SetDirty(aftInteractor);
@@ -201,9 +206,7 @@ namespace Hanger51.EditorTools
             }
 
             FirstPersonController player = Object.FindFirstObjectByType<FirstPersonController>(FindObjectsInactive.Include);
-            P51AftEquipmentPlayerInteractor aftInteractor = player != null
-                ? player.GetComponent<P51AftEquipmentPlayerInteractor>()
-                : null;
+            P51AftEquipmentPlayerInteractor aftInteractor = FindAftEquipmentInteractor(player);
             FirstPersonCameraSmoother smoother = player != null
                 ? player.GetComponentInChildren<FirstPersonCameraSmoother>(true)
                 : null;
@@ -237,6 +240,58 @@ namespace Hanger51.EditorTools
                     $"P-51 Step 95 passed. Aircraft={checkedAircraft}, guided slots={checkedSlots}. Animated aft servicing, pulsing compatible placement guides, "
                     + "larger/easier fastener targets and hold-C crouch are configured.");
             }
+        }
+
+        private static P51AftEquipmentPlayerInteractor FindAftEquipmentInteractor(FirstPersonController player)
+        {
+            if (player == null)
+            {
+                return null;
+            }
+
+            P51AftEquipmentPlayerInteractor interactor = player.GetComponent<P51AftEquipmentPlayerInteractor>();
+            if (interactor != null)
+            {
+                return interactor;
+            }
+
+            interactor = player.GetComponentInChildren<P51AftEquipmentPlayerInteractor>(true);
+            if (interactor != null)
+            {
+                return interactor;
+            }
+
+            interactor = player.GetComponentInParent<P51AftEquipmentPlayerInteractor>(true);
+            if (interactor != null)
+            {
+                return interactor;
+            }
+
+            P51AftEquipmentPlayerInteractor[] allInteractors = Object.FindObjectsByType<P51AftEquipmentPlayerInteractor>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+            P51AftEquipmentPlayerInteractor onlySceneInteractor = null;
+            int sameSceneCount = 0;
+            for (int index = 0; index < allInteractors.Length; index++)
+            {
+                P51AftEquipmentPlayerInteractor candidate = allInteractors[index];
+                if (candidate == null
+                    || !candidate.gameObject.scene.IsValid()
+                    || candidate.gameObject.scene != player.gameObject.scene)
+                {
+                    continue;
+                }
+
+                if (candidate.transform.root == player.transform.root)
+                {
+                    return candidate;
+                }
+
+                onlySceneInteractor = candidate;
+                sameSceneCount++;
+            }
+
+            return sameSceneCount == 1 ? onlySceneInteractor : null;
         }
 
         private static Material GetOrCreateHighlightMaterial()
