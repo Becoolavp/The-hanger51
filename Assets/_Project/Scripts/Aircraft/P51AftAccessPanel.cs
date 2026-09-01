@@ -3,8 +3,6 @@ using UnityEngine;
 namespace Hanger51.Aircraft
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(BoxCollider))]
-    [RequireComponent(typeof(Rigidbody))]
     public sealed class P51AftAccessPanel : MonoBehaviour
     {
         [SerializeField] private P51AftEquipmentBay bay;
@@ -12,10 +10,28 @@ namespace Hanger51.Aircraft
         [SerializeField] private bool installed = true;
 
         private Rigidbody body;
-        private Collider interactionCollider;
+        private bool held;
 
         public P51AftEquipmentBay Bay => bay;
         public bool IsInstalled => installed;
+        public int SecuredFastenerCount
+        {
+            get
+            {
+                P51AftPanelFastener[] fasteners = GetComponentsInChildren<P51AftPanelFastener>(true);
+                int count = 0;
+                for (int i = 0; i < fasteners.Length; i++)
+                {
+                    if (fasteners[i] != null && fasteners[i].IsSecured)
+                    {
+                        count++;
+                    }
+                }
+                return count;
+            }
+        }
+        public int FastenerCount => GetComponentsInChildren<P51AftPanelFastener>(true).Length;
+        public bool CanRemove => installed && SecuredFastenerCount == 0;
 
         private void Awake()
         {
@@ -34,15 +50,37 @@ namespace Hanger51.Aircraft
             bay = configuredBay;
             installedAnchor = configuredAnchor;
             installed = startsInstalled;
+            held = false;
             ResolvePhysics();
             RefreshState();
         }
 
-        public void RemoveFromAircraft()
+        public bool TryRemoveFromAircraft(out string message)
         {
+            message = string.Empty;
+            if (!installed)
+            {
+                message = "The aft access panel is already removed.";
+                return false;
+            }
+            int remaining = SecuredFastenerCount;
+            if (remaining > 0)
+            {
+                message = $"Release the {remaining} remaining aft-panel fastener{(remaining == 1 ? string.Empty : "s")} first.";
+                return false;
+            }
+
             installed = false;
             transform.SetParent(null, true);
             RefreshState();
+            message = "Aft equipment bay opened.";
+            return true;
+        }
+
+        // Compatibility for older callers. Fasteners still gate the removal.
+        public void RemoveFromAircraft()
+        {
+            TryRemoveFromAircraft(out _);
         }
 
         public void InstallOnAircraft(P51AftEquipmentBay targetBay)
@@ -54,6 +92,7 @@ namespace Hanger51.Aircraft
             }
 
             installed = true;
+            held = false;
             if (installedAnchor != null)
             {
                 transform.SetParent(installedAnchor, false);
@@ -63,20 +102,11 @@ namespace Hanger51.Aircraft
             RefreshState();
         }
 
-        public void SetHeld(bool held)
+        public void SetHeld(bool isHeld)
         {
+            held = isHeld;
             ResolvePhysics();
-            if (body != null)
-            {
-                body.isKinematic = held || installed;
-                body.useGravity = !held && !installed;
-                body.linearVelocity = Vector3.zero;
-                body.angularVelocity = Vector3.zero;
-            }
-            if (interactionCollider != null)
-            {
-                interactionCollider.enabled = !held;
-            }
+            RefreshState();
         }
 
         private void RefreshState()
@@ -89,19 +119,32 @@ namespace Hanger51.Aircraft
                 transform.localRotation = Quaternion.identity;
             }
 
+            // This panel is a hand-serviced part, not a physics projectile. Keeping it kinematic
+            // and using trigger-only interaction colliders prevents a removed panel from shoving
+            // the CharacterController or launching the player while it is picked up.
             if (body != null)
             {
-                body.isKinematic = installed;
-                body.useGravity = !installed;
-                if (installed)
-                {
-                    body.linearVelocity = Vector3.zero;
-                    body.angularVelocity = Vector3.zero;
-                }
+                body.isKinematic = true;
+                body.useGravity = false;
+                body.linearVelocity = Vector3.zero;
+                body.angularVelocity = Vector3.zero;
             }
-            if (interactionCollider != null)
+
+            Collider[] colliders = GetComponentsInChildren<Collider>(true);
+            for (int i = 0; i < colliders.Length; i++)
             {
-                interactionCollider.enabled = true;
+                Collider collider = colliders[i];
+                if (collider == null)
+                {
+                    continue;
+                }
+                MeshCollider mesh = collider as MeshCollider;
+                if (mesh != null)
+                {
+                    mesh.convex = true;
+                }
+                collider.isTrigger = true;
+                collider.enabled = !held;
             }
         }
 
@@ -111,9 +154,9 @@ namespace Hanger51.Aircraft
             {
                 body = GetComponent<Rigidbody>();
             }
-            if (interactionCollider == null)
+            if (body == null)
             {
-                interactionCollider = GetComponent<Collider>();
+                body = gameObject.AddComponent<Rigidbody>();
             }
         }
     }
