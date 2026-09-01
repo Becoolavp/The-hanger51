@@ -91,7 +91,7 @@ namespace Hanger51.EditorTools
 
             Debug.Log(
                 $"P-51 Step 92 complete on {repaired} aircraft. The aft rack was moved inward/upward, "
-                + "eight captive quarter-turn panel fasteners were added, the panel was converted to non-launching trigger-only handling, "
+                + "four captive quarter-turn panel fasteners were added at the panel corners, the panel was converted to non-launching trigger-only handling, "
                 + "and the upper tailwheel oleo connection was restored.");
         }
 
@@ -132,9 +132,9 @@ namespace Hanger51.EditorTools
                 }
 
                 P51AftPanelFastener[] fasteners = panel.GetComponentsInChildren<P51AftPanelFastener>(true);
-                if (fasteners.Length != 8)
+                if (fasteners.Length != 4)
                 {
-                    Debug.LogError($"P-51 Step 93 failed: '{flight.name}' aft panel should have 8 service fasteners; found {fasteners.Length}.", panel);
+                    Debug.LogError($"P-51 Step 93 failed: '{flight.name}' aft panel should have 4 service fasteners; found {fasteners.Length}.", panel);
                     passed = false;
                 }
 
@@ -172,7 +172,7 @@ namespace Hanger51.EditorTools
             if (passed)
             {
                 Debug.Log(
-                    $"P-51 Step 93 passed. Aircraft checked={checkedAircraft}. Rack fit, 8 panel fasteners, non-launching panel handling, "
+                    $"P-51 Step 93 passed. Aircraft checked={checkedAircraft}. Rack fit, 4 panel fasteners, non-launching panel handling, "
                     + "and the upper tailwheel oleo connection are all configured.");
             }
         }
@@ -264,10 +264,9 @@ namespace Hanger51.EditorTools
             for (int row = 0; row < 2; row++)
             {
                 float targetY = row == 0 ? topY : bottomY;
-                for (int column = 0; column < 4; column++)
+                for (int column = 0; column < 2; column++)
                 {
-                    float t = column / 3f;
-                    float targetZ = Mathf.Lerp(rearZ, frontZ, t);
+                    float targetZ = column == 0 ? rearZ : frontZ;
                     FindOuterSurfacePoint(vertices, normals, targetY, targetZ, out Vector3 position, out Vector3 normal);
                     CreateFastener(panel, index, position + normal * 0.014f, normal, service, dark);
                     index++;
