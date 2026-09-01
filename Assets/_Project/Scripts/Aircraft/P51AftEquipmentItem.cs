@@ -9,7 +9,6 @@ namespace Hanger51.Aircraft
     }
 
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(Collider))]
     [RequireComponent(typeof(Rigidbody))]
     public sealed class P51AftEquipmentItem : MonoBehaviour
     {
