@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Hanger51.Aircraft
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(BoxCollider))]
     public sealed class P51AftEquipmentSlot : MonoBehaviour
     {
         [SerializeField] private P51AftEquipmentBay bay;
