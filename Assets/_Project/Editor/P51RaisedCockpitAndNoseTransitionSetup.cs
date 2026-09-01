@@ -20,6 +20,7 @@ namespace Hanger51.EditorTools
         private const string RaisedTransitionName = "P-51 Raised Cockpit Nose Transition";
         private const string TransitionRearSealName = "P-51 Raised Windshield Rear Seal";
         private const string TransitionFrontSealName = "P-51 Raised Windshield Front Seal";
+        private const string RaisedSillFairingRootName = "P-51 Raised Cockpit Sill Fairings";
 
         private const string TransitionMeshPath =
             "Assets/_Project/Aircraft/P51/Meshes/P51D_RaisedCockpitNoseTransition.asset";
@@ -28,7 +29,9 @@ namespace Hanger51.EditorTools
         private const string DarkMaterialPath =
             "Assets/_Project/Aircraft/P51/Materials/DarkAircraftMetal.mat";
 
-        // The entire cockpit package now moves rather than only the pilot camera.
+        // The cockpit tub and controls rise together. The canopy rises slightly farther so the
+        // windshield frame moves above the primary sightline instead of remaining fixed relative
+        // to the pilot eye.
         private const float CockpitLift = 0.22f;
         private const float CanopyLift = 0.28f;
         private static readonly Vector3 PilotEyeLocalPosition = new Vector3(0f, 2.38f, -0.56f);
@@ -53,9 +56,8 @@ namespace Hanger51.EditorTools
             }
         }
 
-        // This is intentionally a shallow fairing. It begins under the newly raised windshield,
-        // then gradually climbs only a few centimeters into the intact upper fuselage/cowling.
-        // Unlike Step 79, it never forms a tall hump in front of the pilot.
+        // A shallow fairing that begins underneath the raised windshield and gently joins the
+        // intact upper fuselage/cowling. It deliberately avoids the tall Step 79 hump.
         private static readonly DeckStation[] DeckStations =
         {
             new DeckStation(1.08f, 0.475f, 1.970f, 2.015f),
@@ -141,11 +143,18 @@ namespace Hanger51.EditorTools
                     continue;
                 }
 
-                // Use canonical offsets rather than += so this step is safe to rerun.
+                // Use canonical offsets instead of += so Step 81 is safe to rerun.
                 Undo.RecordObject(cockpit, "Raise complete P-51 cockpit interior");
                 cockpit.localPosition = new Vector3(0f, CockpitLift, 0f);
                 cockpit.localRotation = Quaternion.identity;
                 cockpit.localScale = Vector3.one;
+
+                // The trim ring represents the actual cut edge in the fuselage mesh. Counteract
+                // the cockpit-root lift so this ring remains physically attached to the body.
+                Undo.RecordObject(openingRim, "Keep P-51 fuselage opening rim on body");
+                openingRim.localPosition = new Vector3(0f, -CockpitLift, 0f);
+                openingRim.localRotation = Quaternion.identity;
+                openingRim.localScale = Vector3.one;
 
                 Undo.RecordObject(canopy, "Raise complete P-51 canopy assembly");
                 canopy.localPosition = new Vector3(0f, CanopyLift, 0f);
@@ -169,8 +178,10 @@ namespace Hanger51.EditorTools
                 }
 
                 BuildOrUpdateRaisedTransition(flight.transform, transitionMesh, metal, dark);
+                BuildOrUpdateRaisedSillFairings(flight.transform, metal, dark);
 
                 EditorUtility.SetDirty(cockpit);
+                EditorUtility.SetDirty(openingRim);
                 EditorUtility.SetDirty(canopy);
                 EditorUtility.SetDirty(windshieldBow);
                 EditorUtility.SetDirty(seat.CameraAnchor);
@@ -197,10 +208,10 @@ namespace Hanger51.EditorTools
 
             Selection.activeGameObject = master != null ? master.gameObject : aircraft[0].gameObject;
             Debug.Log(
-                $"P-51 Step 81 complete. Raised {aircraftUpdated} complete cockpit package(s) by {CockpitLift:F2} m, "
+                $"P-51 Step 81 complete. Raised {aircraftUpdated} complete cockpit interior package(s) by {CockpitLift:F2} m, "
                 + $"raised the canopy assemblies by {CanopyLift:F2} m, moved the pilot eyes to local Y={PilotEyeLocalPosition.y:F2} m, "
-                + $"disabled {oldBridgesDisabled} obsolete Step 79 nose-hump bridge(s), moved the windshield transition bow up/forward, "
-                + "and fitted a new shallow nose-to-windshield deck so the engine cowling/nose no longer has to fold down into the glass.",
+                + $"disabled {oldBridgesDisabled} obsolete Step 79 nose-hump bridge(s), kept the true fuselage cut rim fixed to the aircraft body, "
+                + "added raised sill fairings between the body and canopy, moved the windshield transition bow up/forward, and fitted a shallow nose-to-windshield transition.",
                 master != null ? master.gameObject : null);
         }
 
@@ -256,16 +267,20 @@ namespace Hanger51.EditorTools
                 Transform transition = FindDescendant(flight.transform, RaisedTransitionName);
                 Transform rearSeal = FindDescendant(transition, TransitionRearSealName);
                 Transform frontSeal = FindDescendant(transition, TransitionFrontSealName);
+                Transform sillFairings = FindDescendant(flight.transform, RaisedSillFairingRootName);
+                Transform leftMidFairing = FindDescendant(sillFairings, "Left Raised Sill Fairing Mid");
+                Transform rightMidFairing = FindDescendant(sillFairings, "Right Raised Sill Fairing Mid");
                 Transform oldBridge = FindDescendant(flight.transform, OldBridgeName);
                 P51PilotSeat[] seats = flight.GetComponentsInChildren<P51PilotSeat>(true);
                 P51PilotSeat seat = seats.Length > 0 ? seats[0] : null;
 
                 if (cockpit == null || openingRim == null || canopy == null || glass == null
                     || windshieldBow == null || transition == null || rearSeal == null || frontSeal == null
+                    || sillFairings == null || leftMidFairing == null || rightMidFairing == null
                     || seat == null || seat.CameraAnchor == null)
                 {
                     Debug.LogError(
-                        $"P-51 Step 82 failed. '{flight.name}' is missing raised-cockpit, canopy, transition-deck, or pilot-eye parts.",
+                        $"P-51 Step 82 failed. '{flight.name}' is missing raised-cockpit, canopy, sill-fairing, transition-deck, or pilot-eye parts.",
                         flight);
                     passed = false;
                     continue;
@@ -274,11 +289,12 @@ namespace Hanger51.EditorTools
                 aircraftChecked++;
 
                 if (Mathf.Abs(cockpit.localPosition.y - CockpitLift) > 0.01f
-                    || Mathf.Abs(canopy.localPosition.y - CanopyLift) > 0.01f)
+                    || Mathf.Abs(canopy.localPosition.y - CanopyLift) > 0.01f
+                    || Mathf.Abs(openingRim.localPosition.y + CockpitLift) > 0.01f)
                 {
                     Debug.LogError(
-                        $"P-51 Step 82 failed. '{flight.name}' cockpit/canopy lift is wrong. "
-                        + $"CockpitY={cockpit.localPosition.y:F3}, CanopyY={canopy.localPosition.y:F3}.",
+                        $"P-51 Step 82 failed. '{flight.name}' cockpit/canopy/rim lift is wrong. "
+                        + $"CockpitY={cockpit.localPosition.y:F3}, CanopyY={canopy.localPosition.y:F3}, RimLocalY={openingRim.localPosition.y:F3}.",
                         flight);
                     passed = false;
                 }
@@ -318,12 +334,14 @@ namespace Hanger51.EditorTools
                     passed = false;
                 }
 
-                Collider[] colliders = transition.GetComponentsInChildren<Collider>(true);
-                if (colliders.Length != 0)
+                Collider[] transitionColliders = transition.GetComponentsInChildren<Collider>(true);
+                Collider[] fairingColliders = sillFairings.GetComponentsInChildren<Collider>(true);
+                if (transitionColliders.Length != 0 || fairingColliders.Length != 0)
                 {
                     Debug.LogError(
-                        $"P-51 Step 82 failed. '{flight.name}' raised nose transition is visual-only and must have zero colliders; found {colliders.Length}.",
-                        transition);
+                        $"P-51 Step 82 failed. '{flight.name}' raised cockpit exterior trim is visual-only. "
+                        + $"Transition colliders={transitionColliders.Length}, sill-fairing colliders={fairingColliders.Length}.",
+                        flight);
                     passed = false;
                 }
             }
@@ -338,8 +356,9 @@ namespace Hanger51.EditorTools
             {
                 Debug.Log(
                     $"P-51 Step 82 passed. Aircraft checked={aircraftChecked}. Complete cockpit interiors are raised {CockpitLift:F2} m, "
-                    + $"canopies are raised {CanopyLift:F2} m, pilot eyes are at local {PilotEyeLocalPosition}, the windshield bow is shifted up/forward, "
-                    + "the obsolete tall nose bridge is disabled, and the new shallow nose transition closes the cowling-to-windshield area without adding physics colliders.");
+                    + $"canopies are raised {CanopyLift:F2} m, pilot eyes are at local {PilotEyeLocalPosition}, the true fuselage rim remains attached to the body, "
+                    + "raised sill fairings close the vertical side gap, the windshield bow is shifted up/forward, the obsolete tall nose bridge is disabled, "
+                    + "and the new shallow nose transition closes the cowling-to-windshield area without adding physics colliders.");
             }
         }
 
@@ -470,6 +489,70 @@ namespace Hanger51.EditorTools
             EditorUtility.SetDirty(root);
             EditorUtility.SetDirty(rearSeal);
             EditorUtility.SetDirty(frontSeal);
+        }
+
+        private static void BuildOrUpdateRaisedSillFairings(
+            Transform aircraft,
+            Material metal,
+            Material dark)
+        {
+            Transform root = FindDirectChild(aircraft, RaisedSillFairingRootName);
+            if (root == null)
+            {
+                GameObject rootObject = new GameObject(RaisedSillFairingRootName);
+                Undo.RegisterCreatedObjectUndo(rootObject, "Create P-51 raised cockpit sill fairings");
+                root = rootObject.transform;
+                root.SetParent(aircraft, false);
+            }
+            else
+            {
+                Undo.RecordObject(root.gameObject, "Refit P-51 raised cockpit sill fairings");
+                root.gameObject.SetActive(true);
+            }
+
+            root.localPosition = Vector3.zero;
+            root.localRotation = Quaternion.identity;
+            root.localScale = Vector3.one;
+
+            BuildSillSide(root, true, metal, dark);
+            BuildSillSide(root, false, metal, dark);
+            RemoveColliders(root.gameObject);
+            EditorUtility.SetDirty(root);
+        }
+
+        private static void BuildSillSide(Transform root, bool left, Material metal, Material dark)
+        {
+            float x = left ? -0.555f : 0.555f;
+            string side = left ? "Left" : "Right";
+
+            CreateOrUpdateVisualCube(
+                root,
+                $"{side} Raised Sill Fairing Rear",
+                new Vector3(x, 1.835f, -0.72f),
+                new Vector3(0.085f, 0.275f, 0.90f),
+                metal);
+            CreateOrUpdateVisualCube(
+                root,
+                $"{side} Raised Sill Fairing Mid",
+                new Vector3(x, 1.845f, 0.23f),
+                new Vector3(0.090f, 0.295f, 1.05f),
+                metal);
+            CreateOrUpdateVisualCube(
+                root,
+                $"{side} Raised Sill Fairing Front",
+                new Vector3(x, 1.875f, 0.98f),
+                new Vector3(0.085f, 0.245f, 0.52f),
+                metal);
+
+            // A dark inner strip keeps the raised sill from reading like a single solid block
+            // when viewed from the cockpit.
+            float innerX = left ? -0.505f : 0.505f;
+            CreateOrUpdateVisualCube(
+                root,
+                $"{side} Raised Sill Inner Trim",
+                new Vector3(innerX, 1.850f, 0.02f),
+                new Vector3(0.035f, 0.245f, 2.26f),
+                dark);
         }
 
         private static Transform CreateOrUpdateVisualCube(
