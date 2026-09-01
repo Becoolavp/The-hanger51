@@ -3,7 +3,7 @@ using UnityEngine;
 namespace Hanger51.Aircraft
 {
     [DisallowMultipleComponent]
-    [RequireComponent(typeof(Collider))]
+    [RequireComponent(typeof(BoxCollider))]
     [RequireComponent(typeof(Rigidbody))]
     public sealed class P51BatteryTester : MonoBehaviour
     {
