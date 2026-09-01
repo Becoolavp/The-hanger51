@@ -21,6 +21,7 @@ namespace Hanger51.Aircraft
         [SerializeField] private InventoryUI inventoryUI;
         [SerializeField] private AircraftServicePlayerInteractor aircraftServiceInteractor;
         [SerializeField] private P51FuelPlayerInteractor fuelInteractor;
+        [SerializeField] private P51AftEquipmentPlayerInteractor aftEquipmentInteractor;
         [SerializeField] private EngineHoistPlayerInteractor engineHoistInteractor;
         [SerializeField] private EngineConditionPlayerInteractor engineConditionInteractor;
         [SerializeField] private EquippedItemView equippedItemView;
@@ -104,11 +105,10 @@ namespace Hanger51.Aircraft
                 return;
             }
 
-            // Fuel servicing gets first priority over cockpit entry. P51FuelPlayerInteractor
-            // executes earlier in the frame, so one E press can never both move a fuel cap
-            // and occupy the pilot seat. Suppressing this block also removes the overlapping
-            // "enter aircraft" prompt while the player is aimed at fuel hardware.
-            if (fuelInteractor != null && fuelInteractor.HasActiveFuelInteraction)
+            // Servicing interactions execute before cockpit entry. One E press must never both
+            // manipulate fuel/aft equipment and occupy the pilot seat.
+            if ((fuelInteractor != null && fuelInteractor.HasActiveFuelInteraction)
+                || (aftEquipmentInteractor != null && aftEquipmentInteractor.HasActiveAftInteraction))
             {
                 ClearOwnedPrompt();
                 aimedSeat = null;
@@ -250,6 +250,7 @@ namespace Hanger51.Aircraft
             DisableForCockpit(inventoryInteractor);
             DisableForCockpit(aircraftServiceInteractor);
             DisableForCockpit(fuelInteractor);
+            DisableForCockpit(aftEquipmentInteractor);
             DisableForCockpit(engineHoistInteractor);
             DisableForCockpit(engineConditionInteractor);
             DisableForCockpit(equippedItemView);
@@ -393,6 +394,11 @@ namespace Hanger51.Aircraft
             if (fuelInteractor == null)
             {
                 fuelInteractor = GetComponent<P51FuelPlayerInteractor>();
+            }
+
+            if (aftEquipmentInteractor == null && playerCamera != null)
+            {
+                aftEquipmentInteractor = playerCamera.GetComponent<P51AftEquipmentPlayerInteractor>();
             }
 
             if (engineHoistInteractor == null)
