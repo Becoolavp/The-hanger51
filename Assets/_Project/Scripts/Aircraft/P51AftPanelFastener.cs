@@ -10,6 +10,7 @@ namespace Hanger51.Aircraft
         private const float BottomRowInsetFraction = 0.24f;
         private const float BottomRowInsetMaximum = 0.16f;
         private const int CurvedLowerFastenerIndex = 2;
+        private const float CurvedSurfaceNormalBlend = 0.72f;
 
         [SerializeField] private P51AftAccessPanel panel;
         [SerializeField] private int fastenerIndex;
@@ -134,17 +135,21 @@ namespace Hanger51.Aircraft
                 out Vector3 panelLocalPosition,
                 out Vector3 panelLocalNormal);
 
-            // Fastener 3 is on the lower curved transition. Its shaft should follow the real
-            // curved-skin normal instead of being forced toward panel-local -X. The -X clamp is
-            // what produced the roughly 90-degree sideways rotation visible in the Inspector.
-            // Keep the established position and correct only this fastener's mount direction.
+            // Fastener 3 sits on the lower curved transition. Following the raw curved-skin normal
+            // at 100 percent made the shaft lean too far downward. Blend most of the natural curve
+            // with the stable side-facing normal so it still follows the fuselage without looking
+            // over-rotated. The other three fasteners keep their existing mount directions.
             if (normalizedIndex == CurvedLowerFastenerIndex)
             {
-                panelLocalNormal = FindNaturalCurvedSurfaceNormal(
+                Vector3 naturalCurvedNormal = FindNaturalCurvedSurfaceNormal(
                     vertices,
                     normals,
                     bounds,
                     panelLocalPosition);
+                panelLocalNormal = Vector3.Slerp(
+                    panelLocalNormal,
+                    naturalCurvedNormal,
+                    CurvedSurfaceNormalBlend).normalized;
             }
 
             panelLocalPosition += panelLocalNormal * SurfaceStandOff;
