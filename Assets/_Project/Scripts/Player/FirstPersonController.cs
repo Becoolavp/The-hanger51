@@ -21,6 +21,8 @@ namespace Hanger51.Player
         [SerializeField, Min(0.5f)] private float crouchSpeed = 2.7f;
         [SerializeField, Min(0.1f)] private float crouchEyeDrop = 0.62f;
         [SerializeField, Min(1f)] private float crouchTransitionSpeed = 10f;
+        [SerializeField, HideInInspector] private float standingHeight;
+        [SerializeField, HideInInspector] private Vector3 standingCenter;
 
         [Header("Ground Detection")]
         [SerializeField] private LayerMask groundLayers = ~0;
@@ -41,15 +43,26 @@ namespace Hanger51.Player
         private float cameraPitch;
         private bool jumpWasHeld;
         private bool externalInputBlocked;
-        private float standingHeight;
-        private Vector3 standingCenter;
         private float crouchBlend;
 
         public float CameraPitch => cameraPitch;
         public Camera PlayerCamera => playerCamera;
         public float CrouchCameraOffset => -crouchEyeDrop * crouchBlend;
         public bool IsCrouching => crouchBlend > 0.5f;
-        public float StandingHeight => standingHeight;
+        public float StandingHeight
+        {
+            get
+            {
+                if (standingHeight > 0.01f)
+                {
+                    return standingHeight;
+                }
+                CharacterController controller = characterController != null
+                    ? characterController
+                    : GetComponent<CharacterController>();
+                return controller != null ? controller.height : 0f;
+            }
+        }
         public float ConfiguredCrouchHeight => crouchHeight;
         public float CrouchEyeDrop => crouchEyeDrop;
 
@@ -57,8 +70,7 @@ namespace Hanger51.Player
         {
             characterController = GetComponent<CharacterController>();
             characterController.minMoveDistance = 0f;
-            standingHeight = Mathf.Max(characterController.height, characterController.radius * 2f);
-            standingCenter = characterController.center;
+            CaptureStandingCapsuleIfNeeded();
 
             if (playerCamera == null)
             {
@@ -114,13 +126,10 @@ namespace Hanger51.Player
             {
                 characterController = GetComponent<CharacterController>();
             }
-            if (standingHeight <= 0.01f && characterController != null)
-            {
-                standingHeight = Mathf.Max(characterController.height, characterController.radius * 2f);
-                standingCenter = characterController.center;
-            }
+            CaptureStandingCapsuleIfNeeded();
 
-            crouchHeight = Mathf.Clamp(configuredHeight, 0.5f, Mathf.Max(0.5f, standingHeight - 0.05f));
+            float fullHeight = Mathf.Max(0.55f, StandingHeight);
+            crouchHeight = Mathf.Clamp(configuredHeight, 0.5f, Mathf.Max(0.5f, fullHeight - 0.05f));
             crouchSpeed = Mathf.Max(0.5f, configuredSpeed);
             crouchEyeDrop = Mathf.Max(0.1f, configuredEyeDrop);
             crouchTransitionSpeed = Mathf.Max(1f, transitionSpeed);
@@ -133,12 +142,26 @@ namespace Hanger51.Player
             SetCursorLocked(!isBlocked);
         }
 
+        private void CaptureStandingCapsuleIfNeeded()
+        {
+            if (characterController == null)
+            {
+                return;
+            }
+            if (standingHeight <= 0.01f)
+            {
+                standingHeight = Mathf.Max(characterController.height, characterController.radius * 2f);
+                standingCenter = characterController.center;
+            }
+        }
+
         private void HandleCrouch(bool controlsAreActive)
         {
             if (characterController == null)
             {
                 return;
             }
+            CaptureStandingCapsuleIfNeeded();
 
             Keyboard keyboard = Keyboard.current;
             bool wantsCrouch = controlsAreActive
