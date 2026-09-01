@@ -67,6 +67,7 @@ namespace Hanger51.EditorTools
             int configuredAircraft = 0;
             int configuredSlots = 0;
             int configuredFasteners = 0;
+            int removedLegacyFasteners = 0;
             for (int aircraftIndex = 0; aircraftIndex < aircraft.Length; aircraftIndex++)
             {
                 P51FlightController flight = aircraft[aircraftIndex];
@@ -94,6 +95,7 @@ namespace Hanger51.EditorTools
                     configuredSlots++;
                 }
 
+                removedLegacyFasteners += MigratePanelFastenersToFour(bay.AccessPanel);
                 P51AftPanelFastener[] fasteners = bay.AccessPanel.GetComponentsInChildren<P51AftPanelFastener>(true);
                 RemoveOldFinderRings(bay.AccessPanel.transform);
                 for (int fastenerIndex = 0; fastenerIndex < fasteners.Length; fastenerIndex++)
@@ -134,8 +136,8 @@ namespace Hanger51.EditorTools
             }
 
             Debug.Log(
-                $"P-51 Step 94 complete. Aircraft={configuredAircraft}, placement guides={configuredSlots}, easier fasteners={configuredFasteners}. "
-                + "Aft panel/equipment service motions are active, compatible empty rack positions highlight while carried, and hold C crouches for low service access.");
+                $"P-51 Step 94 complete. Aircraft={configuredAircraft}, placement guides={configuredSlots}, easier fasteners={configuredFasteners}, legacy fasteners removed={removedLegacyFasteners}. "
+                + "The aft access panel now uses four corner quarter-turn fasteners, aft panel/equipment service motions are active, compatible empty rack positions highlight while carried, and hold C crouches for low service access.");
         }
 
         [MenuItem("Hanger 51/P-51 Mustang/Current/95 - Validate Aft Service Animation, Guides and Crouch")]
@@ -187,9 +189,9 @@ namespace Hanger51.EditorTools
                 }
 
                 P51AftPanelFastener[] fasteners = bay.AccessPanel.GetComponentsInChildren<P51AftPanelFastener>(true);
-                if (fasteners.Length != 8)
+                if (fasteners.Length != 4)
                 {
-                    Debug.LogError($"P-51 Step 95 failed: '{flight.name}' should have 8 aft-panel fasteners; found {fasteners.Length}.", bay.AccessPanel);
+                    Debug.LogError($"P-51 Step 95 failed: '{flight.name}' should have exactly 4 aft-panel fasteners; found {fasteners.Length}.", bay.AccessPanel);
                     passed = false;
                 }
                 for (int fastenerIndex = 0; fastenerIndex < fasteners.Length; fastenerIndex++)
@@ -237,7 +239,7 @@ namespace Hanger51.EditorTools
             if (passed)
             {
                 Debug.Log(
-                    $"P-51 Step 95 passed. Aircraft={checkedAircraft}, guided slots={checkedSlots}. Animated aft servicing, pulsing compatible placement guides, "
+                    $"P-51 Step 95 passed. Aircraft={checkedAircraft}, guided slots={checkedSlots}. Four aft-panel fasteners, animated aft servicing, pulsing compatible placement guides, "
                     + "larger/easier fastener targets and hold-C crouch are configured.");
             }
         }
@@ -292,6 +294,110 @@ namespace Hanger51.EditorTools
             }
 
             return sameSceneCount == 1 ? onlySceneInteractor : null;
+        }
+
+        private static int MigratePanelFastenersToFour(P51AftAccessPanel panel)
+        {
+            if (panel == null)
+            {
+                return 0;
+            }
+
+            P51AftPanelFastener[] fasteners = panel.GetComponentsInChildren<P51AftPanelFastener>(true);
+            if (fasteners == null || fasteners.Length == 0)
+            {
+                return 0;
+            }
+
+            float minY = float.PositiveInfinity;
+            float maxY = float.NegativeInfinity;
+            float minZ = float.PositiveInfinity;
+            float maxZ = float.NegativeInfinity;
+            for (int index = 0; index < fasteners.Length; index++)
+            {
+                P51AftPanelFastener fastener = fasteners[index];
+                if (fastener == null)
+                {
+                    continue;
+                }
+
+                Vector3 local = panel.transform.InverseTransformPoint(fastener.transform.position);
+                minY = Mathf.Min(minY, local.y);
+                maxY = Mathf.Max(maxY, local.y);
+                minZ = Mathf.Min(minZ, local.z);
+                maxZ = Mathf.Max(maxZ, local.z);
+            }
+
+            bool[] keep = new bool[fasteners.Length];
+            P51AftPanelFastener[] corners = new P51AftPanelFastener[4];
+            float[] targetY = { maxY, maxY, minY, minY };
+            float[] targetZ = { minZ, maxZ, minZ, maxZ };
+
+            int cornerCount = Mathf.Min(4, fasteners.Length);
+            for (int cornerIndex = 0; cornerIndex < cornerCount; cornerIndex++)
+            {
+                int bestIndex = -1;
+                float bestScore = float.PositiveInfinity;
+                for (int fastenerIndex = 0; fastenerIndex < fasteners.Length; fastenerIndex++)
+                {
+                    P51AftPanelFastener candidate = fasteners[fastenerIndex];
+                    if (candidate == null || keep[fastenerIndex])
+                    {
+                        continue;
+                    }
+
+                    Vector3 local = panel.transform.InverseTransformPoint(candidate.transform.position);
+                    float dy = local.y - targetY[cornerIndex];
+                    float dz = local.z - targetZ[cornerIndex];
+                    float score = dy * dy + dz * dz;
+                    if (score < bestScore)
+                    {
+                        bestScore = score;
+                        bestIndex = fastenerIndex;
+                    }
+                }
+
+                if (bestIndex >= 0)
+                {
+                    keep[bestIndex] = true;
+                    corners[cornerIndex] = fasteners[bestIndex];
+                }
+            }
+
+            int removed = 0;
+            if (fasteners.Length > 4)
+            {
+                for (int fastenerIndex = fasteners.Length - 1; fastenerIndex >= 0; fastenerIndex--)
+                {
+                    if (fasteners[fastenerIndex] != null && !keep[fastenerIndex])
+                    {
+                        Undo.DestroyObjectImmediate(fasteners[fastenerIndex].gameObject);
+                        removed++;
+                    }
+                }
+            }
+
+            for (int cornerIndex = 0; cornerIndex < corners.Length; cornerIndex++)
+            {
+                P51AftPanelFastener fastener = corners[cornerIndex];
+                if (fastener == null)
+                {
+                    continue;
+                }
+
+                bool wasSecured = fastener.IsSecured;
+                Undo.RecordObject(fastener, "Normalize P-51 aft panel fastener");
+                Undo.RecordObject(fastener.gameObject, "Rename P-51 aft panel fastener");
+                fastener.gameObject.name = $"Aft Panel Fastener {cornerIndex + 1}";
+                fastener.Configure(panel, cornerIndex, wasSecured);
+                EditorUtility.SetDirty(fastener);
+            }
+
+            if (removed > 0)
+            {
+                EditorUtility.SetDirty(panel);
+            }
+            return removed;
         }
 
         private static Material GetOrCreateHighlightMaterial()
