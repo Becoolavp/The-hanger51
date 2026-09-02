@@ -36,7 +36,7 @@ namespace Hanger51.Player
                 return;
             }
 
-            Vector3 desiredPosition = followTarget.TransformPoint(eyeOffset);
+            Vector3 desiredPosition = GetDesiredPosition();
 
             if (!isInitialized || positionSmoothTime <= 0f)
             {
@@ -65,15 +65,29 @@ namespace Hanger51.Player
 
         public void SnapToTarget()
         {
+            ResolveReferences();
             if (followTarget == null)
             {
                 return;
             }
 
-            smoothedWorldPosition = followTarget.TransformPoint(eyeOffset);
+            smoothedWorldPosition = GetDesiredPosition();
             positionVelocity = Vector3.zero;
             isInitialized = true;
             transform.position = smoothedWorldPosition;
+        }
+
+        private Vector3 GetDesiredPosition()
+        {
+            Vector3 adjustedOffset = eyeOffset;
+            if (playerController != null)
+            {
+                adjustedOffset.y += playerController.CrouchCameraOffset;
+            }
+
+            return followTarget != null
+                ? followTarget.TransformPoint(adjustedOffset)
+                : transform.position;
         }
 
         private void ResolveReferences()

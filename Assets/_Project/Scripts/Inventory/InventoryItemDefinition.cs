@@ -12,18 +12,30 @@ namespace Hanger51.Inventory
         [SerializeField, TextArea(2, 4)] private string description = string.Empty;
         [SerializeField, Min(1)] private int maxStackSize = 10;
         [SerializeField] private Color placeholderColor = Color.white;
+        [SerializeField] private bool canEquip = true;
+        [SerializeField] private GameObject worldPrefab;
+        [SerializeField] private Vector3 worldScale = Vector3.one;
 
         public string ItemId => itemId;
         public string DisplayName => displayName;
         public string Description => description;
         public int MaxStackSize => maxStackSize;
         public Color PlaceholderColor => placeholderColor;
+        public bool CanEquip => canEquip;
+        public GameObject WorldPrefab => worldPrefab;
+        public Vector3 WorldScale => new Vector3(
+            Mathf.Max(0.01f, worldScale.x),
+            Mathf.Max(0.01f, worldScale.y),
+            Mathf.Max(0.01f, worldScale.z));
 
         private void OnValidate()
         {
             itemId = string.IsNullOrWhiteSpace(itemId) ? name.ToLowerInvariant() : itemId.Trim();
             displayName = string.IsNullOrWhiteSpace(displayName) ? name : displayName.Trim();
             maxStackSize = Mathf.Max(1, maxStackSize);
+            worldScale.x = Mathf.Max(0.01f, worldScale.x);
+            worldScale.y = Mathf.Max(0.01f, worldScale.y);
+            worldScale.z = Mathf.Max(0.01f, worldScale.z);
         }
     }
 }

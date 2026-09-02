@@ -16,6 +16,14 @@ namespace Hanger51.Player
         [SerializeField] private float gravity = -24f;
         [SerializeField, Min(1f)] private float terminalVelocity = 50f;
 
+        [Header("Crouch")]
+        [SerializeField, Min(0.5f)] private float crouchHeight = 1.05f;
+        [SerializeField, Min(0.5f)] private float crouchSpeed = 2.7f;
+        [SerializeField, Min(0.1f)] private float crouchEyeDrop = 0.62f;
+        [SerializeField, Min(1f)] private float crouchTransitionSpeed = 10f;
+        [SerializeField, HideInInspector] private float standingHeight;
+        [SerializeField, HideInInspector] private Vector3 standingCenter;
+
         [Header("Ground Detection")]
         [SerializeField] private LayerMask groundLayers = ~0;
         [SerializeField, Min(0.01f)] private float groundProbeDistance = 0.12f;
@@ -28,19 +36,41 @@ namespace Hanger51.Player
         [SerializeField] private bool lockCursorOnStart = true;
 
         private readonly RaycastHit[] groundHits = new RaycastHit[8];
+        private readonly Collider[] crouchClearanceHits = new Collider[16];
 
         private CharacterController characterController;
         private float verticalVelocity;
         private float cameraPitch;
         private bool jumpWasHeld;
         private bool externalInputBlocked;
+        private float crouchBlend;
 
         public float CameraPitch => cameraPitch;
+        public Camera PlayerCamera => playerCamera;
+        public float CrouchCameraOffset => -crouchEyeDrop * crouchBlend;
+        public bool IsCrouching => crouchBlend > 0.5f;
+        public float StandingHeight
+        {
+            get
+            {
+                if (standingHeight > 0.01f)
+                {
+                    return standingHeight;
+                }
+                CharacterController controller = characterController != null
+                    ? characterController
+                    : GetComponent<CharacterController>();
+                return controller != null ? controller.height : 0f;
+            }
+        }
+        public float ConfiguredCrouchHeight => crouchHeight;
+        public float CrouchEyeDrop => crouchEyeDrop;
 
         private void Awake()
         {
             characterController = GetComponent<CharacterController>();
             characterController.minMoveDistance = 0f;
+            CaptureStandingCapsuleIfNeeded();
 
             if (playerCamera == null)
             {
@@ -79,6 +109,7 @@ namespace Hanger51.Player
                 HandleLookInput();
             }
 
+            HandleCrouch(controlsAreActive);
             HandleMovement(controlsAreActive);
         }
 
@@ -89,11 +120,125 @@ namespace Hanger51.Player
             externalInputBlocked = false;
         }
 
+        public void ConfigureCrouch(float configuredHeight, float configuredSpeed, float configuredEyeDrop, float transitionSpeed)
+        {
+            if (characterController == null)
+            {
+                characterController = GetComponent<CharacterController>();
+            }
+            CaptureStandingCapsuleIfNeeded();
+
+            float fullHeight = Mathf.Max(0.55f, StandingHeight);
+            crouchHeight = Mathf.Clamp(configuredHeight, 0.5f, Mathf.Max(0.5f, fullHeight - 0.05f));
+            crouchSpeed = Mathf.Max(0.5f, configuredSpeed);
+            crouchEyeDrop = Mathf.Max(0.1f, configuredEyeDrop);
+            crouchTransitionSpeed = Mathf.Max(1f, transitionSpeed);
+        }
+
         public void SetExternalInputBlocked(bool isBlocked)
         {
             externalInputBlocked = isBlocked;
             jumpWasHeld = false;
             SetCursorLocked(!isBlocked);
+        }
+
+        private void CaptureStandingCapsuleIfNeeded()
+        {
+            if (characterController == null)
+            {
+                return;
+            }
+            if (standingHeight <= 0.01f)
+            {
+                standingHeight = Mathf.Max(characterController.height, characterController.radius * 2f);
+                standingCenter = characterController.center;
+            }
+        }
+
+        private void HandleCrouch(bool controlsAreActive)
+        {
+            if (characterController == null)
+            {
+                return;
+            }
+            CaptureStandingCapsuleIfNeeded();
+
+            Keyboard keyboard = Keyboard.current;
+            bool wantsCrouch = controlsAreActive
+                && keyboard != null
+                && keyboard.cKey.isPressed;
+
+            float targetBlend = wantsCrouch ? 1f : 0f;
+            if (!wantsCrouch && crouchBlend > 0f && !CanStandAtFullHeight())
+            {
+                targetBlend = 1f;
+            }
+
+            crouchBlend = Mathf.MoveTowards(
+                crouchBlend,
+                targetBlend,
+                crouchTransitionSpeed * Time.deltaTime);
+
+            ApplyCrouchShape();
+        }
+
+        private void ApplyCrouchShape()
+        {
+            float targetCrouchHeight = Mathf.Clamp(
+                crouchHeight,
+                characterController.radius * 2f + 0.02f,
+                standingHeight);
+            float height = Mathf.Lerp(standingHeight, targetCrouchHeight, crouchBlend);
+            float standingBottom = standingCenter.y - standingHeight * 0.5f;
+            Vector3 center = standingCenter;
+            center.y = standingBottom + height * 0.5f;
+
+            characterController.height = height;
+            characterController.center = center;
+        }
+
+        private bool CanStandAtFullHeight()
+        {
+            if (characterController == null || standingHeight <= 0f)
+            {
+                return true;
+            }
+
+            float horizontalScale = Mathf.Max(
+                Mathf.Abs(transform.lossyScale.x),
+                Mathf.Abs(transform.lossyScale.z));
+            float verticalScale = Mathf.Max(0.0001f, Mathf.Abs(transform.lossyScale.y));
+            float radius = Mathf.Max(0.02f, characterController.radius * horizontalScale * 0.94f);
+            float height = Mathf.Max(standingHeight * verticalScale, radius * 2f);
+            Vector3 worldCenter = transform.TransformPoint(standingCenter);
+            float halfCylinder = Mathf.Max(0f, height * 0.5f - radius);
+            Vector3 up = transform.up;
+            Vector3 top = worldCenter + up * halfCylinder;
+            Vector3 bottom = worldCenter - up * halfCylinder + up * 0.03f;
+
+            int count = Physics.OverlapCapsuleNonAlloc(
+                bottom,
+                top,
+                radius,
+                crouchClearanceHits,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i = 0; i < count; i++)
+            {
+                Collider hit = crouchClearanceHits[i];
+                if (hit == null || hit == characterController)
+                {
+                    continue;
+                }
+                if (hit.transform == transform || hit.transform.IsChildOf(transform))
+                {
+                    continue;
+                }
+                return false;
+            }
+
+            return true;
         }
 
         private void HandleMovement(bool controlsAreActive)
@@ -103,11 +248,15 @@ namespace Hanger51.Player
                 ? ReadMovementInput(keyboard)
                 : Vector2.zero;
 
+            bool crouchedForMovement = crouchBlend > 0.2f;
             bool isSprinting = controlsAreActive
                 && keyboard != null
-                && keyboard.leftShiftKey.isPressed;
+                && keyboard.leftShiftKey.isPressed
+                && !crouchedForMovement;
 
-            float currentSpeed = isSprinting ? sprintSpeed : walkSpeed;
+            float currentSpeed = crouchedForMovement
+                ? crouchSpeed
+                : isSprinting ? sprintSpeed : walkSpeed;
 
             Vector3 horizontalMovement = transform.right * movementInput.x
                 + transform.forward * movementInput.y;
@@ -115,7 +264,8 @@ namespace Hanger51.Player
 
             bool jumpHeld = controlsAreActive
                 && keyboard != null
-                && keyboard.spaceKey.isPressed;
+                && keyboard.spaceKey.isPressed
+                && !crouchedForMovement;
 
             bool jumpPressed = jumpHeld && !jumpWasHeld;
             jumpWasHeld = jumpHeld;
@@ -298,6 +448,10 @@ namespace Hanger51.Player
             groundProbeDistance = Mathf.Max(groundProbeDistance, 0.01f);
             groundProbeStartOffset = Mathf.Max(groundProbeStartOffset, 0f);
             groundProbeRadiusInset = Mathf.Max(groundProbeRadiusInset, 0f);
+            crouchHeight = Mathf.Max(crouchHeight, 0.5f);
+            crouchSpeed = Mathf.Max(crouchSpeed, 0.5f);
+            crouchEyeDrop = Mathf.Max(crouchEyeDrop, 0.1f);
+            crouchTransitionSpeed = Mathf.Max(crouchTransitionSpeed, 1f);
         }
     }
 }

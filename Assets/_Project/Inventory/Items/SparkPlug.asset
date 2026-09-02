@@ -13,7 +13,11 @@ MonoBehaviour:
   m_Name: SparkPlug
   m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
   itemId: spark-plug
-  displayName: Spark Plug
-  description: A placeholder aviation spark plug.
-  maxStackSize: 12
-  placeholderColor: {r: 0.78, g: 0.78, b: 0.82, a: 1}
+  displayName: V-1650 Spark Plug
+  description: A detailed aircraft spark plug. Equip it to reveal the open wells,
+    then hold E to screw it into the cover. Two plugs are required per cylinder.
+  maxStackSize: 24
+  placeholderColor: {r: 0.78, g: 0.79, b: 0.82, a: 1}
+  canEquip: 1
+  worldPrefab: {fileID: 1122768364169028156, guid: eb2ed383adcfd8e44895ea914f5e8ffd, type: 3}
+  worldScale: {x: 0.22, y: 0.22, z: 0.22}
