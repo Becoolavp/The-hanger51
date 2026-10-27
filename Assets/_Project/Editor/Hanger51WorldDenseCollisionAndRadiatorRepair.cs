@@ -1098,3 +1098,81 @@ namespace Hanger51.EditorTools
         }
 
         static float Next(System.Random rng, float min, float max) => min + (float)rng.NextDouble() * (max - min);
+        static int StableSign(string value) => (value.GetHashCode() & 1) == 0 ? 1 : -1;
+        static float Ground(Terrain terrain, Vector3 p) => terrain.SampleHeight(p) + terrain.transform.position.y;
+
+        static Terrain FindTerrain()
+        {
+            GameObject g = Find(TerrainName);
+            Terrain t = g ? (g.GetComponent<Terrain>() ?? g.GetComponentInChildren<Terrain>(true)) : null;
+            if (t) return t;
+            Terrain[] all = UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            return all.Length > 0 ? all[0] : null;
+        }
+
+        static GameObject Find(string name)
+        {
+            GameObject g = GameObject.Find(name);
+            if (g) return g;
+            foreach (Transform t in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (t && t.name == name && t.gameObject.scene.IsValid()) return t.gameObject;
+            return null;
+        }
+
+        static Transform FindChild(Transform root, string name)
+        {
+            if (!root) return null;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) if (t.name == name) return t;
+            return null;
+        }
+
+        static Transform DirectChild(Transform root, string name)
+        {
+            if (!root) return null;
+            for (int i = 0; i < root.childCount; i++) if (root.GetChild(i).name == name) return root.GetChild(i);
+            return null;
+        }
+
+        static Transform New(string name, Transform parent)
+        {
+            GameObject g = new GameObject(name);
+            g.transform.SetParent(parent, false);
+            return g.transform;
+        }
+
+        static int Count(Transform root, string namePart)
+        {
+            if (!root) return 0;
+            int count = 0;
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true)) if (t != root && t.name.Contains(namePart)) count++;
+            return count;
+        }
+
+        static void RemoveAllNamed(Transform root, string exactName)
+        {
+            if (!root) return;
+            List<GameObject> kill = new List<GameObject>();
+            foreach (Transform t in root.GetComponentsInChildren<Transform>(true))
+                if (t != root && t.name == exactName) kill.Add(t.gameObject);
+            for (int i = kill.Count - 1; i >= 0; i--) if (kill[i]) UnityEngine.Object.DestroyImmediate(kill[i]);
+        }
+
+        static void ResetFolder()
+        {
+            if (AssetDatabase.IsValidFolder(Gen)) AssetDatabase.DeleteAsset(Gen);
+            Ensure(Gen);
+        }
+
+        static void Ensure(string path)
+        {
+            string[] parts = path.Split('/');
+            string current = parts[0];
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next)) AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+    }
+}
