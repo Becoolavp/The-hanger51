@@ -218,3 +218,223 @@ namespace Hanger51.EditorTools
                 grass >= 2000 &&
                 rocks >= 450 &&
                 treeRoadIntrusions == 0 &&
+                rockRoadIntrusions == 0 &&
+                treeColliderPrototypeFailures == 0 &&
+                rockColliderFailures == 0 &&
+                streamer != null &&
+                regionalCorridors >= 5 &&
+                townCorridors >= 4 &&
+                tieWires >= 18 &&
+                wires >= 180 &&
+                poles >= 90 &&
+                radiatorAircraft > 0 &&
+                radiatorFailures == 0;
+
+            if (ok)
+            {
+                Debug.Log(
+                    $"Step 115 passed. trees={terrain.terrainData.treeInstanceCount}, grass cells={denseGrassCells}, asset grass={grass}, collidable rocks={rocks}, tree-road intrusions={treeRoadIntrusions}, rock-road intrusions={rockRoadIntrusions}, tree prefab collider failures={treeColliderPrototypeFailures}, rock collider failures={rockColliderFailures}, utility corridors={regionalCorridors}+{townCorridors}, poles={poles}, wires={wires}, tie wires={tieWires}, radiator aircraft={radiatorAircraft}.",
+                    pass);
+            }
+            else
+            {
+                Debug.LogError(
+                    $"Step 115 failed. trees={terrain.terrainData.treeInstanceCount}, grass cells={denseGrassCells}, asset grass={grass}, rocks={rocks}, tree-road intrusions={treeRoadIntrusions}, rock-road intrusions={rockRoadIntrusions}, tree prefab collider failures={treeColliderPrototypeFailures}, rock collider failures={rockColliderFailures}, collision streamer={(streamer ? "present" : "missing")}, regional utility corridors={regionalCorridors}, town corridors={townCorridors}, poles={poles}, wires={wires}, tie wires={tieWires}, radiator aircraft={radiatorAircraft}, radiator failures={radiatorFailures}.",
+                    pass);
+            }
+        }
+
+        static Mats LoadMats()
+        {
+            return new Mats
+            {
+                wood = LoadMat("Weathered_Wood"),
+                metal = LoadMat("Dark_Metal"),
+                white = LoadMat("Warm_White")
+            };
+        }
+
+        static Material LoadMat(string name)
+        {
+            Material m = AssetDatabase.LoadAssetAtPath<Material>(BaseGen + "/Materials/" + name + ".mat");
+            if (m)
+            {
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+                if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", Color.black);
+                m.EnableKeyword("_SPECULARHIGHLIGHTS_OFF");
+                EditorUtility.SetDirty(m);
+            }
+            return m;
+        }
+
+        static List<Road> CollectRoads(Transform roadsRoot)
+        {
+            List<Road> roads = new List<Road>();
+            foreach (Transform tr in roadsRoot.GetComponentsInChildren<Transform>(true))
+            {
+                Transform surface = DirectChild(tr, "Road Surface");
+                if (!surface) continue;
+                MeshFilter mf = surface.GetComponent<MeshFilter>();
+                if (!mf || !mf.sharedMesh) continue;
+                Vector3[] vertices = mf.sharedMesh.vertices;
+                if (vertices.Length < 4) continue;
+
+                Road road = new Road { name = tr.name, root = tr };
+                for (int i = 0; i + 1 < vertices.Length; i += 2)
+                {
+                    Vector3 a = mf.transform.TransformPoint(vertices[i]);
+                    Vector3 b = mf.transform.TransformPoint(vertices[i + 1]);
+                    road.path.Add((a + b) * .5f);
+                    if (i == 0) road.width = Vector3.Distance(a, b);
+                }
+                if (road.path.Count >= 2) roads.Add(road);
+            }
+            return roads;
+        }
+
+        static List<Town> CaptureTowns(Transform settlements, Transform roadsRoot)
+        {
+            List<Town> towns = new List<Town>();
+            for (int i = 0; i < settlements.childCount; i++)
+            {
+                Transform root = settlements.GetChild(i);
+                List<Transform> houses = new List<Transform>();
+                foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                    if (tr.name.StartsWith("Detailed House")) houses.Add(tr);
+                if (houses.Count == 0) continue;
+
+                Vector3 center = Vector3.zero;
+                foreach (Transform h in houses) center += h.position;
+                center /= houses.Count;
+
+                Town town = new Town { name = root.name, root = root, center = center };
+                for (int r = 0; r < roadsRoot.childCount; r++)
+                {
+                    Transform road = roadsRoot.GetChild(r);
+                    if (road.name.StartsWith(root.name) && DirectChild(road, "Road Surface")) town.localRoads.Add(road);
+                }
+                towns.Add(town);
+            }
+            return towns;
+        }
+
+        static List<Bounds> CollectHardExclusions(Transform world, Transform airport, Transform plant)
+        {
+            List<Bounds> bounds = new List<Bounds>();
+
+            foreach (Transform tr in airport.GetComponentsInChildren<Transform>(true))
+            {
+                string n = tr.name.ToLowerInvariant();
+                float pad = n.Contains("runway") ? 70f : n.Contains("taxiway") ? 28f : n.Contains("apron") ? 24f :
+                            n.Contains("hangar") || n.Contains("hanger") ? 18f : -1f;
+                if (pad < 0f) continue;
+                if (TryBounds(tr, out Bounds b))
+                {
+                    b.Expand(new Vector3(pad * 2f, 40f, pad * 2f));
+                    bounds.Add(b);
+                }
+            }
+
+            foreach (Transform tr in world.GetComponentsInChildren<Transform>(true))
+            {
+                string n = tr.name;
+                bool building = n.StartsWith("Detailed House") || n.StartsWith("Purpose -") || n.StartsWith("Farmstead -") ||
+                                n == "Power Station Complex" || n.StartsWith("Detached Garage") || n.StartsWith("Community Park -");
+                if (!building) continue;
+                if (TryBounds(tr, out Bounds b))
+                {
+                    b.Expand(new Vector3(18f, 20f, 18f));
+                    bounds.Add(b);
+                }
+            }
+
+            if (plant && TryBounds(plant, out Bounds plantBounds))
+            {
+                plantBounds.Expand(new Vector3(70f, 40f, 70f));
+                bounds.Add(plantBounds);
+            }
+            return bounds;
+        }
+
+        static int BuildDenseTerrainForest(Terrain terrain, List<Road> roads, List<Bounds> exclusions)
+        {
+            TerrainData data = terrain.terrainData;
+            GameObject fir = AssetDatabase.LoadAssetAtPath<GameObject>(FirTree);
+            GameObject leaf = AssetDatabase.LoadAssetAtPath<GameObject>(LeafTree);
+            if (!fir || !leaf)
+            {
+                Debug.LogError("Step 114 could not load both Supercyan mature tree prefabs.");
+                return data.treeInstanceCount;
+            }
+
+            data.treePrototypes = new[]
+            {
+                new TreePrototype { prefab = fir, bendFactor = .25f },
+                new TreePrototype { prefab = leaf, bendFactor = .32f }
+            };
+
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            System.Random rng = new System.Random(Seed + 10);
+            List<TreeInstance> trees = new List<TreeInstance>(32000);
+            int target = 32000;
+            int tries = 0;
+            int maxTries = 850000;
+
+            while (trees.Count < target && tries++ < maxTries)
+            {
+                float nx = Next(rng, .006f, .994f);
+                float nz = Next(rng, .006f, .994f);
+                Vector3 p = new Vector3(origin.x + nx * size.x, 0f, origin.z + nz * size.z);
+                if (InsideAny(p, exclusions)) continue;
+                if (NearRoad(p, roads, 18f)) continue;
+
+                float broad = Fbm(p.x * .00031f + 17f, p.z * .00031f + 43f, 4);
+                float fine = Fbm(p.x * .0011f + 61f, p.z * .0011f + 91f, 3);
+                float acceptance = Mathf.Clamp01(.58f + broad * .24f + fine * .18f);
+                if (rng.NextDouble() > acceptance) continue;
+
+                int prototype = rng.NextDouble() < .46 ? 0 : 1;
+                float heightScale = prototype == 0 ? Next(rng, 2.65f, 4.15f) : Next(rng, 4.10f, 6.25f);
+                float widthScale = heightScale * Next(rng, .74f, .94f);
+                trees.Add(new TreeInstance
+                {
+                    position = new Vector3(nx, data.GetInterpolatedHeight(nx, nz) / Mathf.Max(1f, size.y), nz),
+                    prototypeIndex = prototype,
+                    widthScale = widthScale,
+                    heightScale = heightScale,
+                    rotation = Next(rng, 0f, Mathf.PI * 2f),
+                    color = Color.white,
+                    lightmapColor = Color.white
+                });
+            }
+
+            data.treeInstances = trees.ToArray();
+            EditorUtility.SetDirty(data);
+            return trees.Count;
+        }
+
+        static void ConfigureTerrainTreeCollisionSupport(Terrain terrain)
+        {
+            TerrainCollider collider = terrain.GetComponent<TerrainCollider>();
+            if (!collider) collider = Undo.AddComponent<TerrainCollider>(terrain.gameObject);
+            collider.terrainData = terrain.terrainData;
+            collider.enabled = true;
+
+            SerializedObject serialized = new SerializedObject(collider);
+            SerializedProperty enableTrees = serialized.FindProperty("m_EnableTreeColliders");
+            if (enableTrees != null) enableTrees.boolValue = true;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            EditorUtility.SetDirty(collider);
+        }
+
+        static int FillDenseTerrainGrass(Terrain terrain, List<Road> roads, List<Bounds> exclusions)
+        {
+            TerrainData data = terrain.terrainData;
+            if (data.detailPrototypes == null || data.detailPrototypes.Length == 0)
+            {
+                Texture2D texture = AssetDatabase.LoadAssetAtPath<Texture2D>(
+                    "Assets/_Project/Environment/Generated/CountrysideVisualUpgrade/Textures/MeadowGrass.asset");
+                if (texture)
+                {
