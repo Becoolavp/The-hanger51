@@ -878,3 +878,223 @@ namespace Hanger51.EditorTools
                 if (prototype == null || !prototype.prefab) { bad++; continue; }
                 Collider collider = prototype.prefab.GetComponentInChildren<Collider>(true);
                 if (!collider || !collider.enabled || collider.isTrigger) bad++;
+            }
+            return bad;
+        }
+
+        static int CountColliderFailures(Transform root, string prefix)
+        {
+            int bad = 0;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!tr.name.StartsWith(prefix)) continue;
+                Collider collider = tr.GetComponentInChildren<Collider>(true);
+                if (!collider || !collider.enabled || collider.isTrigger) bad++;
+            }
+            return bad;
+        }
+
+        static int CountNamedRoadIntrusions(Transform root, string prefix, List<Road> roads, float extra)
+        {
+            int bad = 0;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                if (tr.name.StartsWith(prefix) && NearRoad(tr.position, roads, extra)) bad++;
+            return bad;
+        }
+
+        static int CountDenseGrassCells(Terrain terrain)
+        {
+            TerrainData data = terrain.terrainData;
+            if (data.detailPrototypes == null || data.detailPrototypes.Length == 0 || data.detailWidth <= 0 || data.detailHeight <= 0) return 0;
+            int[,] layer = data.GetDetailLayer(0, 0, data.detailWidth, data.detailHeight, 0);
+            int count = 0;
+            for (int z = 0; z < layer.GetLength(0); z++)
+                for (int x = 0; x < layer.GetLength(1); x++)
+                    if (layer[z, x] > 0) count++;
+            return count;
+        }
+
+        static void RasterizeExclusions(bool[,] blocked, Terrain terrain, List<Bounds> exclusions)
+        {
+            int height = blocked.GetLength(0);
+            int width = blocked.GetLength(1);
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = terrain.terrainData.size;
+            foreach (Bounds b in exclusions)
+            {
+                int x0 = Mathf.Clamp(Mathf.FloorToInt((b.min.x - origin.x) / size.x * width), 0, width - 1);
+                int x1 = Mathf.Clamp(Mathf.CeilToInt((b.max.x - origin.x) / size.x * width), 0, width - 1);
+                int z0 = Mathf.Clamp(Mathf.FloorToInt((b.min.z - origin.z) / size.z * height), 0, height - 1);
+                int z1 = Mathf.Clamp(Mathf.CeilToInt((b.max.z - origin.z) / size.z * height), 0, height - 1);
+                for (int z = z0; z <= z1; z++) for (int x = x0; x <= x1; x++) blocked[z, x] = true;
+            }
+        }
+
+        static void RasterizeRoads(bool[,] blocked, Terrain terrain, List<Road> roads, float extra)
+        {
+            int height = blocked.GetLength(0);
+            int width = blocked.GetLength(1);
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = terrain.terrainData.size;
+            foreach (Road road in roads)
+            {
+                float radius = road.width * .5f + extra;
+                for (int i = 0; i < road.path.Count - 1; i++)
+                {
+                    Vector3 a = road.path[i];
+                    Vector3 b = road.path[i + 1];
+                    int steps = Mathf.Max(1, Mathf.CeilToInt(Vector3.Distance(a, b) / 7f));
+                    for (int s = 0; s <= steps; s++)
+                    {
+                        Vector3 p = Vector3.Lerp(a, b, s / (float)steps);
+                        int cx = Mathf.RoundToInt((p.x - origin.x) / size.x * (width - 1));
+                        int cz = Mathf.RoundToInt((p.z - origin.z) / size.z * (height - 1));
+                        int rx = Mathf.Max(1, Mathf.CeilToInt(radius / size.x * width));
+                        int rz = Mathf.Max(1, Mathf.CeilToInt(radius / size.z * height));
+                        for (int z = Mathf.Max(0, cz - rz); z <= Mathf.Min(height - 1, cz + rz); z++)
+                            for (int x = Mathf.Max(0, cx - rx); x <= Mathf.Min(width - 1, cx + rx); x++)
+                                blocked[z, x] = true;
+                    }
+                }
+            }
+        }
+
+        static bool InsideAny(Vector3 p, List<Bounds> exclusions)
+        {
+            for (int i = 0; i < exclusions.Count; i++)
+            {
+                Bounds b = exclusions[i];
+                if (p.x >= b.min.x && p.x <= b.max.x && p.z >= b.min.z && p.z <= b.max.z) return true;
+            }
+            return false;
+        }
+
+        static bool TryBounds(Transform root, out Bounds bounds)
+        {
+            bool set = false;
+            bounds = new Bounds(root.position, Vector3.zero);
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!set) { bounds = renderer.bounds; set = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            foreach (Collider collider in root.GetComponentsInChildren<Collider>(true))
+            {
+                if (!set) { bounds = collider.bounds; set = true; }
+                else bounds.Encapsulate(collider.bounds);
+            }
+            return set;
+        }
+
+        static void DisableAllColliders(Transform root)
+        {
+            foreach (Collider collider in root.GetComponentsInChildren<Collider>(true)) collider.enabled = false;
+        }
+
+        static void EnsureSolidCollider(GameObject root)
+        {
+            Collider collider = root.GetComponentInChildren<Collider>(true);
+            if (collider)
+            {
+                collider.enabled = true;
+                collider.isTrigger = false;
+                return;
+            }
+            MeshFilter mf = root.GetComponentInChildren<MeshFilter>(true);
+            if (mf && mf.sharedMesh)
+            {
+                MeshCollider mc = root.AddComponent<MeshCollider>();
+                mc.sharedMesh = mf.sharedMesh;
+                mc.convex = false;
+            }
+        }
+
+        static GameObject Box(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, bool collide, Vector3? localEuler = null)
+        {
+            GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            g.name = name;
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = localPosition;
+            g.transform.localScale = localScale;
+            if (localEuler.HasValue) g.transform.localRotation = Quaternion.Euler(localEuler.Value);
+            Renderer renderer = g.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider collider = g.GetComponent<Collider>();
+            if (collider) collider.enabled = collide;
+            g.isStatic = true;
+            return g;
+        }
+
+        static GameObject Cylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, bool collide)
+        {
+            GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            g.name = name;
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = localPosition;
+            g.transform.localScale = localScale;
+            Renderer renderer = g.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider collider = g.GetComponent<Collider>();
+            if (collider) collider.enabled = collide;
+            g.isStatic = true;
+            return g;
+        }
+
+        static void Wire(Transform parent, Vector3 a, Vector3 b, Material material, string name, bool collide)
+        {
+            Vector3 d = b - a;
+            if (d.sqrMagnitude < .001f) return;
+            GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            g.name = name;
+            g.transform.SetParent(parent, false);
+            g.transform.position = (a + b) * .5f;
+            g.transform.rotation = Quaternion.FromToRotation(Vector3.up, d.normalized);
+            g.transform.localScale = new Vector3(.035f, d.magnitude * .5f, .035f);
+            Renderer renderer = g.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider collider = g.GetComponent<Collider>();
+            if (collider) collider.enabled = collide;
+            g.isStatic = true;
+        }
+
+        static Vector3 RandomTerrainPoint(System.Random rng, Terrain terrain)
+        {
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = terrain.terrainData.size;
+            Vector3 p = new Vector3(origin.x + Next(rng, .008f, .992f) * size.x, 0f, origin.z + Next(rng, .008f, .992f) * size.z);
+            p.y = Ground(terrain, p);
+            return p;
+        }
+
+        static float SegmentDistance(Vector3 p, Vector3 a, Vector3 b)
+        {
+            Vector2 q = new Vector2(p.x, p.z);
+            Vector2 x = new Vector2(a.x, a.z);
+            Vector2 d = new Vector2(b.x - a.x, b.z - a.z);
+            return d.sqrMagnitude < .001f ? Vector2.Distance(q, x) : Vector2.Distance(q, x + d * Mathf.Clamp01(Vector2.Dot(q - x, d) / d.sqrMagnitude));
+        }
+
+        static float Planar(Vector3 a, Vector3 b)
+        {
+            float x = a.x - b.x;
+            float z = a.z - b.z;
+            return Mathf.Sqrt(x * x + z * z);
+        }
+
+        static float Fbm(float x, float y, int octaves)
+        {
+            float value = 0f;
+            float amplitude = 1f;
+            float sum = 0f;
+            float frequency = 1f;
+            for (int i = 0; i < octaves; i++)
+            {
+                value += Mathf.PerlinNoise(x * frequency, y * frequency) * amplitude;
+                sum += amplitude;
+                amplitude *= .5f;
+                frequency *= 2.03f;
+            }
+            return sum > 0f ? value / sum : 0f;
+        }
+
+        static float Next(System.Random rng, float min, float max) => min + (float)rng.NextDouble() * (max - min);
