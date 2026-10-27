@@ -118,10 +118,11 @@ namespace Hanger51.World
             for (int i = 0; i < instances.Length; i++)
             {
                 TreeInstance instance = instances[i];
-                Vector3 p = new Vector3(
-                    origin.x + instance.position.x * size.x,
-                    origin.y + instance.position.y * size.y,
-                    origin.z + instance.position.z * size.z);
+                float worldX = origin.x + instance.position.x * size.x;
+                float worldZ = origin.z + instance.position.z * size.z;
+                Vector3 samplePoint = new Vector3(worldX, origin.y, worldZ);
+                float worldY = terrain.SampleHeight(samplePoint) + origin.y;
+                Vector3 p = new Vector3(worldX, worldY, worldZ);
                 Vector2Int cell = CellFor(p);
                 TreeRecord record = new TreeRecord
                 {
@@ -241,7 +242,9 @@ namespace Hanger51.World
                 : DefaultShape();
 
             proxy.treeIndex = treeIndex;
-            proxy.gameObject.transform.position = tree.worldPosition;
+            Vector3 grounded = tree.worldPosition;
+            grounded.y = terrain ? terrain.SampleHeight(grounded) + terrain.transform.position.y : grounded.y;
+            proxy.gameObject.transform.position = grounded;
             proxy.gameObject.transform.rotation = Quaternion.Euler(0f, tree.rotationDegrees, 0f);
             proxy.gameObject.transform.localScale = Vector3.one;
 
@@ -283,25 +286,48 @@ namespace Hanger51.World
                 CapsuleCollider capsule = prototype.prefab.GetComponentInChildren<CapsuleCollider>(true);
                 if (capsule)
                 {
+                    Transform source = capsule.transform;
+                    Vector3 centerWorld = source.TransformPoint(capsule.center);
+                    Vector3 centerLocal = prototype.prefab.transform.InverseTransformPoint(centerWorld);
+                    Vector3 lossy = source.lossyScale;
+                    float radialScale = capsule.direction == 0
+                        ? Mathf.Max(Mathf.Abs(lossy.y), Mathf.Abs(lossy.z))
+                        : capsule.direction == 1
+                            ? Mathf.Max(Mathf.Abs(lossy.x), Mathf.Abs(lossy.z))
+                            : Mathf.Max(Mathf.Abs(lossy.x), Mathf.Abs(lossy.y));
+                    float heightScale = capsule.direction == 0
+                        ? Mathf.Abs(lossy.x)
+                        : capsule.direction == 1
+                            ? Mathf.Abs(lossy.y)
+                            : Mathf.Abs(lossy.z);
                     return new PrototypeShape
                     {
-                        center = capsule.center,
-                        radius = Mathf.Max(0.12f, capsule.radius),
-                        height = Mathf.Max(capsule.radius * 2f, capsule.height),
+                        center = centerLocal,
+                        radius = Mathf.Max(0.12f, capsule.radius * radialScale),
+                        height = Mathf.Max(capsule.radius * 2f, capsule.height * heightScale),
                         direction = capsule.direction
                     };
                 }
 
-                Collider collider = prototype.prefab.GetComponentInChildren<Collider>(true);
-                Renderer renderer = prototype.prefab.GetComponentInChildren<Renderer>(true);
-                Bounds bounds = collider ? collider.bounds : renderer ? renderer.bounds : new Bounds(Vector3.up * 1.5f, new Vector3(.8f, 3f, .8f));
-                return new PrototypeShape
-                {
-                    center = prototype.prefab.transform.InverseTransformPoint(bounds.center),
-                    radius = Mathf.Max(.18f, Mathf.Min(bounds.size.x, bounds.size.z) * .35f),
-                    height = Mathf.Max(.5f, bounds.size.y),
-                    direction = 1
-                };
+                string n = prototype.prefab.name.ToLowerInvariant();
+                if (n.Contains("fir"))
+                    return new PrototypeShape
+                    {
+                        center = new Vector3(.04f, 1.6552377f, -.01f),
+                        radius = .25f,
+                        height = 3.5331335f,
+                        direction = 1
+                    };
+                if (n.Contains("leaf"))
+                    return new PrototypeShape
+                    {
+                        center = new Vector3(.05f, 1.0146283f, -.0314104f),
+                        radius = .33f,
+                        height = 2.3331134f,
+                        direction = 1
+                    };
+
+                return DefaultShape();
             }
             return DefaultShape();
         }
