@@ -116,6 +116,7 @@ namespace Hanger51.EditorTools
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Farms", "Clearing trees and crops from farmyards and lanes", .72f);
                 int terrainTreesRemoved = ClearTerrainTreesNearFarmSites(terrain, sites);
+                int sceneTreesRemoved = ClearSceneTreesNearFarmSites(world.transform, sites);
                 int detailCellsCleared = ClearTerrainDetailsNearFarmSites(terrain, sites);
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Farms", "Adding larger shelter belts around farm country", .84f);
@@ -137,7 +138,7 @@ namespace Hanger51.EditorTools
                 Selection.activeGameObject = pass.gameObject;
 
                 Debug.Log(
-                    $"Step 120 complete. scene trees rescaled={treesRescaled}, scene-tree collider repairs={treeColliderRepairs}, remaining scene-tree collider failures={treeColliderFailures}, working farms={sites.Count}, barns={barns}, silos={silos}, tractors={tractors}, combines={combines}, hay bales={hayBales}, fence sections={fences}, farm lanes={lanes}, terrain trees removed from farmyards={terrainTreesRemoved}, detail cells cleared from farmyards={detailCellsCleared}, larger field-edge trees added/upgraded={shelterTrees}. Run Step 121 to validate.",
+                    $"Step 120 complete. scene trees rescaled={treesRescaled}, scene-tree collider repairs={treeColliderRepairs}, remaining scene-tree collider failures={treeColliderFailures}, working farms={sites.Count}, barns={barns}, silos={silos}, tractors={tractors}, combines={combines}, hay bales={hayBales}, fence sections={fences}, farm lanes={lanes}, terrain trees removed from farmyards={terrainTreesRemoved}, scene trees removed from farmyards={sceneTreesRemoved}, detail cells cleared from farmyards={detailCellsCleared}, larger field-edge trees added/upgraded={shelterTrees}. Run Step 121 to validate.",
                     pass.gameObject);
             }
             finally
@@ -371,7 +372,7 @@ namespace Hanger51.EditorTools
                 dir.Normalize();
 
                 float edgeDistance = DistanceToFieldEdge(field, dir);
-                if (distance < edgeDistance + 45f || distance > edgeDistance + 360f) continue;
+                if (distance < edgeDistance + 20f || distance > edgeDistance + 520f) continue;
 
                 float yardDistance = edgeDistance + Mathf.Min(55f, Mathf.Max(32f, (distance - edgeDistance) * .30f));
                 Vector3 yard = field.center + dir * yardDistance;
@@ -393,7 +394,7 @@ namespace Hanger51.EditorTools
             {
                 bool close = false;
                 foreach (FarmSite used in chosen)
-                    if (Planar(site.yard, used.yard) < 360f) { close = true; break; }
+                    if (Planar(site.yard, used.yard) < 280f) { close = true; break; }
                 if (close) continue;
                 chosen.Add(site);
                 if (chosen.Count >= target) break;
@@ -677,6 +678,27 @@ namespace Hanger51.EditorTools
             return removed;
         }
 
+        static int ClearSceneTreesNearFarmSites(Transform world, List<FarmSite> sites)
+        {
+            List<GameObject> remove = new List<GameObject>();
+            foreach (Transform tr in world.GetComponentsInChildren<Transform>(true))
+            {
+                if (!IsManagedTreeRoot(tr.name)) continue;
+                foreach (FarmSite site in sites)
+                {
+                    if (Planar(tr.position, site.yard) < 62f || SegmentDistance(tr.position, site.yard, site.nearestRoad) < 9f)
+                    {
+                        remove.Add(tr.gameObject);
+                        break;
+                    }
+                }
+            }
+
+            foreach (GameObject g in remove)
+                if (g) UnityEngine.Object.DestroyImmediate(g);
+            return remove.Count;
+        }
+
         static int ClearTerrainDetailsNearFarmSites(Terrain terrain, List<FarmSite> sites)
         {
             TerrainData data = terrain.terrainData;
@@ -833,6 +855,7 @@ namespace Hanger51.EditorTools
                     n.Contains("Farm Fuel Tank");
                 if (!shouldBeSolid) continue;
                 Collider col = tr.GetComponent<Collider>();
+                if (!col) col = tr.GetComponentInChildren<Collider>(true);
                 if (!col || !col.enabled || col.isTrigger) bad++;
             }
             return bad;
