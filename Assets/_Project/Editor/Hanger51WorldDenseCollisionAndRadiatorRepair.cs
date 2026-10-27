@@ -426,9 +426,16 @@ namespace Hanger51.EditorTools
 
             SerializedObject serialized = new SerializedObject(collider);
             SerializedProperty enableTrees = serialized.FindProperty("m_EnableTreeColliders");
-            if (enableTrees != null) enableTrees.boolValue = true;
+            bool knownBrokenNativeTreeColliders =
+                Application.unityVersion.StartsWith("6000.2.6f2") ||
+                Application.unityVersion.StartsWith("6000.2.7f2") ||
+                Application.unityVersion.StartsWith("6000.2.8f1");
+            if (enableTrees != null) enableTrees.boolValue = !knownBrokenNativeTreeColliders;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(collider);
+            if (knownBrokenNativeTreeColliders)
+                Debug.Log("Step 114 disabled Unity's native Terrain tree colliders on " + Application.unityVersion +
+                          " and will use the streamed aircraft collision proxies instead.");
         }
 
         static void ConfigureFoliageRendering(Terrain terrain)
