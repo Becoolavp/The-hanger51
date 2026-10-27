@@ -96,7 +96,7 @@ namespace Hanger51.EditorTools
                 EditorUtility.DisplayProgressBar("Hanger 51 Agriculture", "Planning realistic field parcels", .18f);
                 List<Road> roads = CollectRoads(roadsRoot);
                 List<Bounds> exclusions = CollectExclusions(world.transform, airport.transform);
-                List<FieldParcel> fields = PlanFields(terrain, roads, exclusions, 64);
+                List<FieldParcel> fields = PlanFields(terrain, roads, exclusions, 96);
 
                 Transform oldPass = FindChild(world.transform, PassName);
                 if (oldPass) UnityEngine.Object.DestroyImmediate(oldPass.gameObject);
@@ -190,7 +190,7 @@ namespace Hanger51.EditorTools
             int cultivatedRockIntrusions = CountNamedObjectsInsideFieldMarkers(world.transform, fields, "Solid Ground Rock");
 
             bool ok =
-                fieldCount >= 40 &&
+                fieldCount >= 60 &&
                 fieldPixels >= 12000 &&
                 cropCells >= 12000 &&
                 prototypeColliderFailures == 0 &&
@@ -221,6 +221,8 @@ namespace Hanger51.EditorTools
             GameObject temp = PrefabUtility.InstantiatePrefab(source) as GameObject;
             if (!temp) return null;
             temp.name = System.IO.Path.GetFileNameWithoutExtension(outputPath);
+            if (PrefabUtility.IsPartOfPrefabInstance(temp))
+                PrefabUtility.UnpackPrefabInstance(temp, PrefabUnpackMode.Completely, InteractionMode.AutomatedAction);
             foreach (Collider collider in temp.GetComponentsInChildren<Collider>(true))
                 UnityEngine.Object.DestroyImmediate(collider);
 
@@ -363,6 +365,7 @@ namespace Hanger51.EditorTools
             TerrainData data = terrain.terrainData;
             int fieldLayer = FindTerrainLayer(data, "New Field");
             int meadowLayer = FindTerrainLayer(data, "New Meadow");
+            int stoneLayer = FindTerrainLayer(data, "Natural Stone");
             if (fieldLayer < 0)
             {
                 Debug.LogError("Step 116 could not find the 'New Field' terrain layer.");
@@ -393,9 +396,7 @@ namespace Hanger51.EditorTools
                     float row = .5f + .5f * Mathf.Sin((local.y + field.cropType * 3.7f) * (field.cropType == 2 ? .22f : .12f));
                     float strength = Mathf.Clamp01(.76f + row * .16f) * edge;
 
-                    float keepRock = 0f;
-                    int stoneLayer = FindTerrainLayer(data, "Natural Stone");
-                    if (stoneLayer >= 0) keepRock = alpha[z, x, stoneLayer] * .25f;
+                    float keepRock = stoneLayer >= 0 ? alpha[z, x, stoneLayer] * .25f : 0f;
 
                     for (int layer = 0; layer < alpha.GetLength(2); layer++) alpha[z, x, layer] *= 1f - strength;
                     alpha[z, x, fieldLayer] += strength * (1f - keepRock);
