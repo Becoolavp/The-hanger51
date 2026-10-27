@@ -213,6 +213,87 @@ namespace Hanger51.EditorTools
             }
         }
 
+        [MenuItem("Hanger 51/World/Current/118 - Repair Existing Farmland Terrain Paint")]
+        public static void RepairExistingFarmlandPaint()
+        {
+            if (EditorApplication.isPlaying || EditorApplication.isCompiling)
+            {
+                Debug.LogError("Step 118 failed. Exit Play mode and let Unity finish compiling first.");
+                return;
+            }
+
+            GameObject world = Find(WorldName);
+            GameObject airport = Find(AirportName);
+            Terrain terrain = FindTerrain();
+            Transform pass = world ? FindChild(world.transform, PassName) : null;
+            Transform fieldRoot = pass ? FindChild(pass, FieldRootName) : null;
+            Transform roadsRoot = world ? FindChild(world.transform, "Road Network") : null;
+            if (!world || !airport || !terrain || !fieldRoot || !roadsRoot)
+            {
+                Debug.LogError("Step 118 failed. Run Step 116 first so the 96 agricultural field markers exist.");
+                return;
+            }
+
+            List<FieldParcel> fields = ReadFieldMarkers(fieldRoot);
+            List<Road> roads = CollectRoads(roadsRoot);
+            List<Bounds> exclusions = CollectExclusions(world.transform, airport.transform);
+
+            int fieldLayer = FindTerrainLayer(terrain.terrainData, "New Field");
+            if (fieldLayer < 0)
+            {
+                string available = "";
+                TerrainLayer[] layers = terrain.terrainData.terrainLayers;
+                if (layers != null)
+                    for (int i = 0; i < layers.Length; i++)
+                        available += (i == 0 ? "" : ", ") + i + ":" + (layers[i] ? layers[i].name : "<null>");
+                Debug.LogError("Step 118 could not resolve a field terrain layer. Active layers: " + available);
+                return;
+            }
+
+            int painted = PaintFields(terrain, fields, roads, exclusions);
+            terrain.Flush();
+            EditorUtility.SetDirty(terrain.terrainData);
+            EditorUtility.SetDirty(terrain);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.SaveOpenScenes();
+
+            int strongPixels = CountFieldPixels(terrain);
+            TerrainLayer resolved = terrain.terrainData.terrainLayers[fieldLayer];
+            Debug.Log(
+                $"Step 118 complete. Repainted {painted} agricultural terrain pixels using layer index {fieldLayer} ({(resolved ? resolved.name : "<null>")}); strongly visible field pixels={strongPixels}. Now run Step 117 again.",
+                terrain);
+        }
+
+        [MenuItem("Hanger 51/World/Current/119 - Validate Farmland Paint Repair")]
+        public static void ValidateFarmlandPaintRepair()
+        {
+            GameObject world = Find(WorldName);
+            Terrain terrain = FindTerrain();
+            Transform pass = world ? FindChild(world.transform, PassName) : null;
+            Transform fieldRoot = pass ? FindChild(pass, FieldRootName) : null;
+            if (!world || !terrain || !fieldRoot)
+            {
+                Debug.LogError("Step 119 failed. Run Step 116 and Step 118 first.");
+                return;
+            }
+
+            int fieldLayer = FindTerrainLayer(terrain.terrainData, "New Field");
+            int pixels = CountFieldPixels(terrain);
+            int cropCells = CountCropDetailCells(terrain);
+            int fieldCount = ReadFieldMarkers(fieldRoot).Count;
+
+            if (fieldLayer >= 0 && pixels >= 12000 && cropCells >= 12000 && fieldCount >= 60)
+            {
+                TerrainLayer resolved = terrain.terrainData.terrainLayers[fieldLayer];
+                Debug.Log($"Step 119 passed. fields={fieldCount}, field layer={fieldLayer}:{resolved.name}, strongly painted field pixels={pixels}, crop cells={cropCells}.", pass.gameObject);
+            }
+            else
+            {
+                Debug.LogError($"Step 119 failed. fields={fieldCount}, field layer index={fieldLayer}, strongly painted field pixels={pixels}, crop cells={cropCells}.", pass ? pass.gameObject : terrain.gameObject);
+            }
+        }
+
         static GameObject CreateColliderlessTreePrefab(string sourcePath, string outputPath)
         {
             GameObject source = AssetDatabase.LoadAssetAtPath<GameObject>(sourcePath);
@@ -396,16 +477,32 @@ namespace Hanger51.EditorTools
                     float row = .5f + .5f * Mathf.Sin((local.y + field.cropType * 3.7f) * (field.cropType == 2 ? .22f : .12f));
                     float strength = Mathf.Clamp01(.76f + row * .16f) * edge;
 
-                    float keepRock = stoneLayer >= 0 ? alpha[z, x, stoneLayer] * .25f : 0f;
+                    float targetField = Mathf.Lerp(alpha[z, x, fieldLayer], Mathf.Lerp(.80f, .96f, row), edge);
+                    targetField = Mathf.Clamp(targetField, 0f, .97f);
 
-                    for (int layer = 0; layer < alpha.GetLength(2); layer++) alpha[z, x, layer] *= 1f - strength;
-                    alpha[z, x, fieldLayer] += strength * (1f - keepRock);
-                    if (meadowLayer >= 0) alpha[z, x, meadowLayer] += (1f - edge) * .08f;
+                    float otherSum = 0f;
+                    for (int layer = 0; layer < alpha.GetLength(2); layer++)
+                        if (layer != fieldLayer) otherSum += alpha[z, x, layer];
 
-                    float sum = 0f;
-                    for (int layer = 0; layer < alpha.GetLength(2); layer++) sum += alpha[z, x, layer];
-                    if (sum > .0001f)
-                        for (int layer = 0; layer < alpha.GetLength(2); layer++) alpha[z, x, layer] /= sum;
+                    float remaining = 1f - targetField;
+                    if (otherSum > .0001f)
+                    {
+                        for (int layer = 0; layer < alpha.GetLength(2); layer++)
+                            if (layer != fieldLayer) alpha[z, x, layer] = alpha[z, x, layer] / otherSum * remaining;
+                    }
+                    else
+                    {
+                        for (int layer = 0; layer < alpha.GetLength(2); layer++)
+                            if (layer != fieldLayer) alpha[z, x, layer] = 0f;
+                        if (meadowLayer >= 0 && meadowLayer != fieldLayer) alpha[z, x, meadowLayer] = remaining;
+                        else
+                        {
+                            int fallback = fieldLayer == 0 && alpha.GetLength(2) > 1 ? 1 : 0;
+                            if (fallback != fieldLayer) alpha[z, x, fallback] = remaining;
+                        }
+                    }
+
+                    alpha[z, x, fieldLayer] = targetField;
                     painted++;
                 }
             }
@@ -592,7 +689,7 @@ namespace Hanger51.EditorTools
             int count = 0;
             for (int z = 0; z < data.alphamapHeight; z++)
                 for (int x = 0; x < data.alphamapWidth; x++)
-                    if (alpha[z, x, layer] >= .58f) count++;
+                    if (alpha[z, x, layer] >= .50f) count++;
             return count;
         }
 
@@ -693,10 +790,38 @@ namespace Hanger51.EditorTools
         static int FindTerrainLayer(TerrainData data, string name)
         {
             TerrainLayer[] layers = data.terrainLayers;
-            if (layers == null) return -1;
+            if (layers == null || layers.Length == 0) return -1;
+
+            string wanted = NormalizeLayerName(name);
             for (int i = 0; i < layers.Length; i++)
-                if (layers[i] && layers[i].name == name) return i;
+            {
+                TerrainLayer layer = layers[i];
+                if (!layer) continue;
+                if (NormalizeLayerName(layer.name) == wanted) return i;
+            }
+
+            string token = wanted.Contains("field") ? "field" :
+                           wanted.Contains("meadow") ? "meadow" :
+                           wanted.Contains("stone") ? "stone" : wanted;
+
+            for (int i = 0; i < layers.Length; i++)
+            {
+                TerrainLayer layer = layers[i];
+                if (!layer) continue;
+                string layerName = NormalizeLayerName(layer.name);
+                string textureName = layer.diffuseTexture ? NormalizeLayerName(layer.diffuseTexture.name) : string.Empty;
+                if (layerName.Contains(token) || textureName.Contains(token)) return i;
+            }
+
+            if (token == "field" && layers.Length > 1) return 1;
+            if (token == "meadow") return 0;
             return -1;
+        }
+
+        static string NormalizeLayerName(string value)
+        {
+            if (string.IsNullOrEmpty(value)) return string.Empty;
+            return value.ToLowerInvariant().Replace(" ", string.Empty).Replace("_", string.Empty).Replace("-", string.Empty).Replace("matte", string.Empty);
         }
 
         static FieldParcel FieldAt(List<FieldParcel> fields, Vector3 p, float margin)
