@@ -509,3 +509,274 @@ namespace Hanger51.EditorTools
             UnityEngine.Object.DestroyImmediate(cap.GetComponent<Collider>());
             cap.isStatic = true;
         }
+
+        static void BuildTractor(Transform farm, Vector3 pos, Quaternion rot, Mats m)
+        {
+            Transform t = New("Farm Tractor", farm);
+            t.localPosition = pos;
+            t.localRotation = rot;
+            Box(t, "Farm Equipment Tractor Body", new Vector3(0f, 1.25f, 0f), new Vector3(2.6f, 1.5f, 4.6f), m.green, true);
+            Box(t, "Farm Equipment Tractor Hood", new Vector3(0f, 1.45f, -2.4f), new Vector3(2.3f, 1.1f, 2.1f), m.green, true);
+            Box(t, "Farm Equipment Tractor Cab", new Vector3(0f, 2.45f, .55f), new Vector3(2.1f, 2.2f, 2.3f), m.glass, true);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Cylinder(t, "Farm Equipment Tractor Rear Wheel", new Vector3(side * 1.55f, 1.05f, 1.15f),
+                    new Vector3(.95f, .38f, .95f), m.rubber, true, Quaternion.Euler(0f, 0f, 90f));
+                Cylinder(t, "Farm Equipment Tractor Front Wheel", new Vector3(side * 1.28f, .78f, -1.85f),
+                    new Vector3(.67f, .30f, .67f), m.rubber, true, Quaternion.Euler(0f, 0f, 90f));
+            }
+            Cylinder(t, "Farm Equipment Exhaust", new Vector3(.72f, 2.6f, -1.5f), new Vector3(.10f, .95f, .10f), m.metal, true, null);
+        }
+
+        static void BuildCombine(Transform farm, Vector3 pos, Quaternion rot, Mats m)
+        {
+            Transform c = New("Combine Harvester", farm);
+            c.localPosition = pos;
+            c.localRotation = rot;
+            Box(c, "Farm Equipment Combine Body", new Vector3(0f, 2.0f, 0f), new Vector3(4.8f, 3.5f, 7.6f), m.green, true);
+            Box(c, "Farm Equipment Combine Cab", new Vector3(0f, 3.6f, -1.9f), new Vector3(3.7f, 2.6f, 2.5f), m.glass, true);
+            Box(c, "Farm Equipment Grain Tank", new Vector3(0f, 4.0f, 1.7f), new Vector3(4.2f, 1.5f, 3.1f), m.green, true);
+            for (int side = -1; side <= 1; side += 2)
+            {
+                Cylinder(c, "Farm Equipment Combine Main Wheel", new Vector3(side * 2.65f, 1.3f, -1.4f),
+                    new Vector3(1.35f, .48f, 1.35f), m.rubber, true, Quaternion.Euler(0f, 0f, 90f));
+                Cylinder(c, "Farm Equipment Combine Rear Wheel", new Vector3(side * 2.15f, .95f, 2.55f),
+                    new Vector3(.85f, .38f, .85f), m.rubber, true, Quaternion.Euler(0f, 0f, 90f));
+            }
+            Box(c, "Farm Equipment Header Bar", new Vector3(0f, 1.2f, -5.0f), new Vector3(8.5f, .45f, 1.1f), m.metal, true);
+            for (int i = -4; i <= 4; i++)
+                Box(c, "Farm Equipment Header Tine", new Vector3(i * .95f, .75f, -5.55f), new Vector3(.10f, .65f, .7f), m.metal, true);
+        }
+
+        static void BuildEquipmentCluster(Transform farm, Vector3 basePos, Mats m)
+        {
+            Transform e = New("Farm Equipment Yard", farm);
+            e.localPosition = basePos;
+
+            Box(e, "Farm Equipment Flatbed Wagon", new Vector3(0f, .8f, 0f), new Vector3(5.8f, .35f, 2.5f), m.wood, true);
+            for (int side = -1; side <= 1; side += 2)
+                Cylinder(e, "Farm Equipment Wagon Wheel", new Vector3(side * 2.15f, .55f, 0f),
+                    new Vector3(.55f, .22f, .55f), m.rubber, true, Quaternion.Euler(0f, 0f, 90f));
+
+            Box(e, "Farm Equipment Plow Frame", new Vector3(0f, .65f, 4.0f), new Vector3(4.8f, .22f, 1.3f), m.metal, true);
+            for (int i = -2; i <= 2; i++)
+                Box(e, "Farm Equipment Plow Blade", new Vector3(i * .9f, .30f, 4.45f), new Vector3(.12f, .65f, .8f), m.metal, true, Quaternion.Euler(0f, 0f, -22f));
+
+            Cylinder(e, "Farm Equipment Seed Tank", new Vector3(0f, 1.35f, -4.0f), new Vector3(1.15f, 1.35f, 1.15f), m.yellow, true, null);
+            Box(e, "Farm Equipment Seeder Frame", new Vector3(0f, .45f, -4.0f), new Vector3(5.0f, .22f, 1.4f), m.metal, true);
+        }
+
+        static void BuildFarmFences(Transform farm, Mats m, ref int fences)
+        {
+            float halfX = 34f;
+            float halfZ = 29f;
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int i = -3; i <= 3; i++)
+                {
+                    Box(farm, "Farm Fence Rail", new Vector3(i * 9f, 1.0f, side * halfZ),
+                        new Vector3(8.3f, .14f, .14f), m.wood, true);
+                    Box(farm, "Farm Fence Rail", new Vector3(i * 9f, 1.75f, side * halfZ),
+                        new Vector3(8.3f, .14f, .14f), m.wood, true);
+                    fences += 2;
+                }
+            }
+
+            for (int side = -1; side <= 1; side += 2)
+            {
+                for (int i = -2; i <= 2; i++)
+                {
+                    Box(farm, "Farm Fence Rail", new Vector3(side * halfX, 1.0f, i * 10f),
+                        new Vector3(.14f, .14f, 9.3f), m.wood, true);
+                    Box(farm, "Farm Fence Rail", new Vector3(side * halfX, 1.75f, i * 10f),
+                        new Vector3(.14f, .14f, 9.3f), m.wood, true);
+                    fences += 2;
+                }
+            }
+
+            for (int x = -3; x <= 3; x++)
+                for (int z = -1; z <= 1; z += 2)
+                    Box(farm, "Farm Fence Post", new Vector3(x * 9f, 1.0f, z * halfZ),
+                        new Vector3(.22f, 2f, .22f), m.wood, true);
+
+            for (int z = -2; z <= 2; z++)
+                for (int x = -1; x <= 1; x += 2)
+                    Box(farm, "Farm Fence Post", new Vector3(x * halfX, 1.0f, z * 10f),
+                        new Vector3(.22f, 2f, .22f), m.wood, true);
+
+            Box(farm, "Farm Gate Left", new Vector3(-3.2f, 1.2f, -halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
+            Box(farm, "Farm Gate Right", new Vector3(3.2f, 1.2f, -halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
+        }
+
+        static void BuildWaterAndFuel(Transform farm, Mats m)
+        {
+            Cylinder(farm, "Farm Water Tank", new Vector3(28f, 2.1f, 4f), new Vector3(2.6f, 2.1f, 2.6f), m.metal, true, null);
+            Cylinder(farm, "Farm Fuel Tank", new Vector3(27f, 1.25f, -3.5f), new Vector3(1.2f, 3.3f, 1.2f), m.white, true, Quaternion.Euler(0f, 0f, 90f));
+            Box(farm, "Farm Fuel Pump", new Vector3(23f, 1.1f, -4f), new Vector3(.8f, 2.2f, .8f), m.red, true);
+            Box(farm, "Livestock Water Trough", new Vector3(-25f, .55f, -9f), new Vector3(5.5f, 1.1f, 1.8f), m.metal, true);
+        }
+
+        static void BuildFarmAccessLane(Terrain terrain, Transform farm, Vector3 from, Vector3 to, Mats m)
+        {
+            Vector3 a = from;
+            Vector3 b = to;
+            a.y = Ground(terrain, a) + .04f;
+            b.y = Ground(terrain, b) + .04f;
+            float distance = Planar(a, b);
+            int segments = Mathf.Max(1, Mathf.CeilToInt(distance / 18f));
+
+            Transform laneRoot = New("Farm Access Lane", farm.parent);
+            for (int i = 0; i < segments; i++)
+            {
+                float t0 = i / (float)segments;
+                float t1 = (i + 1) / (float)segments;
+                Vector3 p0 = Vector3.Lerp(a, b, t0);
+                Vector3 p1 = Vector3.Lerp(a, b, t1);
+                p0.y = Ground(terrain, p0) + .04f;
+                p1.y = Ground(terrain, p1) + .04f;
+                Vector3 d = p1 - p0;
+                Vector3 mid = (p0 + p1) * .5f;
+                GameObject strip = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                strip.name = "Farm Access Lane Surface";
+                strip.transform.SetParent(laneRoot, false);
+                strip.transform.position = mid;
+                strip.transform.rotation = Quaternion.LookRotation(new Vector3(d.x, 0f, d.z).normalized, Vector3.up);
+                strip.transform.localScale = new Vector3(5.4f, .08f, Mathf.Max(.5f, d.magnitude));
+                strip.GetComponent<Renderer>().sharedMaterial = m.gravel;
+                UnityEngine.Object.DestroyImmediate(strip.GetComponent<Collider>());
+                strip.isStatic = true;
+            }
+        }
+
+        static int ClearTerrainTreesNearFarmSites(Terrain terrain, List<FarmSite> sites)
+        {
+            TerrainData data = terrain.terrainData;
+            TreeInstance[] source = data.treeInstances;
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            List<TreeInstance> kept = new List<TreeInstance>(source.Length);
+            int removed = 0;
+
+            foreach (TreeInstance tree in source)
+            {
+                Vector3 p = new Vector3(origin.x + tree.position.x * size.x, 0f, origin.z + tree.position.z * size.z);
+                bool kill = false;
+                foreach (FarmSite site in sites)
+                {
+                    if (Planar(p, site.yard) < 58f || SegmentDistance(p, site.yard, site.nearestRoad) < 8f)
+                    {
+                        kill = true;
+                        break;
+                    }
+                }
+                if (kill) removed++;
+                else kept.Add(tree);
+            }
+
+            data.treeInstances = kept.ToArray();
+            return removed;
+        }
+
+        static int ClearTerrainDetailsNearFarmSites(Terrain terrain, List<FarmSite> sites)
+        {
+            TerrainData data = terrain.terrainData;
+            if (data.detailPrototypes == null || data.detailPrototypes.Length == 0) return 0;
+            int w = data.detailWidth;
+            int h = data.detailHeight;
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int cleared = 0;
+
+            for (int layer = 0; layer < data.detailPrototypes.Length; layer++)
+            {
+                int[,] map = data.GetDetailLayer(0, 0, w, h, layer);
+                for (int z = 0; z < h; z++)
+                {
+                    float wz = origin.z + z / (float)Mathf.Max(1, h - 1) * size.z;
+                    for (int x = 0; x < w; x++)
+                    {
+                        if (map[z, x] == 0) continue;
+                        float wx = origin.x + x / (float)Mathf.Max(1, w - 1) * size.x;
+                        Vector3 p = new Vector3(wx, 0f, wz);
+                        bool clear = false;
+                        foreach (FarmSite site in sites)
+                        {
+                            if (Planar(p, site.yard) < 50f || SegmentDistance(p, site.yard, site.nearestRoad) < 5.5f)
+                            {
+                                clear = true;
+                                break;
+                            }
+                        }
+                        if (clear)
+                        {
+                            map[z, x] = 0;
+                            cleared++;
+                        }
+                    }
+                }
+                data.SetDetailLayer(0, 0, layer, map);
+            }
+            return cleared;
+        }
+
+        static int UpgradeAndExpandFieldShelterBelts(Terrain terrain, Transform fieldRoot, List<Road> roads)
+        {
+            int touched = 0;
+
+            foreach (Transform tr in fieldRoot.GetComponentsInChildren<Transform>(true))
+            {
+                if (!tr.name.StartsWith("Field Edge Shelter Tree")) continue;
+                float h = RendererHeight(tr);
+                if (h <= .01f) continue;
+                float target = Mathf.Lerp(12.5f, 17.5f, Hash01(tr.name + tr.position.x.ToString("0.0")));
+                float factor = Mathf.Clamp(target / h, .5f, 6f);
+                tr.localScale *= factor;
+                Vector3 p = tr.position;
+                p.y = Ground(terrain, p);
+                tr.position = p;
+                EnableExistingColliders(tr);
+                if (!HasSolidCollider(tr)) AddFallbackTrunkCollider(tr);
+                touched++;
+            }
+
+            GameObject leaf = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Supercyan Free Forest Sample/Prefabs/High Quality/Tree/Leaf/Normal/forestpack_tree_1_leaf_1.prefab");
+            GameObject fir = AssetDatabase.LoadAssetAtPath<GameObject>(
+                "Assets/Supercyan Free Forest Sample/Prefabs/High Quality/Tree/Fir/forestpack_tree_fir_tall.prefab");
+            if (!leaf || !fir) return touched;
+
+            List<FieldParcel> fields = ReadFields(fieldRoot);
+            System.Random rng = new System.Random(Seed + 77);
+            Transform extraRoot = New("Expanded Mature Field Shelter Belts", fieldRoot);
+
+            int extra = 0;
+            for (int f = 0; f < fields.Count; f++)
+            {
+                if (f % 3 != 0) continue;
+                FieldParcel field = fields[f];
+                float half = field.size.x * .5f;
+                int count = Mathf.Clamp(Mathf.RoundToInt(field.size.x / 38f), 5, 14);
+                for (int i = 0; i <= count; i++)
+                {
+                    float x = Mathf.Lerp(-half, half, i / (float)count);
+                    Vector3 p = FieldLocalToWorld(field, new Vector2(x, field.size.y * .5f + 18f));
+                    if (NearRoad(p, roads, 11f)) continue;
+                    p.y = Ground(terrain, p);
+
+                    GameObject src = rng.NextDouble() < .7 ? leaf : fir;
+                    GameObject g = PrefabUtility.InstantiatePrefab(src) as GameObject;
+                    if (!g) continue;
+                    g.name = "Field Edge Shelter Tree Extra " + (++extra).ToString("0000");
+                    g.transform.SetParent(extraRoot, false);
+                    g.transform.position = p;
+                    g.transform.rotation = Quaternion.Euler(0f, Next(rng, 0f, 360f), 0f);
+                    float current = RendererHeight(g.transform);
+                    if (current > .01f) g.transform.localScale *= Mathf.Lerp(12.5f, 17.5f, (float)rng.NextDouble()) / current;
+                    EnableExistingColliders(g.transform);
+                    if (!HasSolidCollider(g.transform)) AddFallbackTrunkCollider(g.transform);
+                    touched++;
+                }
+            }
+
+            return touched;
+        }
