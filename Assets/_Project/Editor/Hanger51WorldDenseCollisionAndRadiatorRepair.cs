@@ -126,9 +126,11 @@ namespace Hanger51.EditorTools
                 EditorUtility.DisplayProgressBar("Hanger 51 Dense Countryside", "Populating mature trees across all usable terrain", .30f);
                 int terrainTrees = BuildDenseTerrainForest(terrain, roads, hardExclusions);
                 ConfigureTerrainTreeCollisionSupport(terrain);
+                ConfigureFoliageRendering(terrain);
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Dense Countryside", "Filling ground with dense grass detail", .47f);
                 int grassCells = FillDenseTerrainGrass(terrain, roads, hardExclusions);
+                ConfigureFoliageRendering(terrain);
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Dense Countryside", "Adding project grass and solid clutter", .61f);
                 RemoveAllNamed(world.transform, VegetationRootName);
@@ -427,6 +429,18 @@ namespace Hanger51.EditorTools
             if (enableTrees != null) enableTrees.boolValue = true;
             serialized.ApplyModifiedPropertiesWithoutUndo();
             EditorUtility.SetDirty(collider);
+        }
+
+        static void ConfigureFoliageRendering(Terrain terrain)
+        {
+            terrain.drawTreesAndFoliage = true;
+            terrain.treeDistance = 6500f;
+            terrain.treeBillboardDistance = 420f;
+            terrain.treeCrossFadeLength = 90f;
+            terrain.treeMaximumFullLODCount = 1800;
+            terrain.detailObjectDistance = 650f;
+            terrain.detailObjectDensity = 1f;
+            EditorUtility.SetDirty(terrain);
         }
 
         static int FillDenseTerrainGrass(Terrain terrain, List<Road> roads, List<Bounds> exclusions)
