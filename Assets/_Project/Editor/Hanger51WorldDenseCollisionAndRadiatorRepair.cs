@@ -658,3 +658,223 @@ namespace Hanger51.EditorTools
             };
         }
 
+        static int TieUtilityEnd(
+            Vector3 position,
+            Vector3[] conductors,
+            List<Town> towns,
+            Dictionary<Town, UtilityRoute> townRoutes,
+            Transform plant,
+            Transform root,
+            Mats mats,
+            ref int wireCount)
+        {
+            if (conductors == null || conductors.Length != 3) return 0;
+
+            if (plant && Planar(position, plant.position) < 350f)
+            {
+                Transform substation = FindChild(plant, "Electrical Substation");
+                Vector3 target = substation ? substation.position : plant.position;
+                Vector3 approach = position - target;
+                approach.y = 0f;
+                if (approach.sqrMagnitude < .01f) approach = plant.forward;
+                approach.Normalize();
+                target += approach * 18f;
+                target.y = GroundAtPlantConnection(position.y, substation ? substation : plant) + 8.2f;
+                Vector3 cross = Vector3.Cross(Vector3.up, approach).normalized;
+                for (int i = 0; i < 3; i++)
+                {
+                    Vector3 end = target + cross * ((i - 1) * .75f);
+                    Wire(root, conductors[i], end, mats.metal, "Utility Tie Wire - Plant Substation", true);
+                    wireCount++;
+                }
+                return 1;
+            }
+
+            Town nearestTown = null;
+            float best = float.MaxValue;
+            foreach (Town town in towns)
+            {
+                float d = Planar(position, town.center);
+                if (d < best) { best = d; nearestTown = town; }
+            }
+            if (nearestTown == null || !townRoutes.TryGetValue(nearestTown, out UtilityRoute townRoute)) return 0;
+
+            Vector3[] targetConductors;
+            float startDist = Planar(position, townRoute.startPosition);
+            float endDist = Planar(position, townRoute.endPosition);
+            targetConductors = startDist <= endDist ? townRoute.startConductors : townRoute.endConductors;
+            if (targetConductors == null) return 0;
+
+            for (int i = 0; i < 3; i++)
+            {
+                Wire(root, conductors[i], targetConductors[i], mats.metal, "Utility Tie Wire - " + nearestTown.name, true);
+                wireCount++;
+            }
+            return 1;
+        }
+
+        static float GroundAtPlantConnection(float fallback, Transform target)
+        {
+            if (!target) return fallback;
+            return target.position.y;
+        }
+
+        static int RepairRadiatorUndersides()
+        {
+            P51FlightController[] aircraft = UnityEngine.Object.FindObjectsByType<P51FlightController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            bool missingRadiator = false;
+            foreach (P51FlightController flight in aircraft)
+                if (flight && flight.gameObject.scene.IsValid() && !FindChild(flight.transform, RadiatorRootName)) missingRadiator = true;
+
+            if (missingRadiator)
+            {
+                P51RadiatorCoolingSystemSetup.BuildFunctionalRadiatorAndCoolantSystem();
+                P51RadiatorAndTailwheelVisualFitRepair.RepairRadiatorAndTailwheelFit();
+                aircraft = UnityEngine.Object.FindObjectsByType<P51FlightController>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            }
+
+            Material aluminum = AssetDatabase.LoadAssetAtPath<Material>(AluminumPath);
+            Material dark = AssetDatabase.LoadAssetAtPath<Material>(DarkAircraftPath);
+            if (!aluminum || !dark)
+            {
+                Debug.LogError("Step 114 could not load the P-51 radiator materials.");
+                return 0;
+            }
+
+            int repaired = 0;
+            foreach (P51FlightController flight in aircraft)
+            {
+                if (!flight || !flight.gameObject.scene.IsValid()) continue;
+                Transform radiator = FindChild(flight.transform, RadiatorRootName);
+                if (!radiator) continue;
+
+                Transform old = DirectChild(radiator, RadiatorSkinName);
+                if (old) UnityEngine.Object.DestroyImmediate(old.gameObject);
+                Transform skin = New(RadiatorSkinName, radiator);
+
+                Box(skin, "Lower Belly Panel Front", new Vector3(0f, .525f, -.96f), new Vector3(.73f, .045f, .38f), aluminum, false, new Vector3(-4f, 0f, 0f));
+                Box(skin, "Lower Belly Panel Forward Mid", new Vector3(0f, .495f, -1.30f), new Vector3(.71f, .045f, .46f), aluminum, false, new Vector3(-1.5f, 0f, 0f));
+                Box(skin, "Lower Belly Panel Aft Mid", new Vector3(0f, .485f, -1.68f), new Vector3(.69f, .045f, .45f), aluminum, false, new Vector3(1.8f, 0f, 0f));
+                Box(skin, "Lower Belly Panel Aft", new Vector3(0f, .525f, -2.02f), new Vector3(.66f, .045f, .34f), aluminum, false, new Vector3(7f, 0f, 0f));
+                Box(skin, "Lower Belly Dark Intake Floor", new Vector3(0f, .555f, -.88f), new Vector3(.64f, .018f, .24f), dark, false, new Vector3(-5f, 0f, 0f));
+                Box(skin, "Lower Belly Left Blend", new Vector3(-.345f, .555f, -1.53f), new Vector3(.035f, .13f, 1.18f), aluminum, false, new Vector3(0f, 0f, -3f));
+                Box(skin, "Lower Belly Right Blend", new Vector3(.345f, .555f, -1.53f), new Vector3(.035f, .13f, 1.18f), aluminum, false, new Vector3(0f, 0f, 3f));
+                repaired++;
+            }
+            return repaired;
+        }
+
+        static Road ReadRoad(Transform roadTransform)
+        {
+            Transform surface = DirectChild(roadTransform, "Road Surface");
+            if (!surface) return null;
+            MeshFilter mf = surface.GetComponent<MeshFilter>();
+            if (!mf || !mf.sharedMesh) return null;
+            Vector3[] vertices = mf.sharedMesh.vertices;
+            if (vertices.Length < 4) return null;
+            Road road = new Road { name = roadTransform.name, root = roadTransform };
+            for (int i = 0; i + 1 < vertices.Length; i += 2)
+            {
+                Vector3 a = mf.transform.TransformPoint(vertices[i]);
+                Vector3 b = mf.transform.TransformPoint(vertices[i + 1]);
+                road.path.Add((a + b) * .5f);
+                if (i == 0) road.width = Vector3.Distance(a, b);
+            }
+            return road.path.Count >= 2 ? road : null;
+        }
+
+        static Transform LongestRoad(List<Transform> roads)
+        {
+            Transform best = null;
+            float bestLength = -1f;
+            foreach (Transform tr in roads)
+            {
+                Road road = ReadRoad(tr);
+                if (road == null) continue;
+                float len = PathLength(road.path);
+                if (len > bestLength) { bestLength = len; best = tr; }
+            }
+            return best;
+        }
+
+        static List<Vector3> Resample(List<Vector3> source, float spacing)
+        {
+            List<Vector3> result = new List<Vector3>();
+            if (source == null || source.Count == 0) return result;
+            result.Add(source[0]);
+            float carry = 0f;
+            Vector3 from = source[0];
+            for (int i = 1; i < source.Count; i++)
+            {
+                Vector3 to = source[i];
+                float segment = Vector3.Distance(from, to);
+                if (segment < .001f) { from = to; continue; }
+                Vector3 direction = (to - from) / segment;
+                while (carry + segment >= spacing)
+                {
+                    float need = spacing - carry;
+                    from += direction * need;
+                    result.Add(from);
+                    segment -= need;
+                    carry = 0f;
+                    if (segment < .001f) break;
+                    direction = (to - from).normalized;
+                }
+                carry += segment;
+                from = to;
+            }
+            if (Vector3.Distance(result[result.Count - 1], source[source.Count - 1]) > spacing * .30f)
+                result.Add(source[source.Count - 1]);
+            return result;
+        }
+
+        static Vector3 PathTangent(List<Vector3> path, int index)
+        {
+            Vector3 tangent = index == 0 ? path[1] - path[0] : index == path.Count - 1 ? path[index] - path[index - 1] : path[index + 1] - path[index - 1];
+            tangent.y = 0f;
+            return tangent.sqrMagnitude > .001f ? tangent.normalized : Vector3.forward;
+        }
+
+        static float PathLength(List<Vector3> path)
+        {
+            float length = 0f;
+            for (int i = 1; i < path.Count; i++) length += Vector3.Distance(path[i - 1], path[i]);
+            return length;
+        }
+
+        static bool NearRoad(Vector3 p, List<Road> roads, float extra)
+        {
+            foreach (Road road in roads)
+            {
+                float limit = road.width * .5f + extra;
+                for (int i = 0; i < road.path.Count - 1; i++)
+                    if (SegmentDistance(p, road.path[i], road.path[i + 1]) < limit) return true;
+            }
+            return false;
+        }
+
+        static int CountTerrainTreeRoadIntrusions(Terrain terrain, List<Road> roads, float extra)
+        {
+            int bad = 0;
+            TerrainData data = terrain.terrainData;
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            TreeInstance[] instances = data.treeInstances;
+            for (int i = 0; i < instances.Length; i++)
+            {
+                Vector3 p = new Vector3(origin.x + instances[i].position.x * size.x, 0f, origin.z + instances[i].position.z * size.z);
+                if (NearRoad(p, roads, extra)) bad++;
+            }
+            return bad;
+        }
+
+        static int CountTreePrototypeColliderFailures(Terrain terrain)
+        {
+            int bad = 0;
+            TreePrototype[] prototypes = terrain.terrainData.treePrototypes;
+            if (prototypes == null || prototypes.Length == 0) return 1;
+            foreach (TreePrototype prototype in prototypes)
+            {
+                if (prototype == null || !prototype.prefab) { bad++; continue; }
+                Collider collider = prototype.prefab.GetComponentInChildren<Collider>(true);
+                if (!collider || !collider.enabled || collider.isTrigger) bad++;
