@@ -780,3 +780,239 @@ namespace Hanger51.EditorTools
 
             return touched;
         }
+
+        static Mats LoadMaterials()
+        {
+            return new Mats
+            {
+                red = LoadMat("Barn_Red"),
+                green = LoadMat("Farm_Green"),
+                white = LoadMat("Warm_White"),
+                roof = LoadMat("Utility_Roof"),
+                metal = LoadMat("Dark_Metal"),
+                wood = LoadMat("Weathered_Wood"),
+                gravel = LoadMat("Matte_Gravel"),
+                dirt = LoadMat("Packed_Dirt"),
+                concrete = LoadMat("Concrete"),
+                rubber = LoadMat("Rubber"),
+                glass = LoadMat("Dark_Glass"),
+                yellow = LoadMat("Road_Paint")
+            };
+        }
+
+        static Material LoadMat(string name)
+        {
+            Material m = AssetDatabase.LoadAssetAtPath<Material>(BaseMat + name + ".mat");
+            if (m)
+            {
+                if (m.HasProperty("_Smoothness")) m.SetFloat("_Smoothness", 0f);
+                if (m.HasProperty("_Metallic")) m.SetFloat("_Metallic", 0f);
+                if (m.HasProperty("_SpecColor")) m.SetColor("_SpecColor", Color.black);
+                EditorUtility.SetDirty(m);
+            }
+            return m;
+        }
+
+        static int CountFarmColliderFailures(Transform farms)
+        {
+            int bad = 0;
+            foreach (Transform tr in farms.GetComponentsInChildren<Transform>(true))
+            {
+                string n = tr.name;
+                bool shouldBeSolid =
+                    n.Contains("Main Barn") ||
+                    n.Contains("Machine Shed") ||
+                    n.Contains("Farm House") ||
+                    n.Contains("Grain Silo") ||
+                    n.Contains("Farm Tractor") ||
+                    n.Contains("Combine Harvester") ||
+                    n.Contains("Hay Bale") ||
+                    n.Contains("Farm Fence") ||
+                    n.Contains("Farm Equipment") ||
+                    n.Contains("Farm Water Tank") ||
+                    n.Contains("Farm Fuel Tank");
+                if (!shouldBeSolid) continue;
+                Collider col = tr.GetComponent<Collider>();
+                if (!col || !col.enabled || col.isTrigger) bad++;
+            }
+            return bad;
+        }
+
+        static bool NearestRoadInfo(Vector3 p, List<Road> roads, out Road road, out Vector3 nearest, out Vector3 tangent, out float distance)
+        {
+            road = null;
+            nearest = p;
+            tangent = Vector3.forward;
+            distance = float.MaxValue;
+
+            foreach (Road r in roads)
+            {
+                for (int i = 0; i < r.path.Count - 1; i++)
+                {
+                    Vector3 q = ClosestXZ(p, r.path[i], r.path[i + 1]);
+                    float d = Planar(p, q);
+                    if (d >= distance) continue;
+                    distance = d;
+                    road = r;
+                    nearest = q;
+                    Vector3 tan = r.path[i + 1] - r.path[i];
+                    tan.y = 0f;
+                    tangent = tan.sqrMagnitude < .001f ? Vector3.forward : tan.normalized;
+                }
+            }
+            return road != null;
+        }
+
+        static Vector3 ClosestXZ(Vector3 p, Vector3 a, Vector3 b)
+        {
+            Vector2 q = new Vector2(p.x, p.z);
+            Vector2 av = new Vector2(a.x, a.z);
+            Vector2 d = new Vector2(b.x - a.x, b.z - a.z);
+            float t = d.sqrMagnitude < .001f ? 0f : Mathf.Clamp01(Vector2.Dot(q - av, d) / d.sqrMagnitude);
+            Vector2 r = av + d * t;
+            return new Vector3(r.x, Mathf.Lerp(a.y, b.y, t), r.y);
+        }
+
+        static bool NearRoad(Vector3 p, List<Road> roads, float extra)
+        {
+            foreach (Road road in roads)
+            {
+                float limit = road.width * .5f + extra;
+                for (int i = 0; i < road.path.Count - 1; i++)
+                    if (SegmentDistance(p, road.path[i], road.path[i + 1]) < limit) return true;
+            }
+            return false;
+        }
+
+        static float SegmentDistance(Vector3 p, Vector3 a, Vector3 b)
+        {
+            Vector2 q = new Vector2(p.x, p.z);
+            Vector2 av = new Vector2(a.x, a.z);
+            Vector2 d = new Vector2(b.x - a.x, b.z - a.z);
+            if (d.sqrMagnitude < .001f) return Vector2.Distance(q, av);
+            return Vector2.Distance(q, av + d * Mathf.Clamp01(Vector2.Dot(q - av, d) / d.sqrMagnitude));
+        }
+
+        static Vector3 FieldLocalToWorld(FieldParcel field, Vector2 local)
+        {
+            float radians = field.rotation * Mathf.Deg2Rad;
+            float c = Mathf.Cos(radians);
+            float s = Mathf.Sin(radians);
+            return field.center + new Vector3(local.x * c - local.y * s, 0f, local.x * s + local.y * c);
+        }
+
+        static float RendererHeight(Transform root)
+        {
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            if (renderers.Length == 0) return 0f;
+            Bounds b = renderers[0].bounds;
+            for (int i = 1; i < renderers.Length; i++) b.Encapsulate(renderers[i].bounds);
+            return b.size.y;
+        }
+
+        static float Hash01(string text)
+        {
+            unchecked
+            {
+                uint h = 2166136261u;
+                for (int i = 0; i < text.Length; i++) h = (h ^ text[i]) * 16777619u;
+                h ^= h >> 13;
+                h *= 1274126177u;
+                return (h & 0x00ffffffu) / 16777215f;
+            }
+        }
+
+        static GameObject Box(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, bool collider, Quaternion? localRotation = null)
+        {
+            GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            g.name = name;
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = localPosition;
+            g.transform.localScale = localScale;
+            if (localRotation.HasValue) g.transform.localRotation = localRotation.Value;
+            Renderer renderer = g.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider col = g.GetComponent<Collider>();
+            if (!collider && col) UnityEngine.Object.DestroyImmediate(col);
+            else if (col) { col.enabled = true; col.isTrigger = false; }
+            g.isStatic = true;
+            return g;
+        }
+
+        static GameObject Cylinder(Transform parent, string name, Vector3 localPosition, Vector3 localScale, Material material, bool collider, Quaternion? localRotation)
+        {
+            GameObject g = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            g.name = name;
+            g.transform.SetParent(parent, false);
+            g.transform.localPosition = localPosition;
+            g.transform.localScale = localScale;
+            if (localRotation.HasValue) g.transform.localRotation = localRotation.Value;
+            Renderer renderer = g.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider col = g.GetComponent<Collider>();
+            if (!collider && col) UnityEngine.Object.DestroyImmediate(col);
+            else if (col) { col.enabled = true; col.isTrigger = false; }
+            g.isStatic = true;
+            return g;
+        }
+
+        static float Planar(Vector3 a, Vector3 b)
+        {
+            float x = a.x - b.x;
+            float z = a.z - b.z;
+            return Mathf.Sqrt(x * x + z * z);
+        }
+
+        static float Next(System.Random rng, float a, float b) => a + (float)rng.NextDouble() * (b - a);
+        static float Ground(Terrain terrain, Vector3 p) => terrain.SampleHeight(p) + terrain.transform.position.y;
+
+        static Terrain FindTerrain()
+        {
+            GameObject g = Find(TerrainName);
+            Terrain t = g ? (g.GetComponent<Terrain>() ?? g.GetComponentInChildren<Terrain>(true)) : null;
+            if (t) return t;
+            Terrain[] all = UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            return all.Length > 0 ? all[0] : null;
+        }
+
+        static GameObject Find(string name)
+        {
+            GameObject direct = GameObject.Find(name);
+            if (direct) return direct;
+            foreach (Transform tr in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (tr && tr.gameObject.scene.IsValid() && tr.name == name) return tr.gameObject;
+            return null;
+        }
+
+        static Transform FindChild(Transform root, string name)
+        {
+            if (!root) return null;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                if (tr.name == name) return tr;
+            return null;
+        }
+
+        static Transform DirectChild(Transform root, string name)
+        {
+            if (!root) return null;
+            for (int i = 0; i < root.childCount; i++)
+                if (root.GetChild(i).name == name) return root.GetChild(i);
+            return null;
+        }
+
+        static Transform New(string name, Transform parent)
+        {
+            GameObject g = new GameObject(name);
+            g.transform.SetParent(parent, false);
+            return g.transform;
+        }
+
+        static int Count(Transform root, string namePart)
+        {
+            int count = 0;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                if (tr != root && tr.name.Contains(namePart)) count++;
+            return count;
+        }
+    }
+}
