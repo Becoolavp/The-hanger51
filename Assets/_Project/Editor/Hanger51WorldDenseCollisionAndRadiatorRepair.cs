@@ -438,3 +438,223 @@ namespace Hanger51.EditorTools
                     "Assets/_Project/Environment/Generated/CountrysideVisualUpgrade/Textures/MeadowGrass.asset");
                 if (texture)
                 {
+                    data.detailPrototypes = new[]
+                    {
+                        new DetailPrototype
+                        {
+                            prototypeTexture = texture,
+                            renderMode = DetailRenderMode.GrassBillboard,
+                            minWidth = .5f,
+                            maxWidth = 1.15f,
+                            minHeight = .55f,
+                            maxHeight = 1.5f,
+                            noiseSpread = .16f,
+                            healthyColor = Color.white,
+                            dryColor = new Color(.76f, .70f, .45f)
+                        }
+                    };
+                }
+            }
+            if (data.detailPrototypes == null || data.detailPrototypes.Length == 0) return 0;
+
+            data.SetDetailResolution(768, 16);
+            int width = data.detailWidth;
+            int height = data.detailHeight;
+            bool[,] blocked = new bool[height, width];
+            RasterizeExclusions(blocked, terrain, exclusions);
+            RasterizeRoads(blocked, terrain, roads, 8f);
+
+            int[,] map = new int[height, width];
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int filled = 0;
+            for (int z = 0; z < height; z++)
+            {
+                for (int x = 0; x < width; x++)
+                {
+                    if (blocked[z, x]) continue;
+                    float wx = origin.x + x / (float)Mathf.Max(1, width - 1) * size.x;
+                    float wz = origin.z + z / (float)Mathf.Max(1, height - 1) * size.z;
+                    float noise = Fbm(wx * .0017f + 33f, wz * .0017f + 67f, 3);
+                    map[z, x] = Mathf.RoundToInt(Mathf.Lerp(5f, 14f, noise));
+                    if (map[z, x] > 0) filled++;
+                }
+            }
+            data.SetDetailLayer(0, 0, 0, map);
+            EditorUtility.SetDirty(data);
+            return filled;
+        }
+
+        static int AddAssetGrass(Terrain terrain, Transform root, List<Road> roads, List<Bounds> exclusions, int target)
+        {
+            GameObject a = AssetDatabase.LoadAssetAtPath<GameObject>(GrassA);
+            GameObject b = AssetDatabase.LoadAssetAtPath<GameObject>(GrassB);
+            if (!a && !b) return 0;
+
+            System.Random rng = new System.Random(Seed + 20);
+            int made = 0;
+            int tries = 0;
+            while (made < target && tries++ < target * 22)
+            {
+                Vector3 p = RandomTerrainPoint(rng, terrain);
+                if (InsideAny(p, exclusions) || NearRoad(p, roads, 7f)) continue;
+                GameObject src = rng.NextDouble() < .5 ? a : b;
+                if (!src) src = a ? a : b;
+                GameObject g = PrefabUtility.InstantiatePrefab(src) as GameObject;
+                if (!g) continue;
+                g.name = "Dense Asset Grass " + (++made).ToString("0000");
+                g.transform.SetParent(root, false);
+                g.transform.position = p;
+                g.transform.rotation = Quaternion.Euler(0f, Next(rng, 0f, 360f), 0f);
+                g.transform.localScale = Vector3.one * Next(rng, .8f, 1.65f);
+                DisableAllColliders(g.transform);
+            }
+            return made;
+        }
+
+        static int AddSolidRocks(Terrain terrain, Transform root, List<Road> roads, List<Bounds> exclusions, int target)
+        {
+            GameObject large = AssetDatabase.LoadAssetAtPath<GameObject>(RockLarge);
+            GameObject medium = AssetDatabase.LoadAssetAtPath<GameObject>(RockMedium);
+            if (!large && !medium) return 0;
+
+            System.Random rng = new System.Random(Seed + 30);
+            int made = 0;
+            int tries = 0;
+            while (made < target && tries++ < target * 30)
+            {
+                Vector3 p = RandomTerrainPoint(rng, terrain);
+                if (InsideAny(p, exclusions) || NearRoad(p, roads, 11f)) continue;
+                if (rng.NextDouble() > .28) continue;
+                GameObject src = rng.NextDouble() < .38 ? large : medium;
+                if (!src) src = large ? large : medium;
+                GameObject g = PrefabUtility.InstantiatePrefab(src) as GameObject;
+                if (!g) continue;
+                g.name = "Solid Ground Rock " + (++made).ToString("0000");
+                g.transform.SetParent(root, false);
+                g.transform.position = p - Vector3.up * Next(rng, .02f, .12f);
+                g.transform.rotation = Quaternion.Euler(Next(rng, -8f, 8f), Next(rng, 0f, 360f), Next(rng, -8f, 8f));
+                g.transform.localScale = Vector3.one * Next(rng, .85f, 2.2f);
+                EnsureSolidCollider(g);
+            }
+            return made;
+        }
+
+        static void BuildConnectedUtilities(
+            Terrain terrain,
+            Transform root,
+            Transform roadsRoot,
+            List<Town> towns,
+            Transform plant,
+            Mats mats,
+            out int regionalPoles,
+            out int townPoles,
+            out int ties,
+            out int wires)
+        {
+            regionalPoles = 0;
+            townPoles = 0;
+            ties = 0;
+            wires = 0;
+
+            Transform regionalRoadRoot = DirectChild(roadsRoot, "Natural Regional Road Network");
+            if (!regionalRoadRoot) return;
+
+            Dictionary<Town, UtilityRoute> townRoutes = new Dictionary<Town, UtilityRoute>();
+            foreach (Town town in towns)
+            {
+                Transform longest = LongestRoad(town.localRoads);
+                if (!longest) continue;
+                Road road = ReadRoad(longest);
+                if (road == null) continue;
+                UtilityRoute route = BuildUtilityRoute(terrain, root, road, "Town Utility Corridor - " + town.name,
+                    44f, 8.5f, 7.9f, mats, ref townPoles, ref wires);
+                if (route != null) townRoutes[town] = route;
+            }
+
+            List<UtilityRoute> regionalRoutes = new List<UtilityRoute>();
+            for (int i = 0; i < regionalRoadRoot.childCount; i++)
+            {
+                Transform roadTransform = regionalRoadRoot.GetChild(i);
+                Road road = ReadRoad(roadTransform);
+                if (road == null) continue;
+                UtilityRoute route = BuildUtilityRoute(terrain, root, road,
+                    "Regional Utility Corridor - " + road.name, 54f, 11f, 8.35f, mats, ref regionalPoles, ref wires);
+                if (route != null) regionalRoutes.Add(route);
+            }
+
+            foreach (UtilityRoute route in regionalRoutes)
+            {
+                ties += TieUtilityEnd(route.startPosition, route.startConductors, towns, townRoutes, plant, root, mats, ref wires);
+                ties += TieUtilityEnd(route.endPosition, route.endConductors, towns, townRoutes, plant, root, mats, ref wires);
+            }
+        }
+
+        static UtilityRoute BuildUtilityRoute(
+            Terrain terrain,
+            Transform parent,
+            Road road,
+            string routeName,
+            float spacing,
+            float sideOffset,
+            float wireHeight,
+            Mats mats,
+            ref int poleCount,
+            ref int wireCount)
+        {
+            List<Vector3> sampled = Resample(road.path, spacing);
+            if (sampled.Count < 2) return null;
+            Transform routeRoot = New(routeName, parent);
+            Vector3[] previous = null;
+            Vector3[] first = null;
+            Vector3[] last = null;
+            Vector3 firstPole = Vector3.zero;
+            Vector3 lastPole = Vector3.zero;
+            int sideSign = StableSign(road.name);
+
+            for (int i = 0; i < sampled.Count; i++)
+            {
+                Vector3 tangent = PathTangent(sampled, i);
+                Vector3 side = Vector3.Cross(Vector3.up, tangent).normalized;
+                Vector3 position = sampled[i] + side * sideSign * (road.width * .5f + sideOffset);
+                position.y = Ground(terrain, position);
+
+                Transform pole = New("Utility Pole " + (++poleCount).ToString("0000"), routeRoot);
+                pole.position = position;
+                pole.rotation = Quaternion.LookRotation(tangent, Vector3.up);
+                Cylinder(pole, "Pole", new Vector3(0f, wireHeight * .53f, 0f), new Vector3(.13f, wireHeight * .53f, .13f), mats.wood, true);
+                Box(pole, "Crossarm", new Vector3(0f, wireHeight - .35f, 0f), new Vector3(2.35f, .14f, .14f), mats.wood, true);
+
+                Vector3[] current = new Vector3[3];
+                for (int k = -1; k <= 1; k++)
+                {
+                    Cylinder(pole, "Insulator", new Vector3(k * .74f, wireHeight - .12f, 0f), new Vector3(.055f, .15f, .055f), mats.white, true);
+                    current[k + 1] = pole.TransformPoint(new Vector3(k * .74f, wireHeight + .08f, 0f));
+                    if (previous != null)
+                    {
+                        Wire(routeRoot, previous[k + 1], current[k + 1], mats.metal, "Utility Wire", true);
+                        wireCount++;
+                    }
+                }
+
+                if (first == null)
+                {
+                    first = current;
+                    firstPole = position;
+                }
+                last = current;
+                lastPole = position;
+                previous = current;
+            }
+
+            return new UtilityRoute
+            {
+                name = routeName,
+                root = routeRoot,
+                startConductors = first,
+                endConductors = last,
+                startPosition = firstPole,
+                endPosition = lastPole
+            };
+        }
+
