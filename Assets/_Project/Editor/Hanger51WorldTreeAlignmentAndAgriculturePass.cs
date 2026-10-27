@@ -305,9 +305,7 @@ namespace Hanger51.EditorTools
                 Transform marker = New(field.name, root);
                 marker.position = field.center;
                 marker.rotation = Quaternion.Euler(0f, field.rotation, 0f);
-                FieldParcelMarker data = marker.gameObject.AddComponent<FieldParcelMarker>();
-                data.size = field.size;
-                data.cropType = field.cropType;
+                marker.localScale = new Vector3(field.size.x, 1f, field.size.y);
             }
         }
 
@@ -357,4 +355,228 @@ namespace Hanger51.EditorTools
             }
             foreach (GameObject g in kill) if (g) UnityEngine.Object.DestroyImmediate(g);
             return kill.Count;
+        }
+
+
+        static int PaintFields(Terrain terrain, List<FieldParcel> fields, List<Road> roads, List<Bounds> exclusions)
+        {
+            TerrainData data = terrain.terrainData;
+            int fieldLayer = FindTerrainLayer(data, "New Field");
+            int meadowLayer = FindTerrainLayer(data, "New Meadow");
+            if (fieldLayer < 0)
+            {
+                Debug.LogError("Step 116 could not find the 'New Field' terrain layer.");
+                return 0;
+            }
+
+            int w = data.alphamapWidth;
+            int h = data.alphamapHeight;
+            float[,,] alpha = data.GetAlphamaps(0, 0, w, h);
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int painted = 0;
+
+            for (int z = 0; z < h; z++)
+            {
+                float wz = origin.z + z / (float)Mathf.Max(1, h - 1) * size.z;
+                for (int x = 0; x < w; x++)
+                {
+                    float wx = origin.x + x / (float)Mathf.Max(1, w - 1) * size.x;
+                    Vector3 p = new Vector3(wx, 0f, wz);
+                    FieldParcel field = FieldAt(fields, p, 10f);
+                    if (field == null || InsideAny(p, exclusions) || NearRoad(p, roads, 7f)) continue;
+
+                    Vector2 local = WorldToField(field, p);
+                    float edgeX = 1f - Mathf.Abs(local.x) / Mathf.Max(1f, field.size.x * .5f);
+                    float edgeZ = 1f - Mathf.Abs(local.y) / Mathf.Max(1f, field.size.y * .5f);
+                    float edge = Mathf.Clamp01(Mathf.Min(edgeX, edgeZ) * 4f);
+                    float row = .5f + .5f * Mathf.Sin((local.y + field.cropType * 3.7f) * (field.cropType == 2 ? .22f : .12f));
+                    float strength = Mathf.Clamp01(.76f + row * .16f) * edge;
+
+                    float keepRock = 0f;
+                    int stoneLayer = FindTerrainLayer(data, "Natural Stone");
+                    if (stoneLayer >= 0) keepRock = alpha[z, x, stoneLayer] * .25f;
+
+                    for (int layer = 0; layer < alpha.GetLength(2); layer++) alpha[z, x, layer] *= 1f - strength;
+                    alpha[z, x, fieldLayer] += strength * (1f - keepRock);
+                    if (meadowLayer >= 0) alpha[z, x, meadowLayer] += (1f - edge) * .08f;
+
+                    float sum = 0f;
+                    for (int layer = 0; layer < alpha.GetLength(2); layer++) sum += alpha[z, x, layer];
+                    if (sum > .0001f)
+                        for (int layer = 0; layer < alpha.GetLength(2); layer++) alpha[z, x, layer] /= sum;
+                    painted++;
+                }
+            }
+
+            data.SetAlphamaps(0, 0, alpha);
+            EditorUtility.SetDirty(data);
+            return painted;
+        }
+
+        static int BuildCropDetails(Terrain terrain, List<FieldParcel> fields, List<Road> roads, List<Bounds> exclusions)
+        {
+            TerrainData data = terrain.terrainData;
+            DetailPrototype meadow = data.detailPrototypes != null && data.detailPrototypes.Length > 0
+                ? data.detailPrototypes[0]
+                : null;
+
+            Texture2D green = CropTexture("GreenCropRows", new Color(.18f, .34f, .07f, 1f), new Color(.38f, .58f, .12f, 1f), 29);
+            Texture2D gold = CropTexture("GoldenGrainRows", new Color(.48f, .32f, .06f, 1f), new Color(.84f, .67f, .17f, 1f), 41);
+            Texture2D dry = CropTexture("DryFallowRows", new Color(.33f, .22f, .08f, 1f), new Color(.58f, .43f, .14f, 1f), 53);
+
+            List<DetailPrototype> prototypes = new List<DetailPrototype>();
+            if (meadow != null) prototypes.Add(meadow);
+            prototypes.Add(MakeDetail(green, .55f, 1.05f, .7f, 1.55f));
+            prototypes.Add(MakeDetail(gold, .48f, .9f, .65f, 1.35f));
+            prototypes.Add(MakeDetail(dry, .42f, .8f, .35f, .85f));
+            data.detailPrototypes = prototypes.ToArray();
+
+            int width = data.detailWidth;
+            int height = data.detailHeight;
+            if (width < 512 || height < 512)
+            {
+                data.SetDetailResolution(768, 16);
+                width = data.detailWidth;
+                height = data.detailHeight;
+            }
+
+            int[,] meadowMap = prototypes.Count > 0 ? data.GetDetailLayer(0, 0, width, height, 0) : new int[height, width];
+            int[,] greenMap = new int[height, width];
+            int[,] goldMap = new int[height, width];
+            int[,] dryMap = new int[height, width];
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int cropCells = 0;
+
+            for (int z = 0; z < height; z++)
+            {
+                float wz = origin.z + z / (float)Mathf.Max(1, height - 1) * size.z;
+                for (int x = 0; x < width; x++)
+                {
+                    float wx = origin.x + x / (float)Mathf.Max(1, width - 1) * size.x;
+                    Vector3 p = new Vector3(wx, 0f, wz);
+                    FieldParcel field = FieldAt(fields, p, 15f);
+                    if (field == null || InsideAny(p, exclusions) || NearRoad(p, roads, 6f)) continue;
+
+                    Vector2 local = WorldToField(field, p);
+                    float rowSpacing = field.cropType == 0 ? 5.5f : field.cropType == 1 ? 4.2f : 7.5f;
+                    float row = Mathf.Abs(Mathf.Repeat(local.x + rowSpacing * .5f, rowSpacing) - rowSpacing * .5f);
+                    if (row > rowSpacing * .28f) continue;
+
+                    int density = field.cropType == 0 ? 10 : field.cropType == 1 ? 8 : 4;
+                    if (field.cropType == 0) greenMap[z, x] = density;
+                    else if (field.cropType == 1) goldMap[z, x] = density;
+                    else dryMap[z, x] = density;
+
+                    if (meadowMap.GetLength(0) == height && meadowMap.GetLength(1) == width) meadowMap[z, x] = 0;
+                    cropCells++;
+                }
+            }
+
+            if (meadowMap.GetLength(0) == height && meadowMap.GetLength(1) == width) data.SetDetailLayer(0, 0, 0, meadowMap);
+            data.SetDetailLayer(0, 0, 1, greenMap);
+            data.SetDetailLayer(0, 0, 2, goldMap);
+            data.SetDetailLayer(0, 0, 3, dryMap);
+            EditorUtility.SetDirty(data);
+            return cropCells;
+        }
+
+        static DetailPrototype MakeDetail(Texture2D texture, float minWidth, float maxWidth, float minHeight, float maxHeight)
+        {
+            return new DetailPrototype
+            {
+                prototypeTexture = texture,
+                renderMode = DetailRenderMode.GrassBillboard,
+                minWidth = minWidth,
+                maxWidth = maxWidth,
+                minHeight = minHeight,
+                maxHeight = maxHeight,
+                noiseSpread = .12f,
+                healthyColor = Color.white,
+                dryColor = Color.white
+            };
+        }
+
+        static Texture2D CropTexture(string name, Color dark, Color light, int seed)
+        {
+            string path = Gen + "/Textures/" + name + ".asset";
+            Texture2D existing = AssetDatabase.LoadAssetAtPath<Texture2D>(path);
+            if (existing) return existing;
+
+            const int size = 64;
+            Texture2D texture = new Texture2D(size, size, TextureFormat.RGBA32, true)
+            {
+                name = "H51 " + name,
+                wrapMode = TextureWrapMode.Repeat,
+                filterMode = FilterMode.Bilinear
+            };
+            Color[] pixels = new Color[size * size];
+            for (int i = 0; i < pixels.Length; i++) pixels[i] = Color.clear;
+
+            System.Random rng = new System.Random(seed);
+            for (int blade = 0; blade < 34; blade++)
+            {
+                int baseX = rng.Next(3, size - 3);
+                int top = rng.Next(34, size - 2);
+                for (int y = 1; y < top; y++)
+                {
+                    float t = y / (float)top;
+                    int x = Mathf.Clamp(baseX + Mathf.RoundToInt(Mathf.Sin((t + blade) * 4.7f) * 2f), 0, size - 1);
+                    Color c = Color.Lerp(dark, light, .25f + t * .75f);
+                    pixels[y * size + x] = c;
+                    if (x + 1 < size && t < .7f) pixels[y * size + x + 1] = c;
+                }
+            }
+
+            texture.SetPixels(pixels);
+            texture.Apply(true, false);
+            AssetDatabase.CreateAsset(texture, path);
+            return texture;
+        }
+
+        static int AddFieldEdgeTrees(Terrain terrain, Transform root, List<FieldParcel> fields, List<Road> roads, List<Bounds> exclusions)
+        {
+            GameObject leaf = AssetDatabase.LoadAssetAtPath<GameObject>(LeafSource);
+            GameObject fir = AssetDatabase.LoadAssetAtPath<GameObject>(FirSource);
+            if (!leaf || !fir) return 0;
+
+            Transform shelter = New("Field Edge Shelter Belts", root);
+            System.Random rng = new System.Random(Seed + 80);
+            int made = 0;
+
+            foreach (FieldParcel field in fields)
+            {
+                if (field.cropType == 2 || rng.NextDouble() < .45) continue;
+                bool alongX = rng.NextDouble() < .5;
+                float half = alongX ? field.size.x * .5f : field.size.y * .5f;
+                int count = Mathf.Clamp(Mathf.FloorToInt(half * 2f / 24f), 5, 28);
+                int edgeSign = rng.NextDouble() < .5 ? -1 : 1;
+
+                for (int i = 0; i <= count; i++)
+                {
+                    float u = Mathf.Lerp(-half, half, i / (float)count);
+                    Vector2 local = alongX
+                        ? new Vector2(u, edgeSign * (field.size.y * .5f + 11f))
+                        : new Vector2(edgeSign * (field.size.x * .5f + 11f), u);
+                    Vector3 p = FieldLocalToWorld(field, local);
+                    if (InsideAny(p, exclusions) || NearRoad(p, roads, 10f)) continue;
+                    p.y = Ground(terrain, p);
+
+                    GameObject src = rng.NextDouble() < .72 ? leaf : fir;
+                    GameObject tree = PrefabUtility.InstantiatePrefab(src) as GameObject;
+                    if (!tree) continue;
+                    tree.name = "Field Edge Shelter Tree " + (++made).ToString("0000");
+                    tree.transform.SetParent(shelter, false);
+                    tree.transform.position = p;
+                    tree.transform.rotation = Quaternion.Euler(0f, Next(rng, 0f, 360f), 0f);
+                    tree.transform.localScale = Vector3.one * Next(rng, 1.1f, 1.8f);
+                    foreach (Collider col in tree.GetComponentsInChildren<Collider>(true))
+                    {
+                        col.enabled = true;
+                        col.isTrigger = false;
+                    }
+                }
+            }
+            return made;
         }
