@@ -580,3 +580,337 @@ namespace Hanger51.EditorTools
             }
             return made;
         }
+
+
+        static int CountFieldPixels(Terrain terrain)
+        {
+            TerrainData data = terrain.terrainData;
+            int layer = FindTerrainLayer(data, "New Field");
+            if (layer < 0) return 0;
+            float[,,] alpha = data.GetAlphamaps(0, 0, data.alphamapWidth, data.alphamapHeight);
+            int count = 0;
+            for (int z = 0; z < data.alphamapHeight; z++)
+                for (int x = 0; x < data.alphamapWidth; x++)
+                    if (alpha[z, x, layer] >= .58f) count++;
+            return count;
+        }
+
+        static int CountCropDetailCells(Terrain terrain)
+        {
+            TerrainData data = terrain.terrainData;
+            if (data.detailPrototypes == null || data.detailPrototypes.Length < 4) return 0;
+            int total = 0;
+            for (int layer = 1; layer <= 3; layer++)
+            {
+                int[,] map = data.GetDetailLayer(0, 0, data.detailWidth, data.detailHeight, layer);
+                for (int z = 0; z < map.GetLength(0); z++)
+                    for (int x = 0; x < map.GetLength(1); x++)
+                        if (map[z, x] > 0) total++;
+            }
+            return total;
+        }
+
+        static int CountTreeGroundAlignmentFailures(Terrain terrain, float tolerance)
+        {
+            TerrainData data = terrain.terrainData;
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int bad = 0;
+            foreach (TreeInstance tree in data.treeInstances)
+            {
+                float x = origin.x + tree.position.x * size.x;
+                float z = origin.z + tree.position.z * size.z;
+                Vector3 p = new Vector3(x, origin.y, z);
+                float sampled = terrain.SampleHeight(p) + origin.y;
+                float stored = origin.y + tree.position.y * size.y;
+                if (Mathf.Abs(sampled - stored) > tolerance) bad++;
+            }
+            return bad;
+        }
+
+        static int CountTreesInsideFieldMarkers(Terrain terrain, Transform markers)
+        {
+            List<FieldParcel> fields = ReadFieldMarkers(markers);
+            TerrainData data = terrain.terrainData;
+            Vector3 origin = terrain.transform.position;
+            Vector3 size = data.size;
+            int bad = 0;
+            foreach (TreeInstance tree in data.treeInstances)
+            {
+                Vector3 p = new Vector3(origin.x + tree.position.x * size.x, 0f, origin.z + tree.position.z * size.z);
+                foreach (FieldParcel field in fields)
+                {
+                    if (InsideField(field, p, 28f))
+                    {
+                        bad++;
+                        break;
+                    }
+                }
+            }
+            return bad;
+        }
+
+        static int CountNamedObjectsInsideFieldMarkers(Transform root, Transform markers, string prefix)
+        {
+            List<FieldParcel> fields = ReadFieldMarkers(markers);
+            int bad = 0;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+            {
+                if (!tr.name.StartsWith(prefix)) continue;
+                foreach (FieldParcel field in fields)
+                {
+                    if (InsideField(field, tr.position, 16f))
+                    {
+                        bad++;
+                        break;
+                    }
+                }
+            }
+            return bad;
+        }
+
+        static List<FieldParcel> ReadFieldMarkers(Transform root)
+        {
+            List<FieldParcel> fields = new List<FieldParcel>();
+            for (int i = 0; i < root.childCount; i++)
+            {
+                Transform marker = root.GetChild(i);
+                if (!marker.name.StartsWith("Field Parcel ")) continue;
+                int crop = marker.name.Contains("Green Crop") ? 0 : marker.name.Contains("Golden Grain") ? 1 : 2;
+                fields.Add(new FieldParcel
+                {
+                    center = marker.position,
+                    size = new Vector2(Mathf.Abs(marker.localScale.x), Mathf.Abs(marker.localScale.z)),
+                    rotation = marker.eulerAngles.y,
+                    cropType = crop,
+                    name = marker.name
+                });
+            }
+            return fields;
+        }
+
+        static int FindTerrainLayer(TerrainData data, string name)
+        {
+            TerrainLayer[] layers = data.terrainLayers;
+            if (layers == null) return -1;
+            for (int i = 0; i < layers.Length; i++)
+                if (layers[i] && layers[i].name == name) return i;
+            return -1;
+        }
+
+        static FieldParcel FieldAt(List<FieldParcel> fields, Vector3 p, float margin)
+        {
+            foreach (FieldParcel field in fields)
+                if (InsideField(field, p, margin)) return field;
+            return null;
+        }
+
+        static bool InsideField(FieldParcel field, Vector3 p, float margin)
+        {
+            Vector2 local = WorldToField(field, p);
+            return Mathf.Abs(local.x) <= Mathf.Max(0f, field.size.x * .5f - margin) &&
+                   Mathf.Abs(local.y) <= Mathf.Max(0f, field.size.y * .5f - margin);
+        }
+
+        static Vector2 WorldToField(FieldParcel field, Vector3 p)
+        {
+            Vector3 delta = p - field.center;
+            float radians = -field.rotation * Mathf.Deg2Rad;
+            float c = Mathf.Cos(radians);
+            float s = Mathf.Sin(radians);
+            return new Vector2(delta.x * c - delta.z * s, delta.x * s + delta.z * c);
+        }
+
+        static Vector3 FieldLocalToWorld(FieldParcel field, Vector2 local)
+        {
+            float radians = field.rotation * Mathf.Deg2Rad;
+            float c = Mathf.Cos(radians);
+            float s = Mathf.Sin(radians);
+            return field.center + new Vector3(local.x * c - local.y * s, 0f, local.x * s + local.y * c);
+        }
+
+        static string CropName(int cropType)
+        {
+            return cropType == 0 ? "Green Crop" : cropType == 1 ? "Golden Grain" : "Fallow Hay";
+        }
+
+        static List<Road> CollectRoads(Transform roadsRoot)
+        {
+            List<Road> roads = new List<Road>();
+            foreach (Transform tr in roadsRoot.GetComponentsInChildren<Transform>(true))
+            {
+                Transform surface = DirectChild(tr, "Road Surface");
+                if (!surface) continue;
+                MeshFilter mf = surface.GetComponent<MeshFilter>();
+                if (!mf || !mf.sharedMesh) continue;
+                Vector3[] vertices = mf.sharedMesh.vertices;
+                if (vertices.Length < 4) continue;
+
+                Road road = new Road();
+                for (int i = 0; i + 1 < vertices.Length; i += 2)
+                {
+                    Vector3 a = mf.transform.TransformPoint(vertices[i]);
+                    Vector3 b = mf.transform.TransformPoint(vertices[i + 1]);
+                    road.path.Add((a + b) * .5f);
+                    if (i == 0) road.width = Vector3.Distance(a, b);
+                }
+                if (road.path.Count >= 2) roads.Add(road);
+            }
+            return roads;
+        }
+
+        static List<Bounds> CollectExclusions(Transform world, Transform airport)
+        {
+            List<Bounds> bounds = new List<Bounds>();
+            foreach (Transform tr in airport.GetComponentsInChildren<Transform>(true))
+            {
+                string n = tr.name.ToLowerInvariant();
+                float pad =
+                    n.Contains("runway") ? 95f :
+                    n.Contains("taxiway") ? 38f :
+                    n.Contains("apron") ? 32f :
+                    n.Contains("hangar") || n.Contains("hanger") ? 24f : -1f;
+                if (pad < 0f) continue;
+                if (TryBounds(tr, out Bounds b))
+                {
+                    b.Expand(new Vector3(pad * 2f, 50f, pad * 2f));
+                    bounds.Add(b);
+                }
+            }
+
+            foreach (Transform tr in world.GetComponentsInChildren<Transform>(true))
+            {
+                string n = tr.name;
+                bool protectedObject =
+                    n.StartsWith("Detailed House") ||
+                    n.StartsWith("Purpose -") ||
+                    n.StartsWith("Farmstead -") ||
+                    n == "Power Station Complex" ||
+                    n.StartsWith("Detached Garage") ||
+                    n.StartsWith("Community Park -") ||
+                    n.StartsWith("Electrical Substation");
+                if (!protectedObject) continue;
+                if (TryBounds(tr, out Bounds b))
+                {
+                    b.Expand(new Vector3(28f, 40f, 28f));
+                    bounds.Add(b);
+                }
+            }
+            return bounds;
+        }
+
+        static bool NearRoad(Vector3 p, List<Road> roads, float extra)
+        {
+            foreach (Road road in roads)
+            {
+                float limit = road.width * .5f + extra;
+                for (int i = 0; i < road.path.Count - 1; i++)
+                    if (SegmentDistance(p, road.path[i], road.path[i + 1]) < limit) return true;
+            }
+            return false;
+        }
+
+        static float SegmentDistance(Vector3 p, Vector3 a, Vector3 b)
+        {
+            Vector2 q = new Vector2(p.x, p.z);
+            Vector2 x = new Vector2(a.x, a.z);
+            Vector2 d = new Vector2(b.x - a.x, b.z - a.z);
+            if (d.sqrMagnitude < .001f) return Vector2.Distance(q, x);
+            return Vector2.Distance(q, x + d * Mathf.Clamp01(Vector2.Dot(q - x, d) / d.sqrMagnitude));
+        }
+
+        static bool InsideAny(Vector3 p, List<Bounds> exclusions)
+        {
+            foreach (Bounds b in exclusions)
+                if (p.x >= b.min.x && p.x <= b.max.x && p.z >= b.min.z && p.z <= b.max.z) return true;
+            return false;
+        }
+
+        static bool TryBounds(Transform root, out Bounds bounds)
+        {
+            bool set = false;
+            bounds = new Bounds(root.position, Vector3.zero);
+            foreach (Renderer renderer in root.GetComponentsInChildren<Renderer>(true))
+            {
+                if (!set) { bounds = renderer.bounds; set = true; }
+                else bounds.Encapsulate(renderer.bounds);
+            }
+            foreach (Collider collider in root.GetComponentsInChildren<Collider>(true))
+            {
+                if (!set) { bounds = collider.bounds; set = true; }
+                else bounds.Encapsulate(collider.bounds);
+            }
+            return set;
+        }
+
+        static float Planar(Vector3 a, Vector3 b)
+        {
+            float x = a.x - b.x;
+            float z = a.z - b.z;
+            return Mathf.Sqrt(x * x + z * z);
+        }
+
+        static float Next(System.Random rng, float a, float b) => a + (float)rng.NextDouble() * (b - a);
+        static float Ground(Terrain terrain, Vector3 p) => terrain.SampleHeight(p) + terrain.transform.position.y;
+
+        static Terrain FindTerrain()
+        {
+            GameObject g = Find(TerrainName);
+            Terrain t = g ? (g.GetComponent<Terrain>() ?? g.GetComponentInChildren<Terrain>(true)) : null;
+            if (t) return t;
+            Terrain[] all = UnityEngine.Object.FindObjectsByType<Terrain>(FindObjectsInactive.Include, FindObjectsSortMode.None);
+            return all.Length > 0 ? all[0] : null;
+        }
+
+        static GameObject Find(string name)
+        {
+            GameObject direct = GameObject.Find(name);
+            if (direct) return direct;
+            foreach (Transform tr in UnityEngine.Object.FindObjectsByType<Transform>(FindObjectsInactive.Include, FindObjectsSortMode.None))
+                if (tr && tr.gameObject.scene.IsValid() && tr.name == name) return tr.gameObject;
+            return null;
+        }
+
+        static Transform FindChild(Transform root, string name)
+        {
+            if (!root) return null;
+            foreach (Transform tr in root.GetComponentsInChildren<Transform>(true))
+                if (tr.name == name) return tr;
+            return null;
+        }
+
+        static Transform DirectChild(Transform root, string name)
+        {
+            if (!root) return null;
+            for (int i = 0; i < root.childCount; i++)
+                if (root.GetChild(i).name == name) return root.GetChild(i);
+            return null;
+        }
+
+        static Transform New(string name, Transform parent)
+        {
+            GameObject g = new GameObject(name);
+            g.transform.SetParent(parent, false);
+            return g.transform;
+        }
+
+        static void ResetFolder()
+        {
+            if (AssetDatabase.IsValidFolder(Gen)) AssetDatabase.DeleteAsset(Gen);
+            Ensure(Gen + "/Prefabs");
+            Ensure(Gen + "/Textures");
+        }
+
+        static void Ensure(string path)
+        {
+            string[] parts = path.Split('/');
+            string current = parts[0];
+            for (int i = 1; i < parts.Length; i++)
+            {
+                string next = current + "/" + parts[i];
+                if (!AssetDatabase.IsValidFolder(next)) AssetDatabase.CreateFolder(current, parts[i]);
+                current = next;
+            }
+        }
+    }
+}
