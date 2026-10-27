@@ -82,6 +82,7 @@ namespace Hanger51.EditorTools
 
             try
             {
+                Hanger51WorldTreeAlignmentAndAgriculturePass.RepairExistingFarmlandPaint();
                 EditorUtility.DisplayProgressBar("Hanger 51 Farms", "Normalizing all existing generated trees", .06f);
                 int treesRescaled;
                 int treeColliderRepairs;
