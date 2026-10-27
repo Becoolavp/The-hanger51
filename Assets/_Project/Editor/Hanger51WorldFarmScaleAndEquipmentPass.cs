@@ -372,9 +372,9 @@ namespace Hanger51.EditorTools
                 dir.Normalize();
 
                 float edgeDistance = DistanceToFieldEdge(field, dir);
-                if (distance < edgeDistance + 20f || distance > edgeDistance + 520f) continue;
+                if (distance < edgeDistance + 18f || distance > edgeDistance + 520f) continue;
 
-                float yardDistance = edgeDistance + Mathf.Min(55f, Mathf.Max(32f, (distance - edgeDistance) * .30f));
+                float yardDistance = Mathf.Max(25f, edgeDistance - 46f);
                 Vector3 yard = field.center + dir * yardDistance;
                 yard.y = Ground(terrain, yard);
 
@@ -767,6 +767,9 @@ namespace Hanger51.EditorTools
                 "Assets/Supercyan Free Forest Sample/Prefabs/High Quality/Tree/Fir/forestpack_tree_fir_tall.prefab");
             if (!leaf || !fir) return touched;
 
+            Transform previousExtra = DirectChild(fieldRoot, "Expanded Mature Field Shelter Belts");
+            if (previousExtra) UnityEngine.Object.DestroyImmediate(previousExtra.gameObject);
+
             List<FieldParcel> fields = ReadFields(fieldRoot);
             System.Random rng = new System.Random(Seed + 77);
             Transform extraRoot = New("Expanded Mature Field Shelter Belts", fieldRoot);
@@ -842,17 +845,17 @@ namespace Hanger51.EditorTools
             {
                 string n = tr.name;
                 bool shouldBeSolid =
-                    n.Contains("Main Barn") ||
-                    n.Contains("Machine Shed") ||
-                    n.Contains("Farm House") ||
-                    n.Contains("Grain Silo") ||
-                    n.Contains("Farm Tractor") ||
-                    n.Contains("Combine Harvester") ||
-                    n.Contains("Hay Bale") ||
-                    n.Contains("Farm Fence") ||
-                    n.Contains("Farm Equipment") ||
-                    n.Contains("Farm Water Tank") ||
-                    n.Contains("Farm Fuel Tank");
+                    n == "Main Barn" ||
+                    n == "Machine Shed" ||
+                    n == "Farm House" ||
+                    n == "Grain Silo" ||
+                    n == "Farm Tractor" ||
+                    n == "Combine Harvester" ||
+                    n.StartsWith("Hay Bale") ||
+                    n.StartsWith("Farm Fence") ||
+                    (n.StartsWith("Farm Equipment") && !n.EndsWith("Yard")) ||
+                    n == "Farm Water Tank" ||
+                    n == "Farm Fuel Tank";
                 if (!shouldBeSolid) continue;
                 Collider col = tr.GetComponent<Collider>();
                 if (!col) col = tr.GetComponentInChildren<Collider>(true);
