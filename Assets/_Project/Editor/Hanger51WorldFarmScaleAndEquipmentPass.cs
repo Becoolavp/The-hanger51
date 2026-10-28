@@ -456,13 +456,13 @@ namespace Hanger51.EditorTools
                 combines++;
             }
 
-            BuildEquipmentCluster(farm, new Vector3(25f, 0f, -23f), m);
+            BuildEquipmentCluster(farm, new Vector3(26f, 0f, -26f), m);
 
             int baleCount = 8 + (index % 5);
             for (int i = 0; i < baleCount; i++)
             {
-                float x = -30f + (i % 6) * 4.4f;
-                float z = -25f + (i / 6) * 3.5f;
+                float x = -32f + (i % 2) * 4.0f;
+                float z = -24f + (i / 2) * 3.4f;
                 Cylinder(farm, "Hay Bale " + i.ToString("00"), new Vector3(x, .85f, z),
                     new Vector3(.95f, .80f, .95f), m.dirt, true, Quaternion.Euler(0f, 0f, 90f));
                 hayBales++;
@@ -484,6 +484,7 @@ namespace Hanger51.EditorTools
             Box(farm, "Barn Door Left", basePos + new Vector3(-2.7f, 3.2f, -13.58f), new Vector3(5.0f, 6.4f, .22f), m.wood, true);
             Box(farm, "Barn Door Right", basePos + new Vector3(2.7f, 3.2f, -13.58f), new Vector3(5.0f, 6.4f, .22f), m.wood, true);
             Box(farm, "Barn Loft Door", basePos + new Vector3(0f, 7.4f, -13.62f), new Vector3(3.3f, 2.8f, .18f), m.white, false);
+            Box(farm, "Barn Roof Ridge", basePos + new Vector3(0f, 13.08f, 0f), new Vector3(.45f, .35f, 29.4f), m.roof, false);
         }
 
         static void BuildMachineShed(Transform farm, Vector3 basePos, Mats m)
@@ -499,6 +500,7 @@ namespace Hanger51.EditorTools
             Box(farm, "Farm House", basePos + new Vector3(0f, 2.7f, 0f), new Vector3(12f, 5.4f, 10f), m.white, true);
             Box(farm, "Farm House Roof Left", basePos + new Vector3(-3.18f, 6.95f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, 25f));
             Box(farm, "Farm House Roof Right", basePos + new Vector3(3.18f, 6.95f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, -25f));
+            Box(farm, "Farm House Roof Ridge", basePos + new Vector3(0f, 8.40f, 0f), new Vector3(.35f, .28f, 11.8f), m.roof, false);
             Box(farm, "Farm House Porch", basePos + new Vector3(0f, .35f, -6.0f), new Vector3(9f, .7f, 3.5f), m.wood, true);
         }
 
