@@ -120,7 +120,7 @@ namespace Hanger51.EditorTools
                 EditorUtility.DisplayProgressBar("Hanger 51 Agriculture", "Rebuilding tree collision index", .89f);
                 TerrainTreeCollisionProxyStreamer streamer = terrain.GetComponent<TerrainTreeCollisionProxyStreamer>();
                 if (!streamer) streamer = Undo.AddComponent<TerrainTreeCollisionProxyStreamer>(terrain.gameObject);
-                streamer.Configure(terrain, 520f, .10f, 2200);
+                streamer.Configure(terrain, 360f, .10f, 1800);
                 streamer.RebuildIndex();
                 EditorUtility.SetDirty(streamer);
 
