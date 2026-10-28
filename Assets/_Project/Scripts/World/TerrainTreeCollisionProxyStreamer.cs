@@ -89,6 +89,12 @@ namespace Hanger51.World
 
         void Update()
         {
+            if (!Application.isPlaying)
+            {
+                ResetProxyAssignments();
+                return;
+            }
+
             if (!terrain) return;
 
             if (Time.unscaledTime >= nextTargetRefresh)
@@ -287,8 +293,21 @@ namespace Hanger51.World
         {
             if (!terrain) terrain = GetComponent<Terrain>();
             RebuildIndex();
+
+            if (!Application.isPlaying)
+            {
+                ResetProxyAssignments();
+                return;
+            }
+
             RefreshTargets();
+            EnsurePool();
             RefreshProxies();
+        }
+
+        public void ClearAllProxiesNow()
+        {
+            ResetProxyAssignments();
         }
 
         public int ValidateActiveProxyAlignment(float tolerance, out float maximumError)
