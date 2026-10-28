@@ -104,7 +104,7 @@ namespace Hanger51.World
         {
             if (!Application.isPlaying)
             {
-                ResetProxyAssignments();
+                DestroyAllProxyObjects();
                 return;
             }
 
@@ -255,6 +255,8 @@ namespace Hanger51.World
 
         Proxy AcquireProxy()
         {
+            if (!Application.isPlaying) return null;
+
             for (int i = 0; i < pool.Count; i++)
             {
                 if (!pool[i].gameObject.activeSelf)
@@ -266,7 +268,7 @@ namespace Hanger51.World
 
             if (pool.Count >= maxProxies) return null;
 
-            GameObject go = new GameObject("Terrain Tree Collision Proxy");
+            GameObject go = new GameObject("H51 Runtime Tree Collision Proxy");
             go.hideFlags = HideFlags.HideAndDontSave;
             go.layer = terrain ? terrain.gameObject.layer : 0;
             CapsuleCollider capsule = go.AddComponent<CapsuleCollider>();
