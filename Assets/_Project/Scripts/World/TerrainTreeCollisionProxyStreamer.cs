@@ -52,6 +52,8 @@ namespace Hanger51.World
 
         PrototypeShape[] shapes;
 
+        public int ActiveProxyCount => activeByTree.Count;
+
         public void Configure(Terrain sourceTerrain, float radius, float interval, int proxyLimit)
         {
             terrain = sourceTerrain;
