@@ -141,7 +141,7 @@ namespace Hanger51.EditorTools
                 EditorUtility.DisplayProgressBar("Hanger 51 Dense Countryside", "Installing runtime tree collision fallback", .74f);
                 TerrainTreeCollisionProxyStreamer streamer = terrain.GetComponent<TerrainTreeCollisionProxyStreamer>();
                 if (!streamer) streamer = Undo.AddComponent<TerrainTreeCollisionProxyStreamer>(terrain.gameObject);
-                streamer.Configure(terrain, 520f, .10f, 2200);
+                streamer.Configure(terrain, 360f, .10f, 1800);
                 EditorUtility.SetDirty(streamer);
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Dense Countryside", "Restoring P-51 radiator lower belly skin", .84f);
