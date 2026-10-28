@@ -58,7 +58,18 @@ namespace Hanger51.Inventory
 
             if (itemNameText != null)
             {
-                itemNameText.text = hasItem ? slot.Item.DisplayName : "Empty";
+                if (hasItem)
+                {
+                    string condition = slot.GetConditionSummary();
+                    itemNameText.text = string.IsNullOrWhiteSpace(condition)
+                        ? slot.Item.DisplayName
+                        : $"{slot.Item.DisplayName}\n{condition}";
+                }
+                else
+                {
+                    itemNameText.text = "Empty";
+                }
+
                 itemNameText.color = hasItem
                     ? Color.white
                     : new Color(0.58f, 0.62f, 0.68f, 1f);

@@ -15,6 +15,8 @@ namespace Hanger51.Inventory
         public IReadOnlyList<InventorySlotData> Slots => slots;
         public int SlotCount => slotCount;
         public InventoryItemDefinition EquippedItem => equippedItem;
+        public EnginePartConditionData EquippedCondition =>
+            PeekFirstCondition(equippedItem);
 
         private void Awake()
         {
@@ -29,9 +31,52 @@ namespace Hanger51.Inventory
                 return Mathf.Max(0, quantity);
             }
 
-            EnsureSlotCount();
+            List<EnginePartConditionData> defaults = null;
+            if (EnginePartConditionData.IsTrackedItem(item))
+            {
+                defaults = new List<EnginePartConditionData>(quantity);
+                EnginePartConditionData transferred = quantity == 1
+                    ? EnginePartConditionTransferContext.PeekForItem(item)
+                    : null;
+                for (int index = 0; index < quantity; index++)
+                {
+                    defaults.Add(
+                        transferred != null && index == 0
+                            ? transferred.Clone()
+                            : EnginePartConditionData.CreateDefaultForItem(item));
+                }
+            }
 
+            return AddItemInstances(item, quantity, defaults);
+        }
+
+        public int AddConditionedItem(
+            InventoryItemDefinition item,
+            EnginePartConditionData condition)
+        {
+            List<EnginePartConditionData> conditions =
+                new List<EnginePartConditionData>(1)
+                {
+                    condition != null
+                        ? condition.Clone()
+                        : EnginePartConditionData.CreateDefaultForItem(item)
+                };
+            return AddItemInstances(item, 1, conditions);
+        }
+
+        public int AddItemInstances(
+            InventoryItemDefinition item,
+            int quantity,
+            IReadOnlyList<EnginePartConditionData> conditions)
+        {
+            if (item == null || quantity <= 0)
+            {
+                return Mathf.Max(0, quantity);
+            }
+
+            EnsureSlotCount();
             int remaining = quantity;
+            int sourceIndex = 0;
             bool changed = false;
 
             for (int index = 0; index < slots.Count && remaining > 0; index++)
@@ -48,10 +93,11 @@ namespace Hanger51.Inventory
                     continue;
                 }
 
-                int amountToAdd = Mathf.Min(availableSpace, remaining);
-                slot.Set(item, slot.Quantity + amountToAdd);
-                remaining -= amountToAdd;
-                changed = true;
+                int requested = Mathf.Min(availableSpace, remaining);
+                int added = slot.Add(item, requested, conditions, sourceIndex);
+                remaining -= added;
+                sourceIndex += added;
+                changed |= added > 0;
             }
 
             for (int index = 0; index < slots.Count && remaining > 0; index++)
@@ -62,10 +108,11 @@ namespace Hanger51.Inventory
                     continue;
                 }
 
-                int amountToAdd = Mathf.Min(item.MaxStackSize, remaining);
-                slot.Set(item, amountToAdd);
-                remaining -= amountToAdd;
-                changed = true;
+                int requested = Mathf.Min(item.MaxStackSize, remaining);
+                int added = slot.Add(item, requested, conditions, sourceIndex);
+                remaining -= added;
+                sourceIndex += added;
+                changed |= added > 0;
             }
 
             if (changed)
@@ -79,7 +126,7 @@ namespace Hanger51.Inventory
         public bool ToggleEquipSlot(int slotIndex)
         {
             InventorySlotData slot = GetSlot(slotIndex);
-            if (slot == null || slot.IsEmpty)
+            if (slot == null || slot.IsEmpty || !slot.Item.CanEquip)
             {
                 return false;
             }
@@ -106,8 +153,24 @@ namespace Hanger51.Inventory
             out InventoryItemDefinition removedItem,
             out int removedQuantity)
         {
+            return TryRemoveFromSlot(
+                slotIndex,
+                requestedQuantity,
+                out removedItem,
+                out removedQuantity,
+                out _);
+        }
+
+        public bool TryRemoveFromSlot(
+            int slotIndex,
+            int requestedQuantity,
+            out InventoryItemDefinition removedItem,
+            out int removedQuantity,
+            out List<EnginePartConditionData> removedConditions)
+        {
             removedItem = null;
             removedQuantity = 0;
+            removedConditions = new List<EnginePartConditionData>();
 
             InventorySlotData slot = GetSlot(slotIndex);
             if (slot == null || slot.IsEmpty || requestedQuantity <= 0)
@@ -115,13 +178,79 @@ namespace Hanger51.Inventory
                 return false;
             }
 
-            removedItem = slot.Item;
-            removedQuantity = Mathf.Min(requestedQuantity, slot.Quantity);
-            slot.Set(removedItem, slot.Quantity - removedQuantity);
+            if (!slot.Remove(
+                    requestedQuantity,
+                    out removedItem,
+                    out removedQuantity,
+                    out removedConditions))
+            {
+                return false;
+            }
 
             RemoveInvalidEquippedItem();
             NotifyInventoryChanged();
             return true;
+        }
+
+        public bool TryRemoveFirstItem(
+            InventoryItemDefinition requiredItem,
+            out EnginePartConditionData removedCondition)
+        {
+            removedCondition = null;
+            if (requiredItem == null)
+            {
+                return false;
+            }
+
+            EnsureSlotCount();
+            for (int index = 0; index < slots.Count; index++)
+            {
+                InventorySlotData slot = slots[index];
+                if (slot == null || slot.IsEmpty || slot.Item != requiredItem)
+                {
+                    continue;
+                }
+
+                if (!TryRemoveFromSlot(
+                        index,
+                        1,
+                        out InventoryItemDefinition removedItem,
+                        out int removedQuantity,
+                        out List<EnginePartConditionData> conditions)
+                    || removedItem != requiredItem
+                    || removedQuantity != 1)
+                {
+                    return false;
+                }
+
+                removedCondition = conditions.Count > 0
+                    ? conditions[0]
+                    : EnginePartConditionData.CreateDefaultForItem(requiredItem);
+                return true;
+            }
+
+            return false;
+        }
+
+        public EnginePartConditionData PeekFirstCondition(
+            InventoryItemDefinition requiredItem)
+        {
+            if (requiredItem == null)
+            {
+                return null;
+            }
+
+            EnsureSlotCount();
+            for (int index = 0; index < slots.Count; index++)
+            {
+                InventorySlotData slot = slots[index];
+                if (slot != null && !slot.IsEmpty && slot.Item == requiredItem)
+                {
+                    return slot.PeekCondition();
+                }
+            }
+
+            return null;
         }
 
         public InventorySlotData GetSlot(int slotIndex)
@@ -181,7 +310,8 @@ namespace Hanger51.Inventory
 
         private void RemoveInvalidEquippedItem()
         {
-            if (equippedItem != null && !ContainsItem(equippedItem))
+            if (equippedItem != null
+                && (!equippedItem.CanEquip || !ContainsItem(equippedItem)))
             {
                 equippedItem = null;
             }
@@ -212,6 +342,7 @@ namespace Hanger51.Inventory
                 {
                     slots[index] = new InventorySlotData();
                 }
+                slots[index].EnsureConditionCount();
             }
         }
 

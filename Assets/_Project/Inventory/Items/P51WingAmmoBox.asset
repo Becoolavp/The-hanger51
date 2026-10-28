@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
+  m_Name: P51WingAmmoBox
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
+  itemId: p51-wing-ammo-box
+  displayName: P-51 Wing Ammunition Box
+  description: A boxed ammunition belt for one P-51 wing gun station. Place it in
+    the compartment beside an installed gun and connect the belt before flight.
+  maxStackSize: 3
+  placeholderColor: {r: 0.2, g: 0.24, b: 0.12, a: 1}
+  canEquip: 1
+  worldPrefab: {fileID: 4905477388831477335, guid: 995903baae1a1094fb1d2b1ac40ad513, type: 3}
+  worldScale: {x: 1, y: 1, z: 1}

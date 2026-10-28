@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using Hanger51.Aircraft;
 using UnityEngine;
 
 namespace Hanger51.Inventory
@@ -29,19 +31,28 @@ namespace Hanger51.Inventory
                     slotIndex,
                     1,
                     out InventoryItemDefinition removedItem,
-                    out int removedQuantity))
+                    out int removedQuantity,
+                    out List<EnginePartConditionData> removedConditions))
             {
                 return false;
             }
 
-            Vector3 dropPosition = FindDropPosition();
-            CreateDroppedPickup(removedItem, removedQuantity, dropPosition);
+            Vector3 groundPosition = FindDropGroundPosition();
+            CreateDroppedPickup(
+                removedItem,
+                removedQuantity,
+                removedConditions,
+                groundPosition);
 
-            resultMessage = $"Dropped {removedItem.DisplayName}.";
+            string conditionText = removedConditions.Count > 0
+                && removedConditions[0] != null
+                    ? $" ({removedConditions[0].GetConditionSummary()})"
+                    : string.Empty;
+            resultMessage = $"Dropped {removedItem.DisplayName}{conditionText}.";
             return true;
         }
 
-        private Vector3 FindDropPosition()
+        private Vector3 FindDropGroundPosition()
         {
             Transform origin = dropOrigin != null ? dropOrigin : transform;
             Vector3 flatForward = Vector3.ProjectOnPlane(origin.forward, Vector3.up).normalized;
@@ -62,32 +73,184 @@ namespace Hanger51.Inventory
                     ~0,
                     QueryTriggerInteraction.Ignore))
             {
-                return groundHit.point + Vector3.up * (pickupScale * 0.5f + 0.02f);
+                return groundHit.point;
             }
 
-            return candidatePosition + Vector3.up * (pickupScale * 0.5f + 0.02f);
+            return candidatePosition;
         }
 
         private void CreateDroppedPickup(
             InventoryItemDefinition item,
             int quantity,
-            Vector3 position)
+            IReadOnlyList<EnginePartConditionData> conditions,
+            Vector3 groundPosition)
         {
-            GameObject pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-            pickupObject.transform.position = position;
-            pickupObject.transform.localScale = Vector3.one * pickupScale;
+            GameObject pickupObject;
+            bool usesItemPrefab = item != null && item.WorldPrefab != null;
 
-            InventoryPickup pickup = pickupObject.AddComponent<InventoryPickup>();
-            pickup.Configure(item, quantity);
-
-            Renderer pickupRenderer = pickupObject.GetComponent<Renderer>();
-            if (pickupRenderer != null)
+            if (usesItemPrefab)
             {
-                Material runtimeMaterial = CreateRuntimeMaterial(item);
-                if (runtimeMaterial != null)
+                pickupObject = Instantiate(item.WorldPrefab);
+                pickupObject.transform.localScale = item.WorldScale;
+            }
+            else
+            {
+                pickupObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
+                pickupObject.transform.localScale = Vector3.one * pickupScale;
+                ApplyFallbackMaterial(pickupObject, item);
+            }
+
+            pickupObject.SetActive(true);
+            pickupObject.transform.position = groundPosition;
+            pickupObject.transform.rotation = Quaternion.identity;
+
+            InventoryPickup pickup = pickupObject.GetComponent<InventoryPickup>();
+            if (pickup == null)
+            {
+                pickup = pickupObject.AddComponent<InventoryPickup>();
+            }
+
+            if (EnginePartConditionData.IsTrackedItem(item))
+            {
+                pickup.Configure(item, conditions);
+            }
+            else
+            {
+                pickup.Configure(item, quantity);
+            }
+
+            EnsurePickupCollider(pickupObject);
+            PrepareP51WheelPartPickup(pickupObject, pickup, item);
+            AlignBottomToGround(pickupObject, groundPosition.y);
+        }
+
+        private static void PrepareP51WheelPartPickup(
+            GameObject pickupObject,
+            InventoryPickup pickup,
+            InventoryItemDefinition item)
+        {
+            if (pickupObject == null || pickup == null || item == null)
+            {
+                return;
+            }
+
+            EnginePartConditionKind kind = EnginePartConditionData.InferKind(item);
+            if (kind != EnginePartConditionKind.Tire
+                && kind != EnginePartConditionKind.Rim)
+            {
+                return;
+            }
+
+            // Generated wheel prefabs contain primitive child colliders. Those can overlap one
+            // another and make the dropped object inconsistent to raycast. Disable every existing
+            // collider first, then expose exactly one fitted root trigger for interaction.
+            Collider[] existingColliders = pickupObject.GetComponentsInChildren<Collider>(true);
+            for (int index = 0; index < existingColliders.Length; index++)
+            {
+                if (existingColliders[index] != null)
                 {
-                    pickupRenderer.material = runtimeMaterial;
+                    existingColliders[index].enabled = false;
                 }
+            }
+
+            BoxCollider rootCollider = pickupObject.GetComponent<BoxCollider>();
+            if (rootCollider == null)
+            {
+                rootCollider = pickupObject.AddComponent<BoxCollider>();
+            }
+            rootCollider.enabled = true;
+            rootCollider.isTrigger = true;
+            FitColliderToRenderers(pickupObject, rootCollider);
+
+            pickup.enabled = true;
+            pickup.SetRuntimePickupBlocked(false);
+
+            if (kind == EnginePartConditionKind.Rim)
+            {
+                // Dropped rims must immediately behave exactly like freshly removed bare rims:
+                // normal E pickup when no matching tire is equipped, or Hold E to mount a tire.
+                P51BareRimServiceTarget.EnsureForPickup(pickup);
+            }
+        }
+
+        private static void FitColliderToRenderers(
+            GameObject root,
+            BoxCollider collider)
+        {
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            if (renderers == null || renderers.Length == 0)
+            {
+                collider.center = Vector3.zero;
+                collider.size = Vector3.one * 0.45f;
+                return;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null)
+                {
+                    bounds.Encapsulate(renderers[index].bounds);
+                }
+            }
+
+            Vector3 scale = root.transform.lossyScale;
+            float sx = Mathf.Max(0.001f, Mathf.Abs(scale.x));
+            float sy = Mathf.Max(0.001f, Mathf.Abs(scale.y));
+            float sz = Mathf.Max(0.001f, Mathf.Abs(scale.z));
+            Vector3 fitted = new Vector3(
+                Mathf.Max(0.18f, bounds.size.x / sx),
+                Mathf.Max(0.18f, bounds.size.y / sy),
+                Mathf.Max(0.18f, bounds.size.z / sz));
+
+            collider.center = root.transform.InverseTransformPoint(bounds.center);
+            collider.size = fitted + Vector3.one * 0.08f;
+        }
+
+        private static void EnsurePickupCollider(GameObject pickupObject)
+        {
+            if (pickupObject.GetComponentInChildren<Collider>() != null)
+            {
+                return;
+            }
+
+            BoxCollider collider = pickupObject.AddComponent<BoxCollider>();
+            collider.size = Vector3.one;
+        }
+
+        private static void AlignBottomToGround(GameObject pickupObject, float groundY)
+        {
+            Renderer[] renderers = pickupObject.GetComponentsInChildren<Renderer>();
+            if (renderers.Length == 0)
+            {
+                pickupObject.transform.position += Vector3.up * 0.02f;
+                return;
+            }
+
+            Bounds combinedBounds = renderers[0].bounds;
+            for (int index = 1; index < renderers.Length; index++)
+            {
+                combinedBounds.Encapsulate(renderers[index].bounds);
+            }
+
+            float verticalOffset = groundY - combinedBounds.min.y + 0.02f;
+            pickupObject.transform.position += Vector3.up * verticalOffset;
+        }
+
+        private static void ApplyFallbackMaterial(
+            GameObject pickupObject,
+            InventoryItemDefinition item)
+        {
+            Renderer pickupRenderer = pickupObject.GetComponent<Renderer>();
+            if (pickupRenderer == null)
+            {
+                return;
+            }
+
+            Material runtimeMaterial = CreateRuntimeMaterial(item);
+            if (runtimeMaterial != null)
+            {
+                pickupRenderer.material = runtimeMaterial;
             }
         }
 
