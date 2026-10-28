@@ -51,6 +51,7 @@ namespace Hanger51.World
         }
 
         PrototypeShape[] shapes;
+        bool[] validPrototypes;
 
         public int ActiveProxyCount => activeByTree.Count;
 
@@ -113,7 +114,17 @@ namespace Hanger51.World
             TerrainData data = terrain.terrainData;
             TreePrototype[] prototypes = data.treePrototypes;
             shapes = new PrototypeShape[prototypes != null ? prototypes.Length : 0];
-            for (int i = 0; i < shapes.Length; i++) shapes[i] = ReadPrototypeShape(prototypes[i]);
+            validPrototypes = new bool[shapes.Length];
+            for (int i = 0; i < shapes.Length; i++)
+            {
+                TreePrototype prototype = prototypes[i];
+                validPrototypes[i] =
+                    prototype != null &&
+                    prototype.prefab &&
+                    prototype.prefab.GetComponentInChildren<Renderer>(true) &&
+                    prototype.prefab.GetComponentInChildren<CapsuleCollider>(true);
+                shapes[i] = validPrototypes[i] ? ReadPrototypeShape(prototype) : DefaultShape();
+            }
 
             TreeInstance[] instances = data.treeInstances;
             Vector3 origin = terrain.transform.position;
@@ -121,6 +132,11 @@ namespace Hanger51.World
             for (int i = 0; i < instances.Length; i++)
             {
                 TreeInstance instance = instances[i];
+                if (instance.prototypeIndex < 0 ||
+                    instance.prototypeIndex >= validPrototypes.Length ||
+                    !validPrototypes[instance.prototypeIndex])
+                    continue;
+
                 float worldX = origin.x + instance.position.x * size.x;
                 float worldZ = origin.z + instance.position.z * size.z;
                 Vector3 samplePoint = new Vector3(worldX, origin.y, worldZ);
@@ -136,13 +152,14 @@ namespace Hanger51.World
                     prototypeIndex = instance.prototypeIndex,
                     cell = cell
                 };
+                int recordIndex = trees.Count;
                 trees.Add(record);
                 if (!spatial.TryGetValue(cell, out List<int> bucket))
                 {
                     bucket = new List<int>();
                     spatial.Add(cell, bucket);
                 }
-                bucket.Add(i);
+                bucket.Add(recordIndex);
             }
         }
 
