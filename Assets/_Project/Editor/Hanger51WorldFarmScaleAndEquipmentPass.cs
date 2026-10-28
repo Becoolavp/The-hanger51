@@ -267,6 +267,7 @@ namespace Hanger51.EditorTools
                    name.StartsWith("Natural Road Tree") ||
                    name.StartsWith("Regional Tree") ||
                    name.StartsWith("Final Mature Tree") ||
+                   name.StartsWith("Settlement Tree") ||
                    name.StartsWith("Field Edge Shelter Tree");
         }
 
@@ -428,39 +429,40 @@ namespace Hanger51.EditorTools
             farm.position = site.yard;
             farm.rotation = Quaternion.LookRotation(forward, Vector3.up);
 
-            Box(farm, "Farm Gravel Yard", new Vector3(0f, .03f, 0f), new Vector3(64f, .06f, 54f), m.gravel, false);
+            Box(farm, "Farm Gravel Yard", new Vector3(0f, .03f, 0f), new Vector3(72f, .06f, 62f), m.gravel, false);
 
-            BuildBarn(farm, new Vector3(-14f, 0f, 8f), m);
+            // Give each major farm function its own clear working zone so vehicles and props do not clip buildings.
+            BuildBarn(farm, new Vector3(-16f, 0f, 9f), m);
             barns++;
 
-            BuildMachineShed(farm, new Vector3(16f, 0f, -10f), m);
-            BuildFarmhouse(farm, new Vector3(-18f, 0f, -17f), m);
+            BuildMachineShed(farm, new Vector3(18f, 0f, -11f), m);
+            BuildFarmhouse(farm, new Vector3(-21f, 0f, -17f), m);
 
-            BuildSilo(farm, new Vector3(20f, 0f, 15f), m);
+            BuildSilo(farm, new Vector3(22f, 0f, 15f), m);
             silos++;
 
             if (index % 2 == 0)
             {
-                BuildSilo(farm, new Vector3(11f, 0f, 18f), m);
+                BuildSilo(farm, new Vector3(12f, 0f, 20f), m);
                 silos++;
             }
 
-            BuildTractor(farm, new Vector3(6f, 0f, -3f), Quaternion.Euler(0f, 12f, 0f), m);
+            BuildTractor(farm, new Vector3(1f, 0f, -7f), Quaternion.Euler(0f, 12f, 0f), m);
             tractors++;
 
             if (index % 3 == 0)
             {
-                BuildCombine(farm, new Vector3(3f, 0f, 14f), Quaternion.Euler(0f, -18f, 0f), m);
+                BuildCombine(farm, new Vector3(2f, 0f, 11f), Quaternion.Euler(0f, -18f, 0f), m);
                 combines++;
             }
 
-            BuildEquipmentCluster(farm, new Vector3(22f, 0f, -20f), m);
+            BuildEquipmentCluster(farm, new Vector3(25f, 0f, -23f), m);
 
             int baleCount = 8 + (index % 5);
             for (int i = 0; i < baleCount; i++)
             {
-                float x = -29f + (i % 4) * 4.2f;
-                float z = 20f + (i / 4) * 3.8f;
+                float x = -30f + (i % 6) * 4.4f;
+                float z = -25f + (i / 6) * 3.5f;
                 Cylinder(farm, "Hay Bale " + i.ToString("00"), new Vector3(x, .85f, z),
                     new Vector3(.95f, .80f, .95f), m.dirt, true, Quaternion.Euler(0f, 0f, 90f));
                 hayBales++;
@@ -476,8 +478,9 @@ namespace Hanger51.EditorTools
         static void BuildBarn(Transform farm, Vector3 basePos, Mats m)
         {
             Box(farm, "Main Barn", basePos + new Vector3(0f, 4.5f, 0f), new Vector3(18f, 9f, 27f), m.red, true);
-            Box(farm, "Barn Roof Left", basePos + new Vector3(-4.5f, 9.5f, 0f), new Vector3(10f, .65f, 29f), m.roof, false, Quaternion.Euler(0f, 0f, -24f));
-            Box(farm, "Barn Roof Right", basePos + new Vector3(4.5f, 9.5f, 0f), new Vector3(10f, .65f, 29f), m.roof, false, Quaternion.Euler(0f, 0f, 24f));
+            // Correct gable: outer eaves sit just above the walls and both panels rise toward the center ridge.
+            Box(farm, "Barn Roof Left", basePos + new Vector3(-4.55f, 11.1f, 0f), new Vector3(10f, .65f, 29f), m.roof, false, Quaternion.Euler(0f, 0f, 24f));
+            Box(farm, "Barn Roof Right", basePos + new Vector3(4.55f, 11.1f, 0f), new Vector3(10f, .65f, 29f), m.roof, false, Quaternion.Euler(0f, 0f, -24f));
             Box(farm, "Barn Door Left", basePos + new Vector3(-2.7f, 3.2f, -13.58f), new Vector3(5.0f, 6.4f, .22f), m.wood, true);
             Box(farm, "Barn Door Right", basePos + new Vector3(2.7f, 3.2f, -13.58f), new Vector3(5.0f, 6.4f, .22f), m.wood, true);
             Box(farm, "Barn Loft Door", basePos + new Vector3(0f, 7.4f, -13.62f), new Vector3(3.3f, 2.8f, .18f), m.white, false);
@@ -494,8 +497,8 @@ namespace Hanger51.EditorTools
         static void BuildFarmhouse(Transform farm, Vector3 basePos, Mats m)
         {
             Box(farm, "Farm House", basePos + new Vector3(0f, 2.7f, 0f), new Vector3(12f, 5.4f, 10f), m.white, true);
-            Box(farm, "Farm House Roof Left", basePos + new Vector3(-3f, 5.8f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, -25f));
-            Box(farm, "Farm House Roof Right", basePos + new Vector3(3f, 5.8f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, 25f));
+            Box(farm, "Farm House Roof Left", basePos + new Vector3(-3.18f, 6.95f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, 25f));
+            Box(farm, "Farm House Roof Right", basePos + new Vector3(3.18f, 6.95f, 0f), new Vector3(7f, .5f, 11.5f), m.roof, false, Quaternion.Euler(0f, 0f, -25f));
             Box(farm, "Farm House Porch", basePos + new Vector3(0f, .35f, -6.0f), new Vector3(9f, .7f, 3.5f), m.wood, true);
         }
 
@@ -570,8 +573,8 @@ namespace Hanger51.EditorTools
 
         static void BuildFarmFences(Transform farm, Mats m, ref int fences)
         {
-            float halfX = 34f;
-            float halfZ = 29f;
+            float halfX = 38f;
+            float halfZ = 33f;
             for (int side = -1; side <= 1; side += 2)
             {
                 for (int i = -3; i <= 3; i++)
@@ -606,16 +609,17 @@ namespace Hanger51.EditorTools
                     Box(farm, "Farm Fence Post", new Vector3(x * halfX, 1.0f, z * 10f),
                         new Vector3(.22f, 2f, .22f), m.wood, true);
 
-            Box(farm, "Farm Gate Left", new Vector3(-3.2f, 1.2f, -halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
-            Box(farm, "Farm Gate Right", new Vector3(3.2f, 1.2f, -halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
+            // The road is local +Z because the whole compound faces its nearest road.
+            Box(farm, "Farm Gate Left", new Vector3(-3.2f, 1.2f, halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
+            Box(farm, "Farm Gate Right", new Vector3(3.2f, 1.2f, halfZ), new Vector3(5.5f, 1.6f, .18f), m.metal, true);
         }
 
         static void BuildWaterAndFuel(Transform farm, Mats m)
         {
-            Cylinder(farm, "Farm Water Tank", new Vector3(28f, 2.1f, 4f), new Vector3(2.6f, 2.1f, 2.6f), m.metal, true, null);
-            Cylinder(farm, "Farm Fuel Tank", new Vector3(27f, 1.25f, -3.5f), new Vector3(1.2f, 3.3f, 1.2f), m.white, true, Quaternion.Euler(0f, 0f, 90f));
-            Box(farm, "Farm Fuel Pump", new Vector3(23f, 1.1f, -4f), new Vector3(.8f, 2.2f, .8f), m.red, true);
-            Box(farm, "Livestock Water Trough", new Vector3(-25f, .55f, -9f), new Vector3(5.5f, 1.1f, 1.8f), m.metal, true);
+            Cylinder(farm, "Farm Water Tank", new Vector3(31f, 2.1f, 10f), new Vector3(2.6f, 2.1f, 2.6f), m.metal, true, null);
+            Cylinder(farm, "Farm Fuel Tank", new Vector3(31f, 1.25f, 2f), new Vector3(1.2f, 3.3f, 1.2f), m.white, true, Quaternion.Euler(0f, 0f, 90f));
+            Box(farm, "Farm Fuel Pump", new Vector3(27f, 1.1f, 2f), new Vector3(.8f, 2.2f, .8f), m.red, true);
+            Box(farm, "Livestock Water Trough", new Vector3(-30f, .55f, -7f), new Vector3(5.5f, 1.1f, 1.8f), m.metal, true);
         }
 
         static void BuildFarmAccessLane(Terrain terrain, Transform farm, Vector3 from, Vector3 to, Mats m)
