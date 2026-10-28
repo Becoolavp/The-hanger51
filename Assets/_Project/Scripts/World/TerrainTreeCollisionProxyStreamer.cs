@@ -8,7 +8,7 @@ namespace Hanger51.World
     public sealed class TerrainTreeCollisionProxyStreamer : MonoBehaviour
     {
         [SerializeField] Terrain terrain;
-        [SerializeField, Min(100f)] float activationRadius = 500f;
+        [SerializeField, Min(100f)] float activationRadius = 360f;
         [SerializeField, Min(0.05f)] float refreshInterval = 0.12f;
         [SerializeField, Min(64)] int maxProxies = 1800;
         [SerializeField, Min(25f)] float spatialCellSize = 100f;
@@ -67,7 +67,15 @@ namespace Hanger51.World
         {
             if (!terrain) terrain = GetComponent<Terrain>();
             RebuildIndex();
+
+            if (!Application.isPlaying)
+            {
+                DestroyAllProxyObjects();
+                return;
+            }
+
             RefreshTargets();
+            EnsurePool();
             RefreshProxies();
         }
 
@@ -75,16 +83,21 @@ namespace Hanger51.World
         {
             if (!terrain) terrain = GetComponent<Terrain>();
             if (trees.Count == 0) RebuildIndex();
+
+            if (!Application.isPlaying)
+            {
+                DestroyAllProxyObjects();
+                return;
+            }
+
+            RefreshTargets();
+            EnsurePool();
         }
 
         void OnDisable()
         {
-            activeByTree.Clear();
-            for (int i = 0; i < pool.Count; i++)
-            {
-                pool[i].treeIndex = -1;
-                if (pool[i].gameObject) pool[i].gameObject.SetActive(false);
-            }
+            if (Application.isPlaying) ResetProxyAssignments();
+            else DestroyAllProxyObjects();
         }
 
         void Update()
@@ -307,7 +320,8 @@ namespace Hanger51.World
 
         public void ClearAllProxiesNow()
         {
-            ResetProxyAssignments();
+            if (Application.isPlaying) ResetProxyAssignments();
+            else DestroyAllProxyObjects();
         }
 
         public int ValidateActiveProxyAlignment(float tolerance, out float maximumError)
@@ -333,6 +347,22 @@ namespace Hanger51.World
                 if (error > limit) failures++;
             }
             return failures;
+        }
+
+        void DestroyAllProxyObjects()
+        {
+            activeByTree.Clear();
+            wanted.Clear();
+            releaseScratch.Clear();
+
+            for (int i = pool.Count - 1; i >= 0; i--)
+            {
+                Proxy proxy = pool[i];
+                if (proxy == null || !proxy.gameObject) continue;
+                if (Application.isPlaying) Destroy(proxy.gameObject);
+                else DestroyImmediate(proxy.gameObject);
+            }
+            pool.Clear();
         }
 
         void ResetProxyAssignments()
