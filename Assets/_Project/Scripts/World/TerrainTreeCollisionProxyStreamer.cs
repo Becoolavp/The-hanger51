@@ -103,6 +103,7 @@ namespace Hanger51.World
 
         public void RebuildIndex()
         {
+            ResetProxyAssignments();
             trees.Clear();
             spatial.Clear();
             if (!terrain || !terrain.terrainData) return;
@@ -202,9 +203,12 @@ namespace Hanger51.World
                 {
                     proxy = AcquireProxy();
                     if (proxy == null) break;
-                    ConfigureProxy(proxy, treeIndex);
                     activeByTree[treeIndex] = proxy;
                 }
+
+                // Reapply the exact TreeInstance transform every refresh. This prevents stale
+                // pooled proxies from remaining at an old tree position after terrain edits.
+                ConfigureProxy(proxy, treeIndex);
                 assigned++;
             }
 
@@ -258,6 +262,55 @@ namespace Hanger51.World
             proxy.collider.radius = Mathf.Max(0.18f, shape.radius * radialScale * trunkRadiusMultiplier);
             proxy.collider.height = Mathf.Max(proxy.collider.radius * 2f, shape.height * verticalScale);
             proxy.collider.enabled = true;
+        }
+
+        public void RebuildAndRefreshNow()
+        {
+            if (!terrain) terrain = GetComponent<Terrain>();
+            RebuildIndex();
+            RefreshTargets();
+            RefreshProxies();
+        }
+
+        public int ValidateActiveProxyAlignment(float tolerance, out float maximumError)
+        {
+            maximumError = 0f;
+            int failures = 0;
+            float limit = Mathf.Max(.001f, tolerance);
+
+            foreach (KeyValuePair<int, Proxy> pair in activeByTree)
+            {
+                int treeIndex = pair.Key;
+                Proxy proxy = pair.Value;
+                if (treeIndex < 0 || treeIndex >= trees.Count || proxy == null || !proxy.gameObject)
+                {
+                    failures++;
+                    continue;
+                }
+
+                Vector3 expected = trees[treeIndex].worldPosition;
+                expected.y = terrain ? terrain.SampleHeight(expected) + terrain.transform.position.y : expected.y;
+                float error = Vector3.Distance(proxy.gameObject.transform.position, expected);
+                maximumError = Mathf.Max(maximumError, error);
+                if (error > limit) failures++;
+            }
+            return failures;
+        }
+
+        void ResetProxyAssignments()
+        {
+            activeByTree.Clear();
+            wanted.Clear();
+            releaseScratch.Clear();
+
+            for (int i = 0; i < pool.Count; i++)
+            {
+                Proxy proxy = pool[i];
+                if (proxy == null || !proxy.gameObject) continue;
+                proxy.treeIndex = -1;
+                if (proxy.collider) proxy.collider.enabled = false;
+                proxy.gameObject.SetActive(false);
+            }
         }
 
         void DeactivateUnused()
