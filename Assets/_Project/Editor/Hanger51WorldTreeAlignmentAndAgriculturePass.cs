@@ -66,13 +66,13 @@ namespace Hanger51.EditorTools
 
             try
             {
-                EditorUtility.DisplayProgressBar("Hanger 51 Agriculture", "Creating collider-safe tree prototypes", .05f);
+                EditorUtility.DisplayProgressBar("Hanger 51 Agriculture", "Restoring visible Supercyan terrain-tree prototypes", .05f);
                 ResetFolder();
-                GameObject leaf = CreateColliderlessTreePrefab(LeafSource, LeafGenerated);
-                GameObject fir = CreateColliderlessTreePrefab(FirSource, FirGenerated);
+                GameObject leaf = AssetDatabase.LoadAssetAtPath<GameObject>(LeafSource);
+                GameObject fir = AssetDatabase.LoadAssetAtPath<GameObject>(FirSource);
                 if (!leaf || !fir)
                 {
-                    Debug.LogError("Step 116 could not create the colliderless terrain-tree visual prefabs.");
+                    Debug.LogError("Step 116 could not load the original Supercyan terrain-tree prefabs.");
                     return;
                 }
 
@@ -138,7 +138,7 @@ namespace Hanger51.EditorTools
                 Selection.activeGameObject = pass.gameObject;
 
                 Debug.Log(
-                    $"Step 116 complete. fields={fields.Count}, field terrain pixels={fieldPixels}, crop detail cells={cropCells}, cultivated trees removed={removedTrees}, cultivated rocks removed={removedRocks}, field-edge shelter trees={edgeTrees}. Terrain tree visuals now use colliderless copies, so the only tree hitboxes are the streamed trunk colliders aligned to the rendered tree positions. Run Step 117 to validate.",
+                    $"Step 116 complete. fields={fields.Count}, field terrain pixels={fieldPixels}, crop detail cells={cropCells}, cultivated trees removed={removedTrees}, cultivated rocks removed={removedRocks}, field-edge shelter trees={edgeTrees}. Terrain trees now use the original visible Supercyan prefabs while Unity native Terrain-tree collisions remain disabled; streamed trunk colliders use those same source prefabs for exact trunk dimensions. Run Step 117 to validate.",
                     pass.gameObject);
             }
             finally
@@ -170,15 +170,27 @@ namespace Hanger51.EditorTools
             foreach (Transform tr in fields.GetComponentsInChildren<Transform>(true))
                 if (tr.name.StartsWith("Field Parcel ")) fieldCount++;
 
-            int prototypeColliderFailures = 0;
+            int prototypeVisualFailures = 0;
+            int prototypeTrunkFailures = 0;
             TreePrototype[] prototypes = terrain.terrainData.treePrototypes;
-            if (prototypes == null || prototypes.Length != 2) prototypeColliderFailures++;
+            if (prototypes == null || prototypes.Length != 2)
+            {
+                prototypeVisualFailures++;
+                prototypeTrunkFailures++;
+            }
             else
             {
                 foreach (TreePrototype prototype in prototypes)
                 {
-                    if (prototype == null || !prototype.prefab) { prototypeColliderFailures++; continue; }
-                    if (prototype.prefab.GetComponentInChildren<Collider>(true) != null) prototypeColliderFailures++;
+                    if (prototype == null || !prototype.prefab)
+                    {
+                        prototypeVisualFailures++;
+                        prototypeTrunkFailures++;
+                        continue;
+                    }
+                    if (!prototype.prefab.GetComponentInChildren<Renderer>(true)) prototypeVisualFailures++;
+                    CapsuleCollider trunk = prototype.prefab.GetComponentInChildren<CapsuleCollider>(true);
+                    if (!trunk || !trunk.enabled || trunk.isTrigger) prototypeTrunkFailures++;
                 }
             }
 
@@ -193,7 +205,8 @@ namespace Hanger51.EditorTools
                 fieldCount >= 60 &&
                 fieldPixels >= 12000 &&
                 cropCells >= 12000 &&
-                prototypeColliderFailures == 0 &&
+                prototypeVisualFailures == 0 &&
+                prototypeTrunkFailures == 0 &&
                 streamer != null &&
                 groundAlignmentFailures == 0 &&
                 cultivatedTreeIntrusions == 0 &&
@@ -202,13 +215,13 @@ namespace Hanger51.EditorTools
             if (ok)
             {
                 Debug.Log(
-                    $"Step 117 passed. fields={fieldCount}, painted field pixels={fieldPixels}, crop cells={cropCells}, colliderless terrain-tree prototypes=2, streamed collision component=present, tree ground-alignment failures={groundAlignmentFailures}, trees inside cultivated fields={cultivatedTreeIntrusions}, rocks inside cultivated fields={cultivatedRockIntrusions}.",
+                    $"Step 117 passed. fields={fieldCount}, painted field pixels={fieldPixels}, crop cells={cropCells}, visible source tree prototypes=2, valid source trunk capsules=2, streamed collision component=present, tree ground-alignment failures={groundAlignmentFailures}, trees inside cultivated fields={cultivatedTreeIntrusions}, rocks inside cultivated fields={cultivatedRockIntrusions}.",
                     pass.gameObject);
             }
             else
             {
                 Debug.LogError(
-                    $"Step 117 failed. fields={fieldCount}, painted field pixels={fieldPixels}, crop cells={cropCells}, prototype collider failures={prototypeColliderFailures}, streamer={(streamer ? "present" : "missing")}, tree ground-alignment failures={groundAlignmentFailures}, trees inside cultivated fields={cultivatedTreeIntrusions}, rocks inside cultivated fields={cultivatedRockIntrusions}.",
+                    $"Step 117 failed. fields={fieldCount}, painted field pixels={fieldPixels}, crop cells={cropCells}, prototype visual failures={prototypeVisualFailures}, prototype trunk failures={prototypeTrunkFailures}, streamer={(streamer ? "present" : "missing")}, tree ground-alignment failures={groundAlignmentFailures}, trees inside cultivated fields={cultivatedTreeIntrusions}, rocks inside cultivated fields={cultivatedRockIntrusions}.",
                     pass.gameObject);
             }
         }
