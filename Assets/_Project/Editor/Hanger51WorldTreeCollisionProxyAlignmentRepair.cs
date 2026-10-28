@@ -39,7 +39,7 @@ namespace Hanger51.EditorTools
             TerrainTreeCollisionProxyStreamer streamer = terrain.GetComponent<TerrainTreeCollisionProxyStreamer>();
             if (!streamer) streamer = Undo.AddComponent<TerrainTreeCollisionProxyStreamer>(terrain.gameObject);
 
-            streamer.Configure(terrain, 520f, .10f, 2200);
+            streamer.Configure(terrain, 360f, .10f, 1800);
             streamer.RebuildAndRefreshNow();
 
             float maxError;
