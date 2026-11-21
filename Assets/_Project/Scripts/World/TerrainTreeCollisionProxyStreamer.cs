@@ -75,7 +75,6 @@ namespace Hanger51.World
             }
 
             RefreshTargets();
-            EnsurePool();
             RefreshProxies();
         }
 
@@ -91,7 +90,6 @@ namespace Hanger51.World
             }
 
             RefreshTargets();
-            EnsurePool();
         }
 
         void OnDisable()
@@ -316,7 +314,6 @@ namespace Hanger51.World
             }
 
             RefreshTargets();
-            EnsurePool();
             RefreshProxies();
         }
 
