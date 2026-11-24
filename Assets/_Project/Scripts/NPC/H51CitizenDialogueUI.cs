@@ -29,7 +29,7 @@ namespace Hanger51.NPCs
         {
             if (!IsOpen) return;
             Keyboard keyboard = Keyboard.current;
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            if (keyboard != null && (keyboard.escapeKey.wasPressedThisFrame || keyboard.iKey.wasPressedThisFrame))
                 Close();
         }
 
@@ -39,12 +39,19 @@ namespace Hanger51.NPCs
             citizen = target;
             response = citizen.Greeting();
             citizen.RegisterConversation();
+            H51CitizenBrain brain = citizen.GetComponent<H51CitizenBrain>();
+            if (brain) brain.SetConversationPaused(true, transform.position);
             IsAnyDialogueOpen = true;
             if (firstPersonController) firstPersonController.SetExternalInputBlocked(true);
         }
 
         public void Close()
         {
+            if (citizen)
+            {
+                H51CitizenBrain brain = citizen.GetComponent<H51CitizenBrain>();
+                if (brain) brain.SetConversationPaused(false, transform.position);
+            }
             citizen = null;
             response = string.Empty;
             IsAnyDialogueOpen = false;
