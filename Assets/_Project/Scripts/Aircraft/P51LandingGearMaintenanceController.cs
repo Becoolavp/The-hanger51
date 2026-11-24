@@ -196,6 +196,56 @@ namespace Hanger51.Aircraft
                 && (tireBurst[wheelIndex] || tireHealth[wheelIndex] <= 0.01f);
         }
 
+        public void ForceInstalledWheelVisuals(int wheelIndex)
+        {
+            EnsureArrays();
+            if (!IsValidWheel(wheelIndex))
+            {
+                return;
+            }
+
+            ApplyVisualState(true);
+
+            Transform gear = gearVisualRoots[wheelIndex];
+            Transform tire = tireVisualRoots[wheelIndex];
+            Transform rim = rimVisualRoots[wheelIndex];
+
+            if (gear != null)
+            {
+                gear.gameObject.SetActive(gearInstalled[wheelIndex]);
+            }
+
+            if (rim != null)
+            {
+                rim.gameObject.SetActive(gearInstalled[wheelIndex]);
+                Renderer[] renderers = rim.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    if (renderers[i] != null)
+                    {
+                        renderers[i].enabled = gearInstalled[wheelIndex];
+                    }
+                }
+            }
+
+            if (tire != null)
+            {
+                bool showTire = gearInstalled[wheelIndex] && tireInstalled[wheelIndex];
+                tire.gameObject.SetActive(showTire);
+                Renderer[] renderers = tire.GetComponentsInChildren<Renderer>(true);
+                for (int i = 0; i < renderers.Length; i++)
+                {
+                    if (renderers[i] != null)
+                    {
+                        renderers[i].enabled = showTire;
+                    }
+                }
+            }
+
+            ApplyVisualState(true);
+            PushPhysicsState();
+        }
+
         public float GetTireHealth(int wheelIndex)
         {
             EnsureArrays();
