@@ -394,9 +394,14 @@ namespace Hanger51.EditorTools
             P51FuelQuantityGauge gauge = panel.GetComponentInChildren<P51FuelQuantityGauge>(true);
             if (gauge != null)
             {
-                gauge.transform.localPosition = new Vector3(0.22f, -0.115f, -0.072f);
+                gauge.transform.localPosition = new Vector3(0f, -0.115f, -0.072f);
                 gauge.transform.localRotation = Quaternion.identity;
-                gauge.transform.localScale = Vector3.one * 0.64f;
+                float panelX = Mathf.Max(.001f, Mathf.Abs(panel.lossyScale.x));
+                float panelY = Mathf.Max(.001f, Mathf.Abs(panel.lossyScale.y));
+                gauge.transform.localScale = new Vector3(
+                    .64f,
+                    .64f * panelX / panelY,
+                    .64f);
                 gauge.RefreshGauge();
                 EditorUtility.SetDirty(gauge.transform);
                 EditorUtility.SetDirty(gauge);
