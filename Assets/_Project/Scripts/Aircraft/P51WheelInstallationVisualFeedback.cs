@@ -96,6 +96,10 @@ namespace Hanger51.Aircraft
             bool holdingE = keyboard != null && keyboard.eKey.isPressed;
 
             P51LandingGearServiceTarget aimedAxle = FindAimedAircraftWheelTarget();
+            if (aimedAxle == null && carriedWheel != null)
+            {
+                aimedAxle = FindBestCompatibleAxleInView(carriedWheel);
+            }
             P51BareRimServiceTarget aimedBareRim = FindAimedBareRim();
 
             UpdateAircraftInstallPreview(carriedWheel, aimedAxle, holdingE);
@@ -558,6 +562,51 @@ namespace Hanger51.Aircraft
                 }
             }
             return null;
+        }
+
+        private P51LandingGearServiceTarget FindBestCompatibleAxleInView(
+            P51LooseWheelAssembly carriedWheel)
+        {
+            if (playerCamera == null || carriedWheel == null)
+            {
+                return null;
+            }
+
+            P51LandingGearServiceTarget best = null;
+            float bestScore = float.PositiveInfinity;
+            Vector3 origin = playerCamera.transform.position;
+            Vector3 forward = playerCamera.transform.forward;
+
+            for (int index = 0; index < aircraftTargets.Length; index++)
+            {
+                P51LandingGearServiceTarget target = aircraftTargets[index];
+                if (!IsCompatibleEmptyAxle(target,carriedWheel))
+                {
+                    continue;
+                }
+
+                Vector3 toTarget = target.ServicePoint.position-origin;
+                float distance = toTarget.magnitude;
+                if (distance < .05f || distance > InteractionDistance)
+                {
+                    continue;
+                }
+
+                float alignment = Vector3.Dot(forward,toTarget/distance);
+                if (alignment < .90f)
+                {
+                    continue;
+                }
+
+                float score = distance+(1f-alignment)*12f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = target;
+                }
+            }
+
+            return best;
         }
 
         private P51BareRimServiceTarget FindAimedBareRim()
