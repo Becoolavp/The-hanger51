@@ -284,6 +284,10 @@ namespace Hanger51.Aircraft
                 return false;
             }
 
+            P51WheelInstallDiagnostics diagnostics =
+                P51WheelInstallDiagnostics.Ensure(maintenance);
+            diagnostics?.BeginInstall(wheelIndex, wheelAssembly);
+
             GetTireArrays(
                 out float[] health,
                 out float[] pressure,
@@ -296,24 +300,34 @@ namespace Hanger51.Aircraft
             installed[wheelIndex] = true;
             rimHealth[wheelIndex] = rimCondition.Health;
             rimInstalled[wheelIndex] = true;
+            diagnostics?.Checkpoint("STATE_WRITTEN_INSTALLED_TRUE", wheelIndex, wheelAssembly);
 
             // Re-resolve the permanent wheel hierarchy on this exact aircraft before the
             // animated carried wheel is deleted. This is important for live-spawned P-51s:
             // their maintenance state can be correct while serialized visual references still
             // point at an older/master hierarchy. In that case the install succeeded logically
             // but there was no visible wheel left on the spawned airplane.
-            P51LandingGearVisualRuntimeBootstrap.EnsureConfiguredFor(maintenance);
-            maintenance.RepairWheelVisualBindingsFromHierarchy(wheelIndex);
+            bool bootstrapReady =
+                P51LandingGearVisualRuntimeBootstrap.EnsureConfiguredFor(maintenance);
+            bool visualBindingsReady =
+                maintenance.RepairWheelVisualBindingsFromHierarchy(wheelIndex);
+            diagnostics?.Checkpoint(
+                $"AFTER_REBIND bootstrapReady={bootstrapReady} visualBindingsReady={visualBindingsReady}",
+                wheelIndex,
+                wheelAssembly);
 
             RefreshMaintenanceVisualsAndPhysics();
             maintenance.ForceInstalledWheelVisuals(wheelIndex);
             ApplyRimVisualState();
+            diagnostics?.Checkpoint("AFTER_FORCE_VISIBLE", wheelIndex, wheelAssembly);
 
             // Only remove the carried/animated loose-wheel object after the installed
             // aircraft tire and rim have been made visible. This gives the animation a
             // clean hand-off instead of making the wheel vanish at the axle.
+            diagnostics?.Checkpoint("BEFORE_DESTROY_CARRIED_WHEEL", wheelIndex, wheelAssembly);
             wheelAssembly.CompleteAircraftInstallation();
-            resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured.";
+            diagnostics?.CompleteInstall(wheelIndex);
+            resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured. Wheel diagnostic trace captured.";
             return true;
         }
 
