@@ -201,6 +201,49 @@ namespace Hanger51.Aircraft
             return true;
         }
 
+        public bool EnsureOriginAxleEmptyForCarriedWheel(
+            int wheelIndex,
+            P51LooseWheelAssembly wheelAssembly)
+        {
+            ResolveBindings();
+            EnsureRimArrays();
+
+            if (!IsReady
+                || maintenance == null
+                || !IsValidWheel(wheelIndex)
+                || wheelAssembly == null
+                || !wheelAssembly.IsCarried
+                || !wheelAssembly.IsComplete
+                || wheelAssembly.OriginWheelIndex != wheelIndex
+                || !maintenance.IsGearInstalled(wheelIndex))
+            {
+                return false;
+            }
+
+            GetTireArrays(
+                out float[] health,
+                out float[] pressure,
+                out bool[] installed,
+                out bool[] burst);
+            _ = health;
+            _ = pressure;
+            _ = burst;
+
+            bool changed = rimInstalled[wheelIndex] || installed[wheelIndex];
+            if (changed)
+            {
+                // A carried wheel with this exact origin can only exist because that complete
+                // assembly was removed from this station. If serialized/runtime state says the
+                // axle still contains a rim or tire, that state is stale and blocks both the
+                // highlight and reinstall interaction. Normalize the axle to empty.
+                rimInstalled[wheelIndex] = false;
+                installed[wheelIndex] = false;
+                RefreshMaintenanceVisualsAndPhysics();
+            }
+
+            return true;
+        }
+
         public bool TryInstallWheelAssembly(
             int wheelIndex,
             P51LooseWheelAssembly wheelAssembly,
