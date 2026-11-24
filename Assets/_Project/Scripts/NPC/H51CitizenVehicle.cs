@@ -116,7 +116,7 @@ namespace Hanger51.NPCs
 
             if (routeIndex >= route.Count)
             {
-                state = H51CitizenVehicleState.Arrived;
+                FinishArrival();
                 return;
             }
 
@@ -128,7 +128,7 @@ namespace Hanger51.NPCs
                 routeIndex++;
                 if (routeIndex >= route.Count)
                 {
-                    state = H51CitizenVehicleState.Arrived;
+                    FinishArrival();
                     return;
                 }
                 target = route[routeIndex];
@@ -174,6 +174,15 @@ namespace Hanger51.NPCs
                     }
                 }
             }
+        }
+
+        void FinishArrival()
+        {
+            float ownerJitter = string.IsNullOrEmpty(ownerCitizenId)
+                ? 0f
+                : ((ownerCitizenId.GetHashCode() & 0x7fffffff) % 7 - 3) * .35f;
+            transform.position += transform.right * 3.1f + transform.forward * ownerJitter;
+            state = H51CitizenVehicleState.Arrived;
         }
 
         void OffsetRouteToRightLane()
