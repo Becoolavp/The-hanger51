@@ -21,6 +21,7 @@ namespace Hanger51.NPCs
     {
         H51CitizenIdentity identity;
         H51CitizenBrain brain;
+        string activityBeforeConversation;
 
         public H51CitizenIdentity Identity => identity ? identity : (identity = GetComponent<H51CitizenIdentity>());
 
@@ -38,6 +39,14 @@ namespace Hanger51.NPCs
             if (player.fear >= 65f) return "I'd rather not have trouble. What do you want?";
             if (player.trust >= 55f) return $"Hey, good to see you. I'm {Identity.DisplayName}.";
             return $"Hello. I'm {Identity.DisplayName}.";
+        }
+
+        public void CaptureActivityBeforeConversation()
+        {
+            if (!brain) brain = GetComponent<H51CitizenBrain>();
+            activityBeforeConversation = brain && !string.IsNullOrWhiteSpace(brain.CurrentActivityDescription)
+                ? brain.CurrentActivityDescription
+                : "I was just going about my day.";
         }
 
         public void RegisterConversation()
@@ -100,11 +109,24 @@ namespace Hanger51.NPCs
 
         string DescribeCurrentActivity()
         {
+            if (!string.IsNullOrWhiteSpace(activityBeforeConversation))
+                return "Before you stopped me, " + ToPastActivity(activityBeforeConversation);
+
             if (!brain) brain = GetComponent<H51CitizenBrain>();
             if (brain && !string.IsNullOrWhiteSpace(brain.CurrentActivityDescription))
                 return brain.CurrentActivityDescription;
 
-            return "I'm just going about my day.";
+            return "I was just going about my day.";
+        }
+
+        static string ToPastActivity(string activity)
+        {
+            string text = activity.Trim();
+            if (text.StartsWith("I'm ", StringComparison.OrdinalIgnoreCase))
+                return "I was " + text.Substring(4);
+            if (text.StartsWith("I am ", StringComparison.OrdinalIgnoreCase))
+                return "I was " + text.Substring(5);
+            return text;
         }
 
         string DescribeTown()
