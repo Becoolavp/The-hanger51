@@ -60,13 +60,30 @@ namespace Hanger51.NPCs
         public void RegisterConversation()
         {
             H51CitizenRelationship player = Identity.Relationship("PLAYER");
-            player.trust = Mathf.Clamp(player.trust + .35f, -100f, 100f);
-            player.respect = Mathf.Clamp(player.respect + .15f, -100f, 100f);
+            double now = H51WorldClock.Instance ? H51WorldClock.Instance.TotalGameMinutes : 0d;
 
-            bool alreadyHasConversationMemory = Identity.Memories.Any(m =>
-                m != null && m.eventKey == "conversation" && m.subjectId == "PLAYER");
-            if (!alreadyHasConversationMemory)
-                Identity.Remember("conversation", "We spoke for the first time.", "PLAYER", 2f, 4f);
+            H51CitizenMemory latestConversation = Identity.Memories
+                .Where(m => m != null && m.eventKey == "conversation" && m.subjectId == "PLAYER")
+                .OrderByDescending(m => m.createdGameMinute)
+                .FirstOrDefault();
+
+            bool firstConversation = latestConversation == null;
+            bool enoughTimePassed =
+                firstConversation ||
+                now <= 0d ||
+                now - latestConversation.createdGameMinute >= 90d;
+
+            if (!enoughTimePassed) return;
+
+            player.trust = Mathf.Clamp(player.trust + (firstConversation ? .75f : .25f), -100f, 100f);
+            player.respect = Mathf.Clamp(player.respect + (firstConversation ? .30f : .10f), -100f, 100f);
+
+            Identity.Remember(
+                "conversation",
+                firstConversation ? "We spoke for the first time." : "We had another conversation.",
+                "PLAYER",
+                firstConversation ? 2f : 1f,
+                firstConversation ? 4f : 2f);
         }
 
         public string Answer(H51CitizenQuestion question)
