@@ -19,20 +19,26 @@ namespace Hanger51.NPCs
         [SerializeField] string townName;
         [SerializeField] H51CitizenAnchorKind kind;
         [SerializeField] string occupationHint;
+        [SerializeField] string displayLabel;
+        [SerializeField] string workplaceId;
         [SerializeField, Min(1)] int capacity = 4;
 
         public string AnchorId => anchorId;
         public string TownName => townName;
         public H51CitizenAnchorKind Kind => kind;
         public string OccupationHint => occupationHint;
+        public string DisplayLabel => string.IsNullOrWhiteSpace(displayLabel) ? name : displayLabel;
+        public string WorkplaceId => workplaceId;
         public int Capacity => capacity;
 
-        public void Configure(string id, string town, H51CitizenAnchorKind anchorKind, string occupation, int maxCapacity)
+        public void Configure(string id, string town, H51CitizenAnchorKind anchorKind, string occupation, int maxCapacity, string label = null, string linkedWorkplaceId = "")
         {
             anchorId = id;
             townName = town;
             kind = anchorKind;
             occupationHint = occupation;
+            displayLabel = string.IsNullOrWhiteSpace(label) ? name : label;
+            workplaceId = linkedWorkplaceId;
             capacity = Mathf.Max(1, maxCapacity);
         }
 
