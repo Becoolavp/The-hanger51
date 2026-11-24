@@ -638,21 +638,38 @@ namespace Hanger51.EditorTools
                     Vector3[] vertices = mf.sharedMesh.vertices;
                     if (vertices == null || vertices.Length < 4) continue;
 
-                    List<int> roadNodes = new List<int>();
+                    List<Vector3> centers = new List<Vector3>();
                     for (int i = 0; i + 1 < vertices.Length; i += 2)
-                    {
-                        Vector3 center = mf.transform.TransformPoint((vertices[i] + vertices[i+1]) * .5f);
-                        int nodeIndex = nodes.Count;
-                        nodes.Add(center);
-                        roadNodes.Add(nodeIndex);
+                        centers.Add(mf.transform.TransformPoint((vertices[i] + vertices[i+1]) * .5f));
 
-                        if (roadNodes.Count > 1)
-                            AddTrafficEdge(nodes, edges, edgeKeys, roadNodes[roadNodes.Count-2], nodeIndex);
+                    List<int> roadNodes = new List<int>();
+                    if (centers.Count > 0)
+                    {
+                        int first = nodes.Count;
+                        nodes.Add(centers[0]);
+                        roadNodes.Add(first);
+
+                        for (int i = 1; i < centers.Count; i++)
+                        {
+                            Vector3 a = centers[i - 1];
+                            Vector3 b = centers[i];
+                            float distance = Vector3.Distance(a, b);
+                            int steps = Mathf.Max(1, Mathf.CeilToInt(distance / 7f));
+
+                            for (int step = 1; step <= steps; step++)
+                            {
+                                Vector3 center = Vector3.Lerp(a, b, step / (float)steps);
+                                int nodeIndex = nodes.Count;
+                                nodes.Add(center);
+                                AddTrafficEdge(nodes, edges, edgeKeys, roadNodes[roadNodes.Count - 1], nodeIndex);
+                                roadNodes.Add(nodeIndex);
+                            }
+                        }
                     }
                 }
             }
 
-            float intersectionThreshold = 12f;
+            float intersectionThreshold = 7.5f;
             float thresholdSqr = intersectionThreshold * intersectionThreshold;
             for (int a = 0; a < nodes.Count; a++)
             {
