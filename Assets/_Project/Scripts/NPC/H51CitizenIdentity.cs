@@ -77,8 +77,23 @@ namespace Hanger51.NPCs
         public float Responsibility => responsibility;
         public float Temper => temper;
         public float Curiosity => curiosity;
-        public List<H51CitizenMemory> Memories => memories;
-        public List<H51CitizenRelationship> Relationships => relationships;
+        public List<H51CitizenMemory> Memories
+        {
+            get
+            {
+                if (memories == null) memories = new List<H51CitizenMemory>();
+                return memories;
+            }
+        }
+
+        public List<H51CitizenRelationship> Relationships
+        {
+            get
+            {
+                if (relationships == null) relationships = new List<H51CitizenRelationship>();
+                return relationships;
+            }
+        }
 
         public void Configure(
             string id, string name, int citizenAge, string town, string job,
@@ -131,6 +146,7 @@ namespace Hanger51.NPCs
         public H51CitizenRelationship Relationship(string otherId, bool create = true)
         {
             if (string.IsNullOrEmpty(otherId)) return null;
+            if (relationships == null) relationships = new List<H51CitizenRelationship>();
             for (int i = 0; i < relationships.Count; i++)
                 if (relationships[i] != null && relationships[i].otherId == otherId)
                     return relationships[i];
@@ -145,6 +161,7 @@ namespace Hanger51.NPCs
             string eventKey, string description, string subjectId,
             float valence, float severity, bool permanent = false)
         {
+            if (memories == null) memories = new List<H51CitizenMemory>();
             double now = H51WorldClock.Instance ? H51WorldClock.Instance.TotalGameMinutes : 0d;
             string id = citizenId + "-" + eventKey + "-" + Math.Abs((description ?? "").GetHashCode()) + "-" + ((long)now).ToString();
 
@@ -193,6 +210,7 @@ namespace Hanger51.NPCs
 
         void TrimMemories(int max)
         {
+            if (memories == null) memories = new List<H51CitizenMemory>();
             if (memories.Count <= max) return;
             int removableIndex = -1;
             float lowest = float.MaxValue;
