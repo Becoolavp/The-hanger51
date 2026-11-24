@@ -45,6 +45,9 @@ namespace Hanger51.NPCs
         bool[] colliderStates;
         bool ridingInVehicle;
         H51CitizenRoutineState vehicleDestinationState;
+        string pendingVehicleDestinationAnchorId;
+        string lastVehicleDestinationAnchorId;
+        float suppressVehicleUntil;
 
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
@@ -264,8 +267,21 @@ namespace Hanger51.NPCs
             float destinationDistance)
         {
             if (!desired || destinationDistance < 38f) return false;
+            if (Time.time < suppressVehicleUntil) return false;
+
+            if (!string.IsNullOrEmpty(lastVehicleDestinationAnchorId))
+            {
+                if (desired.AnchorId == lastVehicleDestinationAnchorId)
+                    return false;
+
+                lastVehicleDestinationAnchorId = string.Empty;
+            }
+
             if (!ownedVehicle) ResolveOwnedVehicle();
             if (!ownedVehicle || ownedVehicle.IsBrokenDown) return false;
+
+            H51ParkingSpot destinationParking = FindDestinationParking(desired);
+            if (!destinationParking) return false;
 
             float toCar = Planar(transform.position, ownedVehicle.transform.position);
             if (toCar > 2.4f)
@@ -286,12 +302,47 @@ namespace Hanger51.NPCs
                 return true;
             }
 
-            if (!ownedVehicle.BeginTrip(identity, desired.transform.position))
+            if (!ownedVehicle.BeginTrip(identity, destinationParking))
                 return false;
 
             vehicleDestinationState = desiredState;
+            pendingVehicleDestinationAnchorId = desired.AnchorId;
             EnterVehicle();
             return true;
+        }
+
+        H51ParkingSpot FindDestinationParking(H51CitizenAnchor desired)
+        {
+            if (!desired || !ownedVehicle) return null;
+
+            H51ParkingSpot[] spots = FindObjectsByType<H51ParkingSpot>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+
+            H51ParkingSpot best = null;
+            float bestScore = float.PositiveInfinity;
+
+            for (int i = 0; i < spots.Length; i++)
+            {
+                H51ParkingSpot spot = spots[i];
+                if (!spot || !spot.IsAvailableFor(ownedVehicle)) continue;
+                if (!string.IsNullOrEmpty(desired.TownName) &&
+                    !string.IsNullOrEmpty(spot.TownName) &&
+                    desired.TownName != spot.TownName)
+                    continue;
+
+                float distance = Planar(spot.transform.position, desired.transform.position);
+                if (distance > 85f) continue;
+
+                float score = distance;
+                if (ownedVehicle.CurrentParkingSpot == spot) score += 1000f;
+                if (score >= bestScore) continue;
+
+                bestScore = score;
+                best = spot;
+            }
+
+            return best;
         }
 
         void EnterVehicle()
@@ -351,6 +402,18 @@ namespace Hanger51.NPCs
             }
 
             bool brokeDown = ownedVehicle.IsBrokenDown;
+
+            if (!brokeDown && !string.IsNullOrEmpty(pendingVehicleDestinationAnchorId))
+            {
+                lastVehicleDestinationAnchorId = pendingVehicleDestinationAnchorId;
+                suppressVehicleUntil = Time.time + 20f;
+            }
+            else if (brokeDown)
+            {
+                suppressVehicleUntil = Time.time + 8f;
+            }
+
+            pendingVehicleDestinationAnchorId = string.Empty;
             ExitVehicle();
             currentActivityDescription = brokeDown
                 ? "My car broke down, so I'm dealing with that."
