@@ -5,6 +5,14 @@ using UnityEngine;
 
 namespace Hanger51.NPCs
 {
+    public enum H51CitizenSocialAction
+    {
+        FriendlyChat,
+        Compliment,
+        OfferHelp,
+        Apologize
+    }
+
     public enum H51CitizenQuestion
     {
         Identity,
