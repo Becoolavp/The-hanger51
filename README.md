@@ -41,7 +41,7 @@ Key fix commits immediately before this README update:
 - `f78eb330` — Release carried wheel ownership before install visual handoff.
 - `2ad4481d` — Prevent wheel self-heal from undoing committed install.
 
-### World calendar, day/night cycle, citizen schedules, and night lighting — IMPLEMENTED / PENDING UNITY VALIDATION
+### World calendar, day/night cycle, citizen schedules, and night lighting — INITIAL PLAY-MODE VISUAL TEST PASSED
 
 A new shared world-time architecture has been added on top of the existing `H51WorldClock`.
 
@@ -83,13 +83,54 @@ Important new files:
 
 The default configured calendar start is **June 1, 2026 at 6:30 AM**, with the existing `1.5 game minutes per real second` progression retained. The date is configuration data, not a hard-coded historical dependency, and can be changed later without rewriting citizen schedules.
 
-Do not mark this milestone verified until Step 152 has been applied, Step 153 passes, and a Play-mode/build test confirms daylight progression, nighttime lighting, citizen schedule transitions, grid demand, and runway-light switching.
+The initial Unity integration and Play-mode visual test now show the world clock/date HUD and active day/night lighting in the standalone Development Build. The user confirmed the result looks good. Keep deeper behavioral verification open for citizen weekday/weekend transitions, night power-load behavior, full dusk/night progression, and runway OFF/AUTO/ON outage behavior.
 
 Compile note: the first pull exposed C# definite-assignment error CS0165 in `H51CitizenBrain.cs` for the medical-appointment local variable. This was fixed in commit `97356c9b` by initializing the appointment anchor before the short-circuited schedule check.
 
 Compile note: the next pull exposed three parser errors on one malformed Step 152 completion-log line in `Hanger51TimeCalendarAndNightLightingSetup.cs`. All three came from a missing opening quotation mark and were fixed in commit `99550e07`.
 
 Integration note: the first Step 152 scene-build run then failed while creating the runway-light control because `H51RunwayLightSwitch` has a `RequireComponent(Collider)` contract and the setup code attempted to add the switch before its `BoxCollider`. Unity rejected the switch component, the subsequent `Configure` call hit a null reference, and Step 152 stopped before the player clock HUD/interactor were added. This was fixed in commit `80e614aa` by creating/configuring the `BoxCollider` first, then adding the runway-light switch with a null guard. Re-running Step 152 is safe: it rebuilds the generated lighting root and reuses existing runway runtime glow children.
+
+### Farm residency, house-door, and airport runway-control cleanup — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The current world screenshots exposed three follow-up issues after the time/night pass:
+
+- The runway-light control cabinet was outside the airport perimeter wall.
+- Working farmsteads had physical farmhouses but farmers still inherited town-home assignments.
+- Some house doors were unreliable and legacy door handles/knobs could float away from the moving door leaf.
+
+A new repair pass was added:
+
+`Hanger 51 -> World -> Current -> 154 - Repair House Doors Farm Residents And Airport Light Control`
+
+Validation:
+
+`Hanger 51 -> World -> Current -> 155 - Validate House Doors Farm Residents And Airport Light Control`
+
+Step 154 does the following:
+
+- Moves the existing runway-light control to the **inside face of the nearest airport perimeter wall**, oriented so its readable/control face points into the airport.
+- Updates the Step 152 builder so future rebuilds also place the control inside the wall.
+- Rebuilds every enterable home front door around a deterministic hinge pivot instead of reverse-engineering the old permanently-open door slab.
+- Uses a unit-scale door-leaf hierarchy with a dedicated collider and separate scaled visual mesh.
+- Parents inside/outside handles directly to the unit-scale door leaf so the handles remain physically attached throughout opening/closing.
+- Doors start closed, open with **E**, and still auto-open for nearby citizens through `H51TownDoor`.
+- Creates a rural farmhouse home anchor and working-farm work anchor for each generated `Working Farm XX`.
+- Adds a local NavMesh volume for each farmstead.
+- Creates/repairs a `H51CitizenWorkplace` on each working farm.
+- Reassigns one non-essential existing citizen per farmstead as a **Farmer**, with that farm's farmhouse as home and that same farm as the work location.
+- Moves the assigned farmer onto the farm NavMesh so the schedule system begins from the actual farm residence.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51FarmResidenceDoorAndAirportControlRepair.cs`
+- `Assets/_Project/Editor/Hanger51TimeCalendarAndNightLightingSetup.cs`
+- `Assets/_Project/Scripts/NPC/H51TownDoor.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenIdentity.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenAnchor.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenWorkplace.cs`
+
+Do not mark this cleanup verified until Step 155 passes and Play mode confirms at least one town-house door opens/closes with its handles attached, at least one farmer returns to the rural farmhouse/work location as the clock changes, and the runway control is reachable from the inside of the airport wall.
 
 ### Wheel-install diagnostics
 
@@ -247,7 +288,8 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue improving maintenance animations and physical part visibility.
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
-- Apply and validate World Steps 152/153, then test at least dawn, daytime, dusk, and full night.
+- Apply and validate World Steps 154/155 for farm residency, house-door interaction, and the inside-wall runway-light control.
+- Continue testing the time system at dawn, daytime, dusk, and full night.
 - Verify ordinary citizens stop following weekday work routines on weekends.
 - Verify power-plant and emergency workers maintain rotating overnight coverage.
 - Verify town/building lights turn on at night only when the utility grid is powered.
