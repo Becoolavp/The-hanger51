@@ -7,6 +7,7 @@ namespace Hanger51.NPCs
     {
         Parked,
         Driving,
+        Parking,
         Arrived,
         BrokenDown
     }
@@ -20,8 +21,11 @@ namespace Hanger51.NPCs
         [SerializeField] H51TrafficNetwork trafficNetwork;
         [SerializeField, Min(1f)] float cruiseSpeed = 10f;
         [SerializeField, Min(1f)] float turnSpeed = 4f;
+        [SerializeField, Min(.5f)] float parkingSpeed = 3.2f;
         [SerializeField, Range(0f,100f)] float condition = 100f;
         [SerializeField] H51CitizenVehicleState state = H51CitizenVehicleState.Parked;
+        [SerializeField] H51ParkingSpot currentParkingSpot;
+        [SerializeField] H51ParkingSpot targetParkingSpot;
 
         readonly List<Vector3> route = new List<Vector3>();
         int routeIndex;
@@ -36,6 +40,8 @@ namespace Hanger51.NPCs
         public bool TripComplete => state == H51CitizenVehicleState.Arrived;
         public bool IsBrokenDown => state == H51CitizenVehicleState.BrokenDown;
         public float Condition => condition;
+        public H51ParkingSpot CurrentParkingSpot => currentParkingSpot;
+        public H51ParkingSpot TargetParkingSpot => targetParkingSpot;
 
         public void Configure(
             string id,
@@ -58,6 +64,55 @@ namespace Hanger51.NPCs
             return citizen && !string.IsNullOrEmpty(ownerCitizenId) && citizen.CitizenId == ownerCitizenId;
         }
 
+        public void SetInitialParkingSpot(H51ParkingSpot spot)
+        {
+            if (currentParkingSpot && currentParkingSpot != spot)
+                currentParkingSpot.Release(this);
+
+            currentParkingSpot = spot;
+            targetParkingSpot = null;
+
+            if (!spot) return;
+            spot.ForceReserve(this);
+            transform.SetPositionAndRotation(spot.transform.position, spot.transform.rotation);
+            state = H51CitizenVehicleState.Parked;
+        }
+
+        public bool BeginTrip(H51CitizenIdentity driver, H51ParkingSpot destinationParking)
+        {
+            if (!driver || !IsOwnedBy(driver) || !trafficNetwork || IsBrokenDown || !destinationParking)
+                return false;
+
+            if (destinationParking == currentParkingSpot)
+                return false;
+
+            if (!destinationParking.TryReserve(this))
+                return false;
+
+            if (!trafficNetwork.TryBuildPath(
+                    transform.position,
+                    destinationParking.RoadApproachPosition,
+                    route) ||
+                route.Count == 0)
+            {
+                destinationParking.Release(this);
+                return false;
+            }
+
+            OffsetRouteToRightLane();
+
+            if (currentParkingSpot)
+                currentParkingSpot.Release(this);
+
+            currentParkingSpot = null;
+            targetParkingSpot = destinationParking;
+            currentDriver = driver;
+            routeIndex = 0;
+            state = H51CitizenVehicleState.Driving;
+            nextIncidentCheck = Time.time + 12f;
+            return true;
+        }
+
         public bool BeginTrip(H51CitizenIdentity driver, Vector3 destination)
         {
             if (!driver || !IsOwnedBy(driver) || !trafficNetwork || IsBrokenDown) return false;
@@ -66,6 +121,11 @@ namespace Hanger51.NPCs
 
             OffsetRouteToRightLane();
 
+            if (currentParkingSpot)
+                currentParkingSpot.Release(this);
+
+            currentParkingSpot = null;
+            targetParkingSpot = null;
             currentDriver = driver;
             routeIndex = 0;
             state = H51CitizenVehicleState.Driving;
@@ -90,6 +150,13 @@ namespace Hanger51.NPCs
 
             state = H51CitizenVehicleState.BrokenDown;
             route.Clear();
+
+            if (targetParkingSpot)
+            {
+                targetParkingSpot.Release(this);
+                targetParkingSpot = null;
+            }
+
             if (currentDriver)
             {
                 currentDriver.Remember(
@@ -112,25 +179,33 @@ namespace Hanger51.NPCs
 
         void Update()
         {
+            if (state == H51CitizenVehicleState.Parking)
+            {
+                UpdateParkingManeuver();
+                return;
+            }
+
             if (state != H51CitizenVehicleState.Driving || route.Count == 0) return;
 
             if (routeIndex >= route.Count)
             {
-                FinishArrival();
+                FinishRoadRoute();
                 return;
             }
 
             Vector3 target = route[routeIndex];
             Vector3 flat = target - transform.position;
             flat.y = 0f;
+
             if (flat.sqrMagnitude < 2.25f)
             {
                 routeIndex++;
                 if (routeIndex >= route.Count)
                 {
-                    FinishArrival();
+                    FinishRoadRoute();
                     return;
                 }
+
                 target = route[routeIndex];
                 flat = target - transform.position;
                 flat.y = 0f;
@@ -146,43 +221,100 @@ namespace Hanger51.NPCs
             }
 
             float actualSpeed = TrafficBlockedAhead() ? 0f : cruiseSpeed;
-            Vector3 next = Vector3.MoveTowards(
+            transform.position = Vector3.MoveTowards(
                 transform.position,
                 target,
                 actualSpeed * Time.deltaTime);
-            transform.position = next;
 
-            if (Time.time >= nextIncidentCheck)
-            {
-                nextIncidentCheck = Time.time + 12f;
-                float wearRisk = Mathf.InverseLerp(100f, 20f, condition);
-                float chance = Mathf.Lerp(.0005f, .015f, wearRisk);
-                if (Random.value < chance)
-                {
-                    condition = Mathf.Max(0f, condition - Random.Range(12f, 30f));
-                    if (condition <= 18f)
-                    {
-                        state = H51CitizenVehicleState.BrokenDown;
-                        route.Clear();
-                        if (currentDriver)
-                            currentDriver.Remember(
-                                "vehicle_breakdown",
-                                "My car broke down while I was traveling.",
-                                vehicleId,
-                                12f,
-                                0f);
-                    }
-                }
-            }
+            CheckMechanicalIncident();
         }
 
-        void FinishArrival()
+        void FinishRoadRoute()
         {
-            float ownerJitter = string.IsNullOrEmpty(ownerCitizenId)
-                ? 0f
-                : ((ownerCitizenId.GetHashCode() & 0x7fffffff) % 7 - 3) * .35f;
-            transform.position += transform.right * 3.1f + transform.forward * ownerJitter;
+            route.Clear();
+            routeIndex = 0;
+
+            if (targetParkingSpot)
+            {
+                state = H51CitizenVehicleState.Parking;
+                return;
+            }
+
             state = H51CitizenVehicleState.Arrived;
+        }
+
+        void UpdateParkingManeuver()
+        {
+            if (!targetParkingSpot)
+            {
+                state = H51CitizenVehicleState.Arrived;
+                return;
+            }
+
+            Vector3 target = targetParkingSpot.transform.position;
+            Vector3 flat = target - transform.position;
+            flat.y = 0f;
+
+            if (flat.sqrMagnitude <= .16f)
+            {
+                transform.SetPositionAndRotation(
+                    targetParkingSpot.transform.position,
+                    targetParkingSpot.transform.rotation);
+                currentParkingSpot = targetParkingSpot;
+                targetParkingSpot = null;
+                state = H51CitizenVehicleState.Arrived;
+                return;
+            }
+
+            if (flat.sqrMagnitude > .01f)
+            {
+                Quaternion pathHeading = Quaternion.LookRotation(flat.normalized, Vector3.up);
+                Quaternion wanted = flat.magnitude < 2.2f
+                    ? targetParkingSpot.transform.rotation
+                    : pathHeading;
+
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    wanted,
+                    1f - Mathf.Exp(-(turnSpeed * 1.4f) * Time.deltaTime));
+            }
+
+            transform.position = Vector3.MoveTowards(
+                transform.position,
+                target,
+                parkingSpeed * Time.deltaTime);
+        }
+
+        void CheckMechanicalIncident()
+        {
+            if (Time.time < nextIncidentCheck) return;
+            nextIncidentCheck = Time.time + 12f;
+
+            float wearRisk = Mathf.InverseLerp(100f, 20f, condition);
+            float chance = Mathf.Lerp(.0005f, .015f, wearRisk);
+            if (Random.value >= chance) return;
+
+            condition = Mathf.Max(0f, condition - Random.Range(12f, 30f));
+            if (condition > 18f) return;
+
+            state = H51CitizenVehicleState.BrokenDown;
+            route.Clear();
+
+            if (targetParkingSpot)
+            {
+                targetParkingSpot.Release(this);
+                targetParkingSpot = null;
+            }
+
+            if (currentDriver)
+            {
+                currentDriver.Remember(
+                    "vehicle_breakdown",
+                    "My car broke down while I was traveling.",
+                    vehicleId,
+                    12f,
+                    0f);
+            }
         }
 
         void OffsetRouteToRightLane()
@@ -208,10 +340,19 @@ namespace Hanger51.NPCs
         bool TrafficBlockedAhead()
         {
             Vector3 origin = transform.position + transform.forward * 2.35f + Vector3.up * .75f;
-            if (!Physics.Raycast(origin, transform.forward, out RaycastHit hit, 7f, ~0, QueryTriggerInteraction.Ignore))
+            if (!Physics.Raycast(
+                    origin,
+                    transform.forward,
+                    out RaycastHit hit,
+                    7f,
+                    ~0,
+                    QueryTriggerInteraction.Ignore))
                 return false;
 
-            H51CitizenVehicle other = hit.collider ? hit.collider.GetComponentInParent<H51CitizenVehicle>() : null;
+            H51CitizenVehicle other = hit.collider
+                ? hit.collider.GetComponentInParent<H51CitizenVehicle>()
+                : null;
+
             return other && other != this;
         }
 
