@@ -246,6 +246,78 @@ namespace Hanger51.Aircraft
             PushPhysicsState();
         }
 
+        public bool RepairWheelVisualBindingsFromHierarchy(int wheelIndex)
+        {
+            EnsureArrays();
+            if (!IsValidWheel(wheelIndex))
+            {
+                return false;
+            }
+
+            Transform systemRoot = transform.Find("P-51 Serviceable Retractable Landing Gear");
+            if (systemRoot == null)
+            {
+                return false;
+            }
+
+            string label = wheelIndex == 0
+                ? "Left Main"
+                : wheelIndex == 1
+                    ? "Right Main"
+                    : "Tailwheel";
+
+            Transform gear = FindDescendant(
+                systemRoot,
+                $"{label} Serviceable Gear Visual");
+            Transform tire = FindDescendant(
+                systemRoot,
+                $"{label} Tire Visual");
+            Transform rim = FindDescendant(
+                systemRoot,
+                $"{label} Rim Visual");
+
+            if (gear != null)
+            {
+                gearVisualRoots[wheelIndex] = gear;
+            }
+            if (tire != null)
+            {
+                tireVisualRoots[wheelIndex] = tire;
+            }
+            if (rim != null)
+            {
+                rimVisualRoots[wheelIndex] = rim;
+            }
+
+            // Re-capture scale data after repairing references. A spawned/cloned aircraft can
+            // otherwise retain an old serialized transform reference even though the visible
+            // serviceable wheel hierarchy was cloned correctly.
+            scalesCaptured = false;
+            CaptureTireScales();
+
+            if (gearInstalled[wheelIndex])
+            {
+                ForceInstalledWheelVisuals(wheelIndex);
+            }
+
+            return gearVisualRoots[wheelIndex] != null
+                && tireVisualRoots[wheelIndex] != null
+                && rimVisualRoots[wheelIndex] != null;
+        }
+
+        public int RepairAllWheelVisualBindingsFromHierarchy()
+        {
+            int repaired = 0;
+            for (int wheelIndex = 0; wheelIndex < WheelCount; wheelIndex++)
+            {
+                if (RepairWheelVisualBindingsFromHierarchy(wheelIndex))
+                {
+                    repaired++;
+                }
+            }
+            return repaired;
+        }
+
         public float GetTireHealth(int wheelIndex)
         {
             EnsureArrays();
@@ -673,6 +745,25 @@ namespace Hanger51.Aircraft
                     : Vector3.one;
             }
             scalesCaptured = true;
+        }
+
+        private static Transform FindDescendant(Transform root, string objectName)
+        {
+            if (root == null || string.IsNullOrWhiteSpace(objectName))
+            {
+                return null;
+            }
+
+            Transform[] all = root.GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < all.Length; index++)
+            {
+                Transform candidate = all[index];
+                if (candidate != null && candidate.name == objectName)
+                {
+                    return candidate;
+                }
+            }
+            return null;
         }
 
         private void ResolveReferences()
