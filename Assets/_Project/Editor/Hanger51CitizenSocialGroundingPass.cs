@@ -256,7 +256,74 @@ namespace Hanger51.EditorTools
 
             if (female >= male + 2) return H51CitizenPresentation.Female;
             if (male >= female + 2) return H51CitizenPresentation.Male;
+
+            return DetectPresentationByShape(root);
+        }
+
+        static H51CitizenPresentation DetectPresentationByShape(Transform root)
+        {
+            List<Vector3> points = new List<Vector3>(4096);
+            SkinnedMeshRenderer[] meshes = root.GetComponentsInChildren<SkinnedMeshRenderer>(true);
+
+            for (int i = 0; i < meshes.Length; i++)
+            {
+                SkinnedMeshRenderer smr = meshes[i];
+                if (!smr || !smr.enabled || !smr.gameObject.activeInHierarchy || !smr.sharedMesh)
+                    continue;
+
+                Vector3[] vertices = smr.sharedMesh.vertices;
+                int stride = Mathf.Max(1, vertices.Length / 3500);
+                for (int v = 0; v < vertices.Length; v += stride)
+                {
+                    Vector3 world = smr.transform.TransformPoint(vertices[v]);
+                    points.Add(root.InverseTransformPoint(world));
+                }
+            }
+
+            if (points.Count < 40) return H51CitizenPresentation.Unknown;
+
+            float minY = float.PositiveInfinity;
+            float maxY = float.NegativeInfinity;
+            for (int i = 0; i < points.Count; i++)
+            {
+                minY = Mathf.Min(minY, points[i].y);
+                maxY = Mathf.Max(maxY, points[i].y);
+            }
+
+            float height = maxY - minY;
+            if (height < .8f) return H51CitizenPresentation.Unknown;
+
+            float hipWidth = SectionWidth(points, minY + height * .45f, minY + height * .61f);
+            float shoulderWidth = SectionWidth(points, minY + height * .68f, minY + height * .82f);
+
+            if (hipWidth < .18f || shoulderWidth < .18f)
+                return H51CitizenPresentation.Unknown;
+
+            float ratio = shoulderWidth / hipWidth;
+
+            // Only use shape as a conservative fallback when the modular asset itself
+            // did not expose male/female naming tokens. Ambiguous bodies stay Unknown.
+            if (ratio <= 1.08f) return H51CitizenPresentation.Female;
+            if (ratio >= 1.23f) return H51CitizenPresentation.Male;
             return H51CitizenPresentation.Unknown;
+        }
+
+        static float SectionWidth(List<Vector3> points, float minY, float maxY)
+        {
+            float minX = float.PositiveInfinity;
+            float maxX = float.NegativeInfinity;
+            bool found = false;
+
+            for (int i = 0; i < points.Count; i++)
+            {
+                Vector3 p = points[i];
+                if (p.y < minY || p.y > maxY) continue;
+                minX = Mathf.Min(minX, p.x);
+                maxX = Mathf.Max(maxX, p.x);
+                found = true;
+            }
+
+            return found ? maxX - minX : 0f;
         }
 
         static void ScoreText(string value, ref int female, ref int male)
@@ -310,7 +377,7 @@ namespace Hanger51.EditorTools
                 : MaleFirstNames;
 
             string last = LastName(citizen.DisplayName);
-            int start = Math.Abs(StableHash(citizen.CitizenId + "|" + citizen.VisualArchetype)) % names.Length;
+            int start = (StableHash(citizen.CitizenId + "|" + citizen.VisualArchetype) & 0x7fffffff) % names.Length;
 
             for (int i = 0; i < names.Length; i++)
             {
@@ -319,7 +386,7 @@ namespace Hanger51.EditorTools
                     return candidate;
             }
 
-            return names[start] + " " + last + " " + Math.Abs(StableHash(citizen.CitizenId) % 99).ToString("00");
+            return names[start] + " " + last + " " + ((StableHash(citizen.CitizenId) & 0x7fffffff) % 99).ToString("00");
         }
 
         static int EstablishExistingSocialLinks(H51CitizenIdentity[] citizens)
