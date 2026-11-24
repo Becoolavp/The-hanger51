@@ -676,10 +676,9 @@ namespace Hanger51.EditorTools
                 }
                 else
                 {
-                    // Do not add to Y every time this pass is rerun. The old incremental
-                    // adjustment caused workplace signs to climb above their roofs after
-                    // repeated citizen/world rebuilds.
-                    p.z+=.10f;
+                    // Leave the authored local position alone when there is no awning.
+                    // Incremental offsets here caused signs to drift higher/farther out
+                    // every time the citizen/world build chain was rerun.
                 }
                 t.localPosition=p;
             }
