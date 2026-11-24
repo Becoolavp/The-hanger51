@@ -61,8 +61,8 @@ namespace Hanger51.NPCs
             citizenById.Clear();
             anchorById.Clear();
 
-            GetComponentsInChildren(true, citizens);
-            GetComponentsInChildren(true, anchors);
+            citizens.AddRange(GetComponentsInChildren<H51CitizenIdentity>(true));
+            anchors.AddRange(GetComponentsInChildren<H51CitizenAnchor>(true));
 
             for (int i = 0; i < citizens.Count; i++)
             {
@@ -160,16 +160,6 @@ namespace Hanger51.NPCs
             {
                 Debug.LogWarning("H51 citizen load failed: " + ex.Message, this);
             }
-        }
-    }
-
-    static class H51ComponentListExtensions
-    {
-        public static void GetComponentsInChildren<T>(this Component root, bool includeInactive, List<T> results) where T : Component
-        {
-            results.Clear();
-            T[] all = root.GetComponentsInChildren<T>(includeInactive);
-            for (int i = 0; i < all.Length; i++) results.Add(all[i]);
         }
     }
 }
