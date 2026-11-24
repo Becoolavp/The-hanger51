@@ -210,6 +210,18 @@ namespace Hanger51.Commerce
             engineStationObject.SetActive(true);
             aircraft.SetActive(true);
 
+            // A spawned aircraft is created after the scene-load bootstrap has already run.
+            // Configure its permanent wheel visuals explicitly so tire/rim references, wear
+            // visuals and suspension followers all belong to this clone rather than relying on
+            // whatever runtime state happened to exist on the master when it was copied.
+            P51LandingGearMaintenanceController spawnedGear =
+                aircraft.GetComponent<P51LandingGearMaintenanceController>();
+            if (spawnedGear != null)
+            {
+                P51LandingGearVisualRuntimeBootstrap.EnsureConfiguredFor(spawnedGear);
+                spawnedGear.RepairAllWheelVisualBindingsFromHierarchy();
+            }
+
             P51LandingGearServiceAttachmentFollower gearFollower =
                 aircraft.GetComponent<P51LandingGearServiceAttachmentFollower>();
             gearFollower?.RepairHierarchy();
