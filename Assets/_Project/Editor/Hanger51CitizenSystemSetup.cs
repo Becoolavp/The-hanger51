@@ -576,7 +576,7 @@ namespace Hanger51.EditorTools
             for (int i = 0; i < renderers.Length; i++)
             {
                 bool keep = MatchesOutfit(renderers[i].gameObject.name, outfit);
-                renderers[i].gameObject.SetActive(keep);
+                renderers[i].enabled = keep;
                 if (keep) visible++;
             }
 
@@ -649,7 +649,7 @@ namespace Hanger51.EditorTools
             Bounds bounds = new Bounds();
             for (int i = 0; i < renderers.Length; i++)
             {
-                if (!renderers[i].gameObject.activeInHierarchy) continue;
+                if (!renderers[i].enabled || !renderers[i].gameObject.activeInHierarchy) continue;
                 if (!set) { bounds = renderers[i].bounds; set = true; }
                 else bounds.Encapsulate(renderers[i].bounds);
             }
