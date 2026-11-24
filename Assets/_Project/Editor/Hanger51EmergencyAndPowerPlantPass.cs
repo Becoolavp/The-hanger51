@@ -356,11 +356,15 @@ namespace Hanger51.EditorTools
                 .Count(t => t && t.name.StartsWith("Power Station Parked Car",StringComparison.Ordinal));
 
             int plantDoors = upgrade.GetComponentsInChildren<H51TownDoor>(true).Length;
-            int activities = upgrade.GetComponentsInChildren<H51CitizenActivitySpot>(true).Length;
+            Transform workAnchorRoot = FindChild(citizenRoot,WorkAnchorRootName);
+            int activities = workAnchorRoot
+                ? workAnchorRoot.GetComponentsInChildren<H51CitizenActivitySpot>(true).Length
+                : 0;
             int vapor = plant.GetComponentsInChildren<ParticleSystem>(true)
                 .Count(p => p && p.name.Contains("Vapor"));
 
             int blockedClearance = 0;
+            Physics.SyncTransforms();
             Transform[] clearanceMarkers = upgrade.GetComponentsInChildren<Transform>(true)
                 .Where(t => t && t.name.StartsWith("Plant Walk Clearance",StringComparison.Ordinal))
                 .ToArray();
@@ -680,7 +684,7 @@ namespace Hanger51.EditorTools
                 new Vector3(-24f,0f,-14f),
                 new Vector3(0f,0f,-14f),
                 new Vector3(22f,0f,-14f),
-                new Vector3(-2f,0f,2f),
+                new Vector3(-3f,0f,10f),
                 new Vector3(19f,0f,10f),
                 new Vector3(30f,0f,20.5f)
             };
@@ -864,6 +868,7 @@ namespace Hanger51.EditorTools
             Transform annexInterior = New("Fire Annex Interior",annex);
             annexInterior.localPosition = Vector3.zero;
 
+            int fireDoors = 0;
             CreateDoubleDoor(
                 annex,
                 "Fire Annex Personnel Door",
@@ -872,9 +877,7 @@ namespace Hanger51.EditorTools
                 2.7f,
                 2.5f,
                 m.red,
-                ref emergencyVehicles /* temporary, corrected below */);
-            // The door helper increments its ref argument; undo that because this counter is vehicles.
-            emergencyVehicles -= 2;
+                ref fireDoors);
 
             Box(annex,"Fire Equipment Locker A",new Vector3(-7.7f,1.2f,-4.7f),new Vector3(1.2f,2.4f,2.0f),m.red,true);
             Box(annex,"Fire Equipment Locker B",new Vector3(-6.2f,1.2f,-4.7f),new Vector3(1.2f,2.4f,2.0f),m.red,true);
@@ -1240,7 +1243,7 @@ namespace Hanger51.EditorTools
             Mats m)
         {
             Transform parking = New("Employee Parking",parent);
-            parking.localPosition = new Vector3(-58f,0f,57f);
+            parking.localPosition = new Vector3(-45f,0f,48f);
             Box(parking,"Parking Surface",new Vector3(0,.04f,0),new Vector3(64f,.08f,24f),m.asphalt,false);
 
             int count = 0;
