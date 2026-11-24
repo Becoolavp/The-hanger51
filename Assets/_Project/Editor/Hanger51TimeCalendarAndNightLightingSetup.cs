@@ -19,6 +19,8 @@ namespace Hanger51.EditorTools
         const string LightingRootName = "H51 Time Calendar And Night Lighting";
         const string RunwayRootName = "P-51 Flight Test Runway";
         const string AircraftRootName = "P-51D Mustang Test Aircraft";
+        const string AirportRootName = "Hanger 51 Airport Complex";
+        const string HangarRootName = "Hanger 51 Test Hangar";
         const string MaterialFolder =
             "Assets/_Project/Environment/Generated/TimeAndLighting";
         const string PoleMaterialPath = MaterialFolder + "/NightLampMetal.mat";
@@ -505,9 +507,7 @@ namespace Hanger51.EditorTools
             Material lamp)
         {
             Transform root = New("Hanger 51 Runway Lighting Control",parent);
-            Vector3 worldPosition = runway.TransformPoint(new Vector3(-23.5f,0f,-505f));
-            root.position = worldPosition;
-            root.rotation = runway.rotation;
+            PositionRunwayControlInsideAirport(root,runway);
 
             GameObject cabinet = GameObject.CreatePrimitive(PrimitiveType.Cube);
             Undo.RegisterCreatedObjectUndo(cabinet,"Create runway light control cabinet");
@@ -563,6 +563,73 @@ namespace Hanger51.EditorTools
 
             control.Configure(controller,text);
             return control;
+        }
+
+        static void PositionRunwayControlInsideAirport(
+            Transform control,
+            Transform runway)
+        {
+            if (!control || !runway) return;
+
+            Vector3 fallback =
+                runway.TransformPoint(new Vector3(-23.5f,0f,-505f));
+            control.position = fallback;
+            control.rotation = runway.rotation;
+
+            GameObject airport = GameObject.Find(AirportRootName);
+            if (!airport) return;
+
+            GameObject hangar = GameObject.Find(HangarRootName);
+            Vector3 interiorReference = hangar
+                ? hangar.transform.position
+                : airport.transform.position;
+
+            Renderer[] renderers =
+                airport.GetComponentsInChildren<Renderer>(true);
+            Renderer nearestWall = null;
+            float nearestSqr = float.PositiveInfinity;
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Renderer renderer = renderers[i];
+                if (!renderer) continue;
+
+                string n = renderer.name;
+                bool wall =
+                    n.IndexOf("Perimeter Wall",StringComparison.OrdinalIgnoreCase) >= 0 ||
+                    n.IndexOf("Airport Wall",StringComparison.OrdinalIgnoreCase) >= 0;
+                if (!wall) continue;
+
+                Vector3 closest = renderer.bounds.ClosestPoint(fallback);
+                float sqr = (closest - fallback).sqrMagnitude;
+                if (sqr >= nearestSqr) continue;
+                nearestSqr = sqr;
+                nearestWall = renderer;
+            }
+
+            if (!nearestWall) return;
+
+            Bounds bounds = nearestWall.bounds;
+            Vector3 inside = interiorReference - bounds.center;
+            inside.y = 0f;
+            if (inside.sqrMagnitude < .01f)
+                inside = -runway.forward;
+            inside.Normalize();
+
+            Vector3 closestPoint = bounds.ClosestPoint(fallback);
+            float surfaceY = Mathf.Clamp(
+                bounds.min.y + 1.35f,
+                bounds.min.y + .75f,
+                bounds.max.y - .45f);
+
+            control.position =
+                new Vector3(closestPoint.x,surfaceY,closestPoint.z) +
+                inside * .48f;
+
+            // The cabinet indicator/text are authored on local -Z, so point local +Z
+            // toward the outside of the wall. The readable/control face then faces inward.
+            Vector3 outward = -inside;
+            control.rotation = Quaternion.LookRotation(outward,Vector3.up);
         }
 
         static void BuildLamp(
