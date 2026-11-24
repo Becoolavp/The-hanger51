@@ -18,9 +18,9 @@ namespace Hanger51.World
         [SerializeField] H51UtilityGridController grid;
         [SerializeField] Renderer[] fixtures = new Renderer[0];
         [SerializeField] Light[] realtimeLights = new Light[0];
-        [SerializeField, Min(20f)] float realtimeLightDistance = 260f;
+        [SerializeField, Min(20f)] float realtimeLightDistance = 1600f;
         [SerializeField] Color emissionColor = new Color(.70f,.88f,1f,1f);
-        [SerializeField, Min(0f)] float emissionMultiplier = 4f;
+        [SerializeField, Min(0f)] float emissionMultiplier = 14f;
         [SerializeField, Min(0f)] float totalDemandMegawatts = .085f;
 
         Transform viewer;
@@ -61,6 +61,27 @@ namespace Hanger51.World
             nextRefresh = Time.unscaledTime + .20f;
             Resolve();
             Refresh(false);
+        }
+
+        public void ConfigureFlightVisibility(
+            float visibleDistance,
+            float emissionStrength,
+            float lightRange,
+            float lightIntensity)
+        {
+            realtimeLightDistance = Mathf.Max(20f,visibleDistance);
+            emissionMultiplier = Mathf.Max(0f,emissionStrength);
+
+            for (int i=0;i<realtimeLights.Length;i++)
+            {
+                Light light = realtimeLights[i];
+                if (!light) continue;
+                light.range = Mathf.Max(1f,lightRange);
+                light.intensity = Mathf.Max(0f,lightIntensity);
+                light.shadows = LightShadows.None;
+            }
+
+            Refresh(true);
         }
 
         public void CycleMode()
@@ -146,7 +167,10 @@ namespace Hanger51.World
                 renderer.GetPropertyBlock(block);
                 Material shared = renderer.sharedMaterial;
                 if (shared && shared.HasProperty("_EmissionColor"))
+                {
+                    if (on) shared.EnableKeyword("_EMISSION");
                     block.SetColor("_EmissionColor",emission);
+                }
                 if (shared && shared.HasProperty("_BaseColor"))
                     block.SetColor(
                         "_BaseColor",
