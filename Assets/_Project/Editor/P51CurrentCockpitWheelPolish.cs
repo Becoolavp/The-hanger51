@@ -186,11 +186,11 @@ namespace Hanger51.EditorTools
                         passed = false;
                     }
 
-                    if (!HasVisibleRenderer(fuel.transform)
-                        || !HasVisibleRenderer(coolant.transform)
-                        || !HasVisibleRenderer(oil.transform))
+                    if (!HasEnabledRenderer(fuel.transform)
+                        || !HasEnabledRenderer(coolant.transform)
+                        || !HasEnabledRenderer(oil.transform))
                     {
-                        Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': one or more live gauges have no enabled renderer.",flight);
+                        Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': one or more live gauges have no enabled renderer component.",flight);
                         passed = false;
                     }
 
@@ -326,9 +326,13 @@ namespace Hanger51.EditorTools
             }
         }
 
-        static bool HasVisibleRenderer(Transform gauge)
+        static bool HasEnabledRenderer(Transform gauge)
         {
-            if (!gauge || !gauge.gameObject.activeInHierarchy) return false;
+            if (!gauge) return false;
+
+            // Spawn/template P-51s are intentionally inactive in the scene hierarchy.
+            // Their gauges are still correctly configured if their renderer components
+            // are enabled; activeInHierarchy should not be treated as a validation failure.
             Renderer[] renderers = gauge.GetComponentsInChildren<Renderer>(true);
             return renderers.Any(r => r && r.enabled);
         }
