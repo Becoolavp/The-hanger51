@@ -440,7 +440,9 @@ namespace Hanger51.EditorTools
             }
 
             Box(modeled, "Movie Screen", new Vector3(0,2.25f,-6.65f), new Vector3(10.5f,4.0f,.12f), m.white, false);
-            Box(modeled, "Projection Console", new Vector3(0,.62f,5.5f), new Vector3(2.4f,1.24f,.7f), m.darkWood, true);
+            Box(modeled, "Projection Console", new Vector3(6.0f,.62f,5.2f), new Vector3(2.4f,1.24f,.7f), m.darkWood, true);
+            InteriorLight(modeled, new Vector3(0f,3.7f,3.0f), 11f, 1.25f);
+            InteriorLight(modeled, new Vector3(0f,3.7f,-3.4f), 11f, 1.10f);
 
             Clearance(modeled, new Vector3(0f,1.0f,5.2f), new Vector3(1.2f,1.8f,1.6f), ref clearances);
             Clearance(modeled, new Vector3(0f,1.0f,2.8f), new Vector3(1.3f,1.8f,1.4f), ref clearances);
@@ -515,6 +517,8 @@ namespace Hanger51.EditorTools
 
             Box(modeled, "Doctor Chart Desk", new Vector3(w*.31f,.62f,-1.4f), new Vector3(2.4f,1.24f,.85f), m.darkWood, true);
             Box(modeled, "Medical Waste Station", new Vector3(-w*.30f,.50f,-1.5f), new Vector3(.85f,1.0f,.85f), m.red, true);
+            InteriorLight(modeled, new Vector3(0f,h-.65f,3.2f), 12f, 1.35f);
+            InteriorLight(modeled, new Vector3(0f,h-.65f,-3.6f), 12f, 1.35f);
 
             Clearance(modeled, new Vector3(0f,1.0f,d*.5f-1.2f), new Vector3(1.2f,1.8f,1.5f), ref clearances);
             Clearance(modeled, new Vector3(0f,1.0f,2.0f), new Vector3(1.25f,1.8f,1.5f), ref clearances);
@@ -574,6 +578,8 @@ namespace Hanger51.EditorTools
             Box(modeled, "Parts Shelving", new Vector3(6.9f,1.55f,-3.5f), new Vector3(1.8f,3.1f,3.8f), m.metal, true);
             Box(modeled, "Service Bay Mat", new Vector3(-2.2f,.08f,-1.2f), new Vector3(5.0f,.08f,7.0f), m.black, false);
             Box(modeled, "Air Compressor", new Vector3(1.9f,.75f,-4.6f), new Vector3(.85f,1.5f,.85f), m.blue, true);
+            InteriorLight(modeled, new Vector3(0f,3.7f,2.8f), 11f, 1.20f);
+            InteriorLight(modeled, new Vector3(0f,3.7f,-3.6f), 11f, 1.20f);
 
             Clearance(modeled, new Vector3(0f,1.0f,5.2f), new Vector3(1.2f,1.8f,1.5f), ref clearances);
             Clearance(modeled, new Vector3(0f,1.0f,1.8f), new Vector3(1.2f,1.8f,1.5f), ref clearances);
@@ -636,13 +642,16 @@ namespace Hanger51.EditorTools
                 Chair(modeled, new Vector3(-.3f + i*2.8f,0f,-1.7f), Quaternion.Euler(0,i<0?90:-90,0), m);
                 Chair(modeled, new Vector3(-.3f + i*.9f,0f,-3.3f), Quaternion.identity, m);
             }
-            Box(modeled, "Briefing Board", new Vector3(0,2.2f,-8.7f), new Vector3(6.0f,2.1f,.12f), m.white, false);
+            Box(modeled, "Briefing Board", new Vector3(5.5f,2.2f,-8.7f), new Vector3(4.5f,2.1f,.12f), m.white, false);
 
             for (int i = 0; i < 5; i++)
                 Box(modeled, "SWAT Locker " + (i+1), new Vector3(-10.6f,1.25f,-5.8f+i*1.45f), new Vector3(.75f,2.5f,1.15f), m.metal, true);
 
             Box(modeled, "SWAT Equipment Bench", new Vector3(-6.7f,.60f,-4.6f), new Vector3(4.6f,1.20f,.85f), m.darkWood, true);
             Box(modeled, "Evidence Cabinet", new Vector3(10.6f,1.35f,-6.0f), new Vector3(.75f,2.7f,3.0f), m.metal, true);
+            InteriorLight(modeled, new Vector3(0f,4.0f,4.8f), 12f, 1.35f);
+            InteriorLight(modeled, new Vector3(0f,4.0f,-1.0f), 12f, 1.30f);
+            InteriorLight(modeled, new Vector3(-6.0f,4.0f,-5.8f), 9f, 1.15f);
 
             Transform cells = New("Holding Cells", modeled);
             cells.localPosition = new Vector3(-6.2f,0f,-7.1f);
@@ -777,12 +786,17 @@ namespace Hanger51.EditorTools
             int needed = desired - assigned.Count;
             if (needed <= 0) return;
 
-            List<H51CitizenIdentity> candidates = citizens
-                .Where(c => c &&
-                            c.TownName == town &&
-                            IsReassignableOccupation(c.Occupation))
-                .OrderBy(c => StableHash(c.CitizenId + occupation))
-                .ToList();
+            bool requiresDedicatedVisual =
+                occupation.IndexOf("SWAT", StringComparison.OrdinalIgnoreCase) >= 0;
+
+            List<H51CitizenIdentity> candidates = requiresDedicatedVisual
+                ? new List<H51CitizenIdentity>()
+                : citizens
+                    .Where(c => c &&
+                                c.TownName == town &&
+                                IsReassignableOccupation(c.Occupation))
+                    .OrderBy(c => StableHash(c.CitizenId + occupation))
+                    .ToList();
 
             for (int i = 0; i < candidates.Count && needed > 0; i++)
             {
@@ -1196,6 +1210,22 @@ namespace Hanger51.EditorTools
         {
             for (int i = root.childCount-1; i >= 0; i--)
                 UnityEngine.Object.DestroyImmediate(root.GetChild(i).gameObject);
+        }
+
+        static void InteriorLight(
+            Transform parent,
+            Vector3 localPosition,
+            float range,
+            float intensity)
+        {
+            Transform t = New("Interior Light",parent);
+            t.localPosition = localPosition;
+            Light light = t.gameObject.AddComponent<Light>();
+            light.type = LightType.Point;
+            light.range = range;
+            light.intensity = intensity;
+            light.color = new Color(1f,.93f,.82f);
+            light.shadows = LightShadows.None;
         }
 
         static void Chair(Transform parent, Vector3 position, Quaternion rotation, Mats m)
