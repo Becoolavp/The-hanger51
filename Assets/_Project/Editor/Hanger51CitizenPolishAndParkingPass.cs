@@ -76,10 +76,12 @@ namespace Hanger51.EditorTools
                     if (!interior || !floor) continue;
 
                     DisableLegacyDoorBlockers(building.transform, interior);
+                    CleanFrontage(building);
                     RemoveOldInteriorFurniture(interior);
 
                     Transform detail = New("H51 Interior Polish", interior);
                     BuildDoor(building, floor, detail, mats);
+                    RefineCommercialFacade(building);
                     BuildInterior(building, floor, detail, mats);
                     AddInteriorLight(building, floor, detail);
 
@@ -98,6 +100,7 @@ namespace Hanger51.EditorTools
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Rebuilding citizen cars and assigning their home parking", .68f);
 
+                int removedDecorativeCars = RemoveLegacyDecorativeCars(world.transform, citizenRoot);
                 H51CitizenVehicle[] vehicles = citizenRoot.GetComponentsInChildren<H51CitizenVehicle>(true);
                 Dictionary<string,H51CitizenIdentity> citizens = citizenRoot
                     .GetComponentsInChildren<H51CitizenIdentity>(true)
@@ -114,6 +117,7 @@ namespace Hanger51.EditorTools
 
                     int seed = StableHash(vehicle.OwnerCitizenId);
                     RebuildCarVisual(vehicle.transform, seed, mats);
+                    SetVehicleVisualsDynamic(vehicle.transform);
                     polishedCars++;
 
                     if (!citizens.TryGetValue(vehicle.OwnerCitizenId, out H51CitizenIdentity owner))
@@ -146,7 +150,7 @@ namespace Hanger51.EditorTools
                 Selection.activeGameObject = polishRoot.gameObject;
 
                 Debug.Log(
-                    $"Step 136 complete. corrected doors={fixedDoors}, polished interiors={polishedInteriors}, parking spaces={spots.Count}, polished cars={polishedCars}, cars assigned home parking={parkedCars}/{vehicles.Length}, NavMeshes rebaked={navMeshes}. The same-destination re-entry loop is also disabled in the citizen brain. Run Step 137.",
+                    $"Step 136 complete. corrected doors={fixedDoors}, polished interiors={polishedInteriors}, parking spaces={spots.Count}, polished cars={polishedCars}, removed legacy decorative cars={removedDecorativeCars}, cars assigned home parking={parkedCars}/{vehicles.Length}, NavMeshes rebaked={navMeshes}. The same-destination re-entry loop is also disabled in the citizen brain. Run Step 137.",
                     polishRoot.gameObject);
             }
             finally
@@ -329,52 +333,80 @@ namespace Hanger51.EditorTools
                 lower.Contains("fire") ||
                 lower.Contains("farm");
 
-            float width = service ? 4.8f : building.Kind == H51EnterableBuildingKind.Home ? 2.05f : 2.35f;
-            float height = service ? 4.1f : 3.2f;
-            float jamb = .16f;
+            bool home = building.Kind == H51EnterableBuildingKind.Home;
+            float width = service ? Mathf.Min(4.6f, size.x * .40f) : home ? 1.15f : 1.45f;
+            float height = service ? 3.65f : home ? 2.28f : 2.45f;
+            float jamb = service ? .18f : .12f;
+
+            Material wall = FindExteriorWallMaterial(building) ?? mats.trim;
+
+            // Step 134 originally made a 2.4 x 3.35 opening for normal doors.
+            // Fill the unused shell opening back in so the visible doorway is human-scaled.
+            if (!service)
+            {
+                const float shellWidth = 2.4f;
+                const float shellHeight = 3.35f;
+                float sideFill = Mathf.Max(0f, (shellWidth - width) * .5f);
+
+                if (sideFill > .02f)
+                {
+                    Box(root, "Door Opening Infill Left",
+                        new Vector3(center.x - width*.5f - sideFill*.5f, floorY + shellHeight*.5f, frontZ-.015f),
+                        new Vector3(sideFill, shellHeight, .16f), wall, true);
+                    Box(root, "Door Opening Infill Right",
+                        new Vector3(center.x + width*.5f + sideFill*.5f, floorY + shellHeight*.5f, frontZ-.015f),
+                        new Vector3(sideFill, shellHeight, .16f), wall, true);
+                }
+
+                float topFill = Mathf.Max(0f, shellHeight - height);
+                if (topFill > .02f)
+                    Box(root, "Door Opening Infill Header",
+                        new Vector3(center.x, floorY + height + topFill*.5f, frontZ-.015f),
+                        new Vector3(width, topFill, .16f), wall, true);
+            }
 
             Box(root, "Door Frame Left",
                 new Vector3(center.x-width*.5f-jamb*.5f, floorY+height*.5f, frontZ+.08f),
-                new Vector3(jamb,height+.15f,.22f), mats.trim, true);
+                new Vector3(jamb,height+.12f,.20f), mats.trim, true);
 
             Box(root, "Door Frame Right",
                 new Vector3(center.x+width*.5f+jamb*.5f, floorY+height*.5f, frontZ+.08f),
-                new Vector3(jamb,height+.15f,.22f), mats.trim, true);
+                new Vector3(jamb,height+.12f,.20f), mats.trim, true);
 
             Box(root, "Door Frame Header",
-                new Vector3(center.x,floorY+height+.08f,frontZ+.08f),
-                new Vector3(width+jamb*2f,.16f,.22f), mats.trim, true);
+                new Vector3(center.x,floorY+height+.055f,frontZ+.08f),
+                new Vector3(width+jamb*2f,.11f,.20f), mats.trim, true);
 
             Box(root, "Door Threshold",
-                new Vector3(center.x,floorY+.035f,frontZ+.10f),
-                new Vector3(width+.18f,.07f,.48f), mats.metal, false);
+                new Vector3(center.x,floorY+.025f,frontZ+.10f),
+                new Vector3(width+.12f,.05f,.38f), mats.metal, false);
 
             if (service)
             {
                 Box(root, "Open Service Door Left",
-                    new Vector3(center.x-width*.52f, floorY+height*.5f, frontZ-.62f),
-                    new Vector3(.10f,height-.18f,1.25f), mats.metal, false);
+                    new Vector3(center.x-width*.51f, floorY+height*.5f, frontZ-.52f),
+                    new Vector3(.09f,height-.14f,1.04f), mats.metal, false);
                 Box(root, "Open Service Door Right",
-                    new Vector3(center.x+width*.52f, floorY+height*.5f, frontZ-.62f),
-                    new Vector3(.10f,height-.18f,1.25f), mats.metal, false);
+                    new Vector3(center.x+width*.51f, floorY+height*.5f, frontZ-.52f),
+                    new Vector3(.09f,height-.14f,1.04f), mats.metal, false);
                 return;
             }
 
-            float doorWidth = width - .18f;
-            Quaternion openRotation = Quaternion.Euler(0f,-74f,0f);
-            Vector3 hinge = new Vector3(center.x-width*.5f+.08f, floorY+height*.5f, frontZ-.02f);
+            float doorWidth = width - .10f;
+            Quaternion openRotation = Quaternion.Euler(0f,-82f,0f);
+            Vector3 hinge = new Vector3(center.x-width*.5f+.05f, floorY+height*.5f, frontZ-.02f);
             Vector3 doorCenter = hinge + openRotation * Vector3.right * (doorWidth*.5f);
 
             BoxRot(root, "Open Door",
                 doorCenter,
                 openRotation,
-                new Vector3(doorWidth,height-.16f,.10f),
+                new Vector3(doorWidth,height-.12f,.075f),
                 mats.door,
                 true);
 
             Sphere(root, "Door Knob",
-                doorCenter + openRotation * new Vector3(doorWidth*.38f,0f,-.08f),
-                .07f,
+                doorCenter + openRotation * new Vector3(doorWidth*.37f,0f,-.065f),
+                .055f,
                 mats.brass);
         }
 
@@ -412,50 +444,71 @@ namespace Hanger51.EditorTools
 
         static void AddHomeInterior(Transform root, Vector3 c, float w, float d, float y, Mats m)
         {
-            Box(root, "Living Rug", c + new Vector3(-w*.20f,.025f,d*.15f),
-                new Vector3(w*.34f,.05f,d*.30f), m.rug, false);
+            // Keep a clear center aisle from the front door to the back half of the home.
+            float backZ = c.z - d*.37f;
+            float leftX = c.x - w*.30f;
+            float rightX = c.x + w*.29f;
 
-            Transform sofa = New("Living Room Sofa", root);
-            sofa.localPosition = c + new Vector3(-w*.27f,y+.02f-c.y,d*.02f);
-            Box(sofa, "Sofa Base", new Vector3(0,.34f,0), new Vector3(Mathf.Min(3.2f,w*.30f),.46f,.96f), m.sofa, true);
-            Box(sofa, "Sofa Back", new Vector3(0,.83f,-.39f), new Vector3(Mathf.Min(3.2f,w*.30f),.88f,.18f), m.sofa, true);
-            Box(sofa, "Left Arm", new Vector3(-Mathf.Min(3.2f,w*.30f)*.48f,.62f,0), new Vector3(.18f,.56f,1.0f), m.sofa, true);
-            Box(sofa, "Right Arm", new Vector3(Mathf.Min(3.2f,w*.30f)*.48f,.62f,0), new Vector3(.18f,.56f,1.0f), m.sofa, true);
-            Box(sofa, "Seat Cushion", new Vector3(0,.62f,.08f), new Vector3(Mathf.Min(2.72f,w*.26f),.16f,.72f), m.cushion, false);
+            // Kitchen: one compact run along the back-left wall.
+            float kitchenWidth = Mathf.Clamp(w*.34f,2.5f,3.3f);
+            Box(root, "Kitchen Cabinet Run",
+                new Vector3(c.x-w*.18f,y+.46f,backZ),
+                new Vector3(kitchenWidth,.88f,.58f), m.cabinet, true);
+            Box(root, "Kitchen Countertop",
+                new Vector3(c.x-w*.18f,y+.93f,backZ),
+                new Vector3(kitchenWidth+.08f,.08f,.68f), m.counter, true);
+            Box(root, "Kitchen Sink",
+                new Vector3(c.x-w*.22f,y+.99f,backZ),
+                new Vector3(.62f,.06f,.40f), m.metal, false);
+            Box(root, "Refrigerator",
+                new Vector3(c.x-w*.39f,y+.95f,c.z-d*.29f),
+                new Vector3(.72f,1.90f,.70f), m.appliance, true);
 
-            Table(root, c + new Vector3(-w*.08f,y-c.y,d*.18f), 1.5f,.8f,.48f,m.darkWood);
-
-            Box(root, "TV Console", c + new Vector3(w*.30f,y+.42f-c.y,d*.12f),
-                new Vector3(1.75f,.78f,.46f), m.darkWood, true);
-            Box(root, "Television", c + new Vector3(w*.30f,y+1.16f-c.y,d*.12f),
-                new Vector3(1.5f,.82f,.10f), m.glass, false);
-
-            float kitchenZ = c.z-d*.34f;
-            for (int i=-1;i<=1;i++)
-                Box(root, "Lower Kitchen Cabinet " + i,
-                    new Vector3(c.x+i*1.15f,y+.48f,kitchenZ),
-                    new Vector3(1.08f,.92f,.62f), m.cabinet, true);
-
-            Box(root, "Kitchen Countertop", new Vector3(c.x,y+.98f,kitchenZ),
-                new Vector3(3.6f,.10f,.72f), m.counter, true);
-            Box(root, "Kitchen Sink", new Vector3(c.x-.6f,y+1.05f,kitchenZ),
-                new Vector3(.72f,.08f,.44f), m.metal, false);
-            Box(root, "Refrigerator", new Vector3(c.x+w*.34f,y+1.02f,c.z-d*.30f),
-                new Vector3(.82f,2.04f,.78f), m.appliance, true);
-
-            Table(root, c + new Vector3(w*.08f,y-c.y,-d*.03f), 1.55f,1.05f,.72f,m.lightWood);
-            Chair(root, new Vector3(c.x+w*.08f-1.05f,y,c.z-d*.03f), Quaternion.Euler(0,90,0), m);
-            Chair(root, new Vector3(c.x+w*.08f+1.05f,y,c.z-d*.03f), Quaternion.Euler(0,-90,0), m);
-
+            // Sleeping area: back-right corner, away from the entrance aisle.
             Transform bed = New("Bed", root);
-            bed.localPosition = new Vector3(c.x-w*.28f,y,c.z-d*.30f);
-            Box(bed, "Bed Frame", new Vector3(0,.28f,0), new Vector3(2.05f,.38f,2.75f), m.darkWood, true);
-            Box(bed, "Mattress", new Vector3(0,.54f,0), new Vector3(1.92f,.30f,2.58f), m.mattress, true);
-            Box(bed, "Pillow", new Vector3(0,.76f,-.88f), new Vector3(1.25f,.16f,.48f), m.pillow, false);
-            Box(bed, "Headboard", new Vector3(0,.92f,-1.28f), new Vector3(2.08f,1.28f,.14f), m.darkWood, true);
+            bed.localPosition = new Vector3(rightX,y,c.z-d*.27f);
+            bed.localRotation = Quaternion.Euler(0f,90f,0f);
+            Box(bed, "Bed Frame", new Vector3(0,.24f,0), new Vector3(1.55f,.30f,2.20f), m.darkWood, true);
+            Box(bed, "Mattress", new Vector3(0,.45f,0), new Vector3(1.45f,.24f,2.08f), m.mattress, true);
+            Box(bed, "Pillow", new Vector3(0,.62f,-.72f), new Vector3(.88f,.13f,.40f), m.pillow, false);
+            Box(bed, "Headboard", new Vector3(0,.77f,-1.02f), new Vector3(1.58f,1.0f,.11f), m.darkWood, true);
 
-            Box(root, "Dresser", new Vector3(c.x-w*.04f,y+.54f,c.z-d*.39f),
-                new Vector3(1.45f,1.08f,.54f), m.darkWood, true);
+            // Living area on the left wall.
+            Transform sofa = New("Living Room Sofa", root);
+            sofa.localPosition = new Vector3(leftX,y,c.z+d*.10f);
+            sofa.localRotation = Quaternion.Euler(0f,90f,0f);
+            float sofaWidth = Mathf.Clamp(d*.26f,2.0f,2.7f);
+            Box(sofa, "Sofa Base", new Vector3(0,.31f,0), new Vector3(sofaWidth,.40f,.82f), m.sofa, true);
+            Box(sofa, "Sofa Back", new Vector3(0,.74f,-.33f), new Vector3(sofaWidth,.74f,.15f), m.sofa, true);
+            Box(sofa, "Seat Cushion", new Vector3(0,.53f,.05f), new Vector3(sofaWidth-.30f,.13f,.60f), m.cushion, false);
+
+            // TV on the opposite wall; keep center floor open.
+            BoxRot(root, "TV Console",
+                new Vector3(rightX,y+.36f,c.z+d*.10f),
+                Quaternion.Euler(0f,90f,0f),
+                new Vector3(1.45f,.66f,.38f), m.darkWood, true);
+            BoxRot(root, "Television",
+                new Vector3(rightX-.03f,y+1.05f,c.z+d*.10f),
+                Quaternion.Euler(0f,90f,0f),
+                new Vector3(1.20f,.68f,.08f), m.glass, false);
+
+            // A modest table only when the room is large enough to keep a useful walking lane.
+            if (w >= 8.5f && d >= 7.2f)
+            {
+                Vector3 table = new Vector3(c.x-w*.06f,y,c.z-d*.02f);
+                Table(root, table, 1.15f, .82f, .68f, m.lightWood);
+                Chair(root, table + new Vector3(-.82f,0,0), Quaternion.Euler(0,90,0), m);
+                Chair(root, table + new Vector3(.82f,0,0), Quaternion.Euler(0,-90,0), m);
+            }
+
+            Box(root, "Dresser",
+                new Vector3(c.x+w*.05f,y+.44f,c.z-d*.40f),
+                new Vector3(1.12f,.88f,.42f), m.darkWood, true);
+
+            Box(root, "Living Rug",
+                new Vector3(c.x,.022f + y,c.z+d*.08f),
+                new Vector3(Mathf.Clamp(w*.30f,2.4f,3.4f),.045f,Mathf.Clamp(d*.24f,1.8f,2.7f)),
+                m.rug,false);
         }
 
         static void AddStoreInterior(Transform root, Vector3 c, float w, float d, float y, Mats m)
@@ -529,6 +582,109 @@ namespace Hanger51.EditorTools
                 new Vector3(w*.40f,1.12f,.68f), m.counter, true);
         }
 
+        static void CleanFrontage(H51EnterableBuilding building)
+        {
+            if (!building || !building.Entrance) return;
+
+            Transform[] all = building.GetComponentsInChildren<Transform>(true);
+            for (int i=all.Length-1;i>=0;i--)
+            {
+                Transform t = all[i];
+                if (!t || t == building.transform) continue;
+
+                if (t.name == "Yard Shrub" && Planar(t.position, building.Entrance.position) < 3.2f)
+                {
+                    UnityEngine.Object.DestroyImmediate(t.gameObject);
+                    continue;
+                }
+
+                if (t.name == "Parked Car" && !t.GetComponentInParent<H51CitizenVehicle>())
+                    UnityEngine.Object.DestroyImmediate(t.gameObject);
+            }
+        }
+
+        static void RefineCommercialFacade(H51EnterableBuilding building)
+        {
+            if (!building || building.Kind == H51EnterableBuildingKind.Home) return;
+
+            Transform awning = FindChild(building.transform,"Awning");
+            Transform[] all = building.GetComponentsInChildren<Transform>(true);
+            for (int i=0;i<all.Length;i++)
+            {
+                Transform t=all[i];
+                if (!t || !t.name.StartsWith("Sign -",StringComparison.Ordinal)) continue;
+
+                Vector3 p=t.localPosition;
+                if (awning)
+                {
+                    p.y=Mathf.Max(p.y,awning.localPosition.y+.82f);
+                    p.z=Mathf.Max(p.z,awning.localPosition.z+.14f);
+                }
+                else
+                {
+                    p.y+=.45f;
+                    p.z+=.10f;
+                }
+                t.localPosition=p;
+            }
+        }
+
+        static int RemoveLegacyDecorativeCars(Transform world, Transform citizenRoot)
+        {
+            if (!world) return 0;
+            Transform[] all=world.GetComponentsInChildren<Transform>(true);
+            int removed=0;
+
+            for(int i=all.Length-1;i>=0;i--)
+            {
+                Transform t=all[i];
+                if(!t || t==world) continue;
+                if(t.name!="Parked Car") continue;
+                if(t.GetComponentInParent<H51CitizenVehicle>()) continue;
+                if(citizenRoot && IsDescendantOf(t,citizenRoot)) continue;
+
+                UnityEngine.Object.DestroyImmediate(t.gameObject);
+                removed++;
+            }
+            return removed;
+        }
+
+        static void SetVehicleVisualsDynamic(Transform vehicle)
+        {
+            if(!vehicle) return;
+            Transform[] all=vehicle.GetComponentsInChildren<Transform>(true);
+            for(int i=0;i<all.Length;i++)
+            {
+                if(!all[i]) continue;
+                all[i].gameObject.isStatic=false;
+            }
+        }
+
+        static Material FindExteriorWallMaterial(H51EnterableBuilding building)
+        {
+            if(!building) return null;
+            Renderer[] renderers=building.GetComponentsInChildren<Renderer>(true);
+
+            string[] preferred={"Textured Siding","Wall","Body"};
+            for(int p=0;p<preferred.Length;p++)
+            {
+                for(int i=0;i<renderers.Length;i++)
+                {
+                    Renderer r=renderers[i];
+                    if(!r || !r.sharedMaterial) continue;
+                    if(r.gameObject.name.IndexOf(preferred[p],StringComparison.OrdinalIgnoreCase)>=0)
+                        return r.sharedMaterial;
+                }
+            }
+
+            for(int i=0;i<renderers.Length;i++)
+            {
+                Renderer r=renderers[i];
+                if(r && r.sharedMaterial) return r.sharedMaterial;
+            }
+            return null;
+        }
+
         static void AddInteriorLight(H51EnterableBuilding building, Transform floor, Transform root)
         {
             GameObject fixture = new GameObject("Ceiling Light");
@@ -562,26 +718,20 @@ namespace Hanger51.EditorTools
                 H51EnterableBuilding building = buildings[i];
                 if (!building || !building.Entrance) continue;
 
-                int count = building.Kind == H51EnterableBuildingKind.Home ? 2 :
+                bool home = building.Kind == H51EnterableBuildingKind.Home;
+                int count = home ? 2 :
                             building.Kind == H51EnterableBuildingKind.Farm ? 5 : 4;
 
-                float spacing = 2.65f;
-                float forwardDistance = building.Kind == H51EnterableBuildingKind.Home ? 4.2f : 5.8f;
+                float spacing = home ? 2.55f : 2.70f;
+                float forwardDistance = home ? 7.0f : 9.5f;
                 Vector3 right = building.transform.right;
                 Vector3 forward = building.transform.forward;
+
+                float homeSide = (StableHash(building.BuildingId) & 1) == 0 ? 1f : -1f;
                 Vector3 center = building.Entrance.position + forward * forwardDistance;
+                if (home) center += right * homeSide * 3.2f;
 
                 Transform lot = New("Parking - " + building.DisplayName, root);
-
-                float lotWidth = Mathf.Max(5.7f,count*spacing+.9f);
-                Vector3 pad = center;
-                pad.y = terrain.SampleHeight(pad) + terrain.transform.position.y + .02f;
-
-                BoxWorld(lot,"Parking Pad",pad,
-                    Quaternion.LookRotation(forward,Vector3.up),
-                    new Vector3(lotWidth,.04f,5.3f),
-                    mats.asphalt,
-                    false);
 
                 for (int s=0; s<count; s++)
                 {
@@ -604,16 +754,21 @@ namespace Hanger51.EditorTools
                         building.TownName,
                         approach);
 
-                    Box(spotTransform,"Parking Line Left",
-                        new Vector3(-1.14f,.02f,0f),
-                        new Vector3(.08f,.04f,4.65f),
-                        mats.parkingLine,
-                        false);
-                    Box(spotTransform,"Parking Line Right",
-                        new Vector3(1.14f,.02f,0f),
-                        new Vector3(.08f,.04f,4.65f),
-                        mats.parkingLine,
-                        false);
+                    // Homes use their existing drive/yard surface and remain unstriped.
+                    // Businesses reuse their existing parking surface so we do not stack pavement meshes.
+                    if (!home)
+                    {
+                        Box(spotTransform,"Parking Line Left",
+                            new Vector3(-1.14f,.075f,0f),
+                            new Vector3(.07f,.035f,4.55f),
+                            mats.parkingLine,
+                            false);
+                        Box(spotTransform,"Parking Line Right",
+                            new Vector3(1.14f,.075f,0f),
+                            new Vector3(.07f,.035f,4.55f),
+                            mats.parkingLine,
+                            false);
+                    }
 
                     spots.Add(spot);
                 }
@@ -662,6 +817,8 @@ namespace Hanger51.EditorTools
                 BuildWagon(car,paint,m);
             else
                 BuildSedan(car,paint,m);
+
+            SetVehicleVisualsDynamic(car);
         }
 
         static void BuildSedan(Transform car, Material paint, Mats m)
