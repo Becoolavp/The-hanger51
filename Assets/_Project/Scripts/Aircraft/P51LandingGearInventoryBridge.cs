@@ -327,7 +327,7 @@ namespace Hanger51.Aircraft
             diagnostics?.Checkpoint("BEFORE_DESTROY_CARRIED_WHEEL", wheelIndex, wheelAssembly);
             wheelAssembly.CompleteAircraftInstallation();
             diagnostics?.CompleteInstall(wheelIndex);
-            resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured. Wheel diagnostic trace captured.";
+            resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured. Diagnostic saved as Hanger51_WheelInstallTrace.txt beside the game EXE.";
             return true;
         }
 
