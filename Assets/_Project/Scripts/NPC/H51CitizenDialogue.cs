@@ -260,6 +260,10 @@ namespace Hanger51.NPCs
 
         string DescribeCurrentActivity()
         {
+            H51CitizenEmergencyState emergency = GetComponent<H51CitizenEmergencyState>();
+            if (emergency && emergency.IsActive)
+                return emergency.CurrentStatusText;
+
             if (!string.IsNullOrWhiteSpace(activityBeforeConversation))
                 return "Before you stopped me, " + ToPastActivity(activityBeforeConversation);
 
