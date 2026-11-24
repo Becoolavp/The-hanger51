@@ -92,6 +92,8 @@ namespace Hanger51.Aircraft
                 maintenance.gameObject.AddComponent<P51LandingGearGroundRetractionGuard>();
             }
 
+            P51WheelInstallDiagnostics.Ensure(maintenance);
+
             bool complete = true;
             for (int wheelIndex = 0; wheelIndex < 3; wheelIndex++)
             {
