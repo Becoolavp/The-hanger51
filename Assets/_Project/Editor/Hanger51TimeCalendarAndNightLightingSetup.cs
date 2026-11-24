@@ -539,12 +539,28 @@ namespace Hanger51.EditorTools
             text.fontSize = 36;
             text.color = Color.white;
 
-            H51RunwayLightSwitch control =
-                Undo.AddComponent<H51RunwayLightSwitch>(root.gameObject);
-            BoxCollider interaction = Undo.AddComponent<BoxCollider>(root.gameObject);
+            // H51RunwayLightSwitch requires a Collider. Add the collider first so
+            // Unity can satisfy the RequireComponent contract before the switch is created.
+            BoxCollider interaction = root.GetComponent<BoxCollider>();
+            if (!interaction)
+                interaction = Undo.AddComponent<BoxCollider>(root.gameObject);
             interaction.center = new Vector3(0f,1.15f,0f);
             interaction.size = new Vector3(1.5f,2.7f,1.0f);
             interaction.isTrigger = false;
+
+            H51RunwayLightSwitch control =
+                root.GetComponent<H51RunwayLightSwitch>();
+            if (!control)
+                control = Undo.AddComponent<H51RunwayLightSwitch>(root.gameObject);
+
+            if (!control)
+            {
+                Debug.LogError(
+                    "Step 152 could not create the runway-light switch after adding its required BoxCollider.",
+                    root.gameObject);
+                return null;
+            }
+
             control.Configure(controller,text);
             return control;
         }
