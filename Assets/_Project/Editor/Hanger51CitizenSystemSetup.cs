@@ -168,6 +168,7 @@ namespace Hanger51.EditorTools
                 if (AssetDatabase.IsValidFolder(Generated)) AssetDatabase.DeleteAsset(Generated);
                 Ensure(PrefabFolder);
                 Ensure(ControllerFolder);
+                Ensure(Generated + "/Materials");
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Building Pack A civilian animator", .15f);
                 RuntimeAnimatorController controllerA = BuildController(PackAPath, ControllerFolder + "/H51_Citizen_PackA.controller");
@@ -587,6 +588,8 @@ namespace Hanger51.EditorTools
                 return null;
             }
 
+            ConvertVisibleMaterialsToUrp(instance, packId);
+
             foreach (Camera camera in instance.GetComponentsInChildren<Camera>(true)) UnityEngine.Object.DestroyImmediate(camera);
             foreach (Light light in instance.GetComponentsInChildren<Light>(true)) UnityEngine.Object.DestroyImmediate(light);
             foreach (Collider collider in instance.GetComponentsInChildren<Collider>(true)) UnityEngine.Object.DestroyImmediate(collider);
@@ -631,6 +634,50 @@ namespace Hanger51.EditorTools
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(instance, path);
             UnityEngine.Object.DestroyImmediate(instance);
             return prefab;
+        }
+
+        static void ConvertVisibleMaterialsToUrp(GameObject instance, string packId)
+        {
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            Renderer[] renderers = instance.GetComponentsInChildren<Renderer>(true);
+            Dictionary<Material,Material> cache = new Dictionary<Material,Material>();
+
+            for (int r = 0; r < renderers.Length; r++)
+            {
+                Renderer renderer = renderers[r];
+                if (!renderer.enabled) continue;
+                Material[] sourceMaterials = renderer.sharedMaterials;
+                Material[] converted = new Material[sourceMaterials.Length];
+
+                for (int i = 0; i < sourceMaterials.Length; i++)
+                {
+                    Material sourceMaterial = sourceMaterials[i];
+                    if (!sourceMaterial) { converted[i] = null; continue; }
+
+                    if (!cache.TryGetValue(sourceMaterial, out Material material))
+                    {
+                        string cleanName = Safe(sourceMaterial.name);
+                        string path = Generated + "/Materials/H51_" + packId + "_" + cleanName + ".mat";
+                        material = AssetDatabase.LoadAssetAtPath<Material>(path);
+                        if (!material)
+                        {
+                            material = new Material(shader) { name = "H51_" + packId + "_" + sourceMaterial.name };
+                            Color color = sourceMaterial.HasProperty("_BaseColor") ? sourceMaterial.GetColor("_BaseColor") :
+                                          sourceMaterial.HasProperty("_Color") ? sourceMaterial.color : Color.white;
+                            material.color = color;
+                            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+                            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0f);
+                            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", .05f);
+                            material.enableInstancing = true;
+                            AssetDatabase.CreateAsset(material, path);
+                        }
+                        cache[sourceMaterial] = material;
+                    }
+                    converted[i] = material;
+                }
+
+                renderer.sharedMaterials = converted;
+            }
         }
 
         static bool MatchesOutfit(string rendererName, string outfit)
