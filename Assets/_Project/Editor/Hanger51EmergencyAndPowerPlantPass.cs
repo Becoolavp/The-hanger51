@@ -2085,11 +2085,10 @@ namespace Hanger51.EditorTools
             shape.angle = 7f;
             shape.radius = radius;
 
+            // The cone/start-speed pair already creates the rising vapor plume. Keep
+            // Velocity over Lifetime disabled; mixed axis curve modes produce Unity console spam.
             ParticleSystem.VelocityOverLifetimeModule velocity = ps.velocityOverLifetime;
-            velocity.enabled = true;
-            velocity.x = new ParticleSystem.MinMaxCurve(-.15f,.15f);
-            velocity.y = new ParticleSystem.MinMaxCurve(0f,0f);
-            velocity.z = new ParticleSystem.MinMaxCurve(-.15f,.15f);
+            velocity.enabled = false;
 
             ParticleSystemRenderer renderer = root.GetComponent<ParticleSystemRenderer>();
             if (renderer && material) renderer.sharedMaterial = material;
