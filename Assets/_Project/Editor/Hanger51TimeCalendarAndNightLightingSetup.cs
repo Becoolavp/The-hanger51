@@ -26,6 +26,7 @@ namespace Hanger51.EditorTools
         const string PoleMaterialPath = MaterialFolder + "/NightLampMetal.mat";
         const string WarmLightMaterialPath = MaterialFolder + "/WarmNightLamp.mat";
         const string CoolLightMaterialPath = MaterialFolder + "/CoolAirportLamp.mat";
+        const string MoonMaterialPath = MaterialFolder + "/H51MoonDisc.mat";
 
         [MenuItem("Hanger 51/World/Current/152 - Add Calendar Day-Night Cycle And Night Lighting")]
         public static void Build()
@@ -815,16 +816,33 @@ namespace Hanger51.EditorTools
             if (!shader)
                 shader = Shader.Find("Standard");
 
-            Material material = new Material(shader)
+            Material material =
+                AssetDatabase.LoadAssetAtPath<Material>(MoonMaterialPath);
+            if (!material)
             {
-                name = "H51 Runtime Moon Material"
-            };
+                material = new Material(shader)
+                {
+                    name = "H51MoonDisc"
+                };
+                AssetDatabase.CreateAsset(material,MoonMaterialPath);
+            }
+            else if (material.shader != shader)
+            {
+                material.shader = shader;
+            }
+
             Color moonColor = new Color(.88f,.92f,1f,1f);
             material.color = moonColor;
             if (material.HasProperty("_BaseColor"))
                 material.SetColor("_BaseColor",moonColor);
             if (material.HasProperty("_Color"))
                 material.SetColor("_Color",moonColor);
+            if (material.HasProperty("_EmissionColor"))
+            {
+                material.SetColor("_EmissionColor",moonColor * 3f);
+                material.EnableKeyword("_EMISSION");
+            }
+            EditorUtility.SetDirty(material);
 
             Renderer renderer = sphere.GetComponent<Renderer>();
             if (renderer)
