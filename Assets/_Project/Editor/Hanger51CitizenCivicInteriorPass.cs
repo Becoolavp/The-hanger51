@@ -695,7 +695,9 @@ namespace Hanger51.EditorTools
             out Transform interior,
             ref int doorCount)
         {
-            Box(root, "Interior Floor", new Vector3(0,.08f,0), new Vector3(width,.16f,depth), m.floor, true);
+            // Finished floor is exactly local Y=0. The slab extends downward so furniture,
+            // doors and citizen activity anchors do not sink into or hover above the floor.
+            Box(root, "Interior Floor", new Vector3(0,-.04f,0), new Vector3(width,.08f,depth), m.floor, true);
             Box(root, "Left Wall", new Vector3(-width*.5f+.10f,height*.5f,0), new Vector3(.20f,height,depth), exterior, true);
             Box(root, "Right Wall", new Vector3(width*.5f-.10f,height*.5f,0), new Vector3(.20f,height,depth), exterior, true);
             Box(root, "Back Wall", new Vector3(0,height*.5f,-depth*.5f+.10f), new Vector3(width,height,.20f), exterior, true);
