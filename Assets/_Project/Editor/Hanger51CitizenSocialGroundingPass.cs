@@ -271,7 +271,16 @@ namespace Hanger51.EditorTools
                 if (!smr || !smr.enabled || !smr.gameObject.activeInHierarchy || !smr.sharedMesh)
                     continue;
 
-                Vector3[] vertices = smr.sharedMesh.vertices;
+                Vector3[] vertices;
+                try
+                {
+                    vertices = smr.sharedMesh.vertices;
+                }
+                catch
+                {
+                    continue;
+                }
+
                 int stride = Mathf.Max(1, vertices.Length / 3500);
                 for (int v = 0; v < vertices.Length; v += stride)
                 {
