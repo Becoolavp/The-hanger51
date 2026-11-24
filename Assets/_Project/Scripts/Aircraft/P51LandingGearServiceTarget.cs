@@ -91,6 +91,14 @@ namespace Hanger51.Aircraft
                     return $"{name} wheel station — wheel service needs P-51 Step 30 | X inspect";
                 }
 
+                P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+                if (carried != null)
+                {
+                    inventoryBridge.EnsureOriginAxleEmptyForCarriedWheel(
+                        wheelIndex,
+                        carried);
+                }
+
                 bool rimPresent = inventoryBridge.IsRimInstalled(wheelIndex);
                 bool tirePresent = controller.IsTireInstalled(wheelIndex);
                 if (rimPresent && tirePresent)
@@ -100,7 +108,6 @@ namespace Hanger51.Aircraft
 
                 if (!rimPresent && !tirePresent)
                 {
-                    P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
                     if (carried != null && carried.CanInstallOn(wheelIndex))
                     {
                         return $"Hold E: install carried complete {name} wheel on highlighted axle and tighten retaining bolt{progress} | X inspect";
@@ -194,11 +201,18 @@ namespace Hanger51.Aircraft
             }
             else
             {
+                P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+                if (inventoryBridge != null && carried != null)
+                {
+                    inventoryBridge.EnsureOriginAxleEmptyForCarriedWheel(
+                        wheelIndex,
+                        carried);
+                }
+
                 bool rimPresent = inventoryBridge != null
                     && inventoryBridge.IsReady
                     && inventoryBridge.IsRimInstalled(wheelIndex);
                 bool tirePresent = controller.IsTireInstalled(wheelIndex);
-                P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
 
                 bool validRemove = shouldRemove
                     && controller.IsGearInstalled(wheelIndex)
@@ -548,13 +562,20 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
+            if (inventoryBridge != null && carried != null)
+            {
+                inventoryBridge.EnsureOriginAxleEmptyForCarriedWheel(
+                    wheelIndex,
+                    carried);
+            }
+
             bool wheelMissing = controller != null
                 && controller.IsGearInstalled(wheelIndex)
                 && !controller.IsTireInstalled(wheelIndex)
                 && inventoryBridge != null
                 && inventoryBridge.IsReady
                 && !inventoryBridge.IsRimInstalled(wheelIndex);
-            P51LooseWheelAssembly carried = P51LooseWheelAssembly.CurrentCarried;
             bool show = wheelMissing
                 && carried != null
                 && carried.IsCarried
