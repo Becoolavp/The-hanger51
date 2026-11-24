@@ -59,6 +59,7 @@ namespace Hanger51.World
         {
             statusDisplay = display;
             vaporSystems = vapors ?? new ParticleSystem[0];
+            NormalizeVaporVelocityCurves();
             nominalOutputMegawatts = Mathf.Max(1f, nominalMegawatts);
             fuelFraction = Mathf.Clamp01(fuelFraction <= 0f ? .82f : fuelFraction);
             generatorHealth = Mathf.Clamp01(generatorHealth <= 0f ? 1f : generatorHealth);
@@ -102,6 +103,7 @@ namespace Hanger51.World
         {
             fuelCycleGameDays = Mathf.Max(1f, fuelCycleGameDays);
             maintenanceCycleGameDays = Mathf.Max(1f, maintenanceCycleGameDays);
+            NormalizeVaporVelocityCurves();
             RefreshPresentation(true);
         }
 
@@ -171,6 +173,27 @@ namespace Hanger51.World
 
                 if (forceParticles && !ps.isPlaying)
                     ps.Play();
+            }
+        }
+
+        void NormalizeVaporVelocityCurves()
+        {
+            if (vaporSystems == null) return;
+
+            for (int i = 0; i < vaporSystems.Length; i++)
+            {
+                ParticleSystem ps = vaporSystems[i];
+                if (!ps) continue;
+
+                ParticleSystem.VelocityOverLifetimeModule velocity = ps.velocityOverLifetime;
+                if (!velocity.enabled) continue;
+
+                // Unity requires all three axes in Velocity over Lifetime to use the same
+                // MinMaxCurve mode. Keep all axes in TwoConstants mode, with zero added Y
+                // velocity because upward motion already comes from the cone/start speed.
+                velocity.x = new ParticleSystem.MinMaxCurve(-.15f,.15f);
+                velocity.y = new ParticleSystem.MinMaxCurve(0f,0f);
+                velocity.z = new ParticleSystem.MinMaxCurve(-.15f,.15f);
             }
         }
 
