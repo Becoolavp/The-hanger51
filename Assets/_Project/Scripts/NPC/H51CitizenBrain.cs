@@ -284,9 +284,10 @@ namespace Hanger51.NPCs
             H51CitizenAnchor currentShop = PickCurrentShopDestination(hour);
             bool essentialShiftWorker = IsEssentialShiftWorker();
             bool scheduledWork = ShouldBeAtWork(hour,worldClock);
+            H51CitizenAnchor appointment = null;
             bool medicalAppointment =
                 !scheduledWork &&
-                TryGetMedicalAppointment(hour,out H51CitizenAnchor appointment);
+                TryGetMedicalAppointment(hour,out appointment);
             bool weekend = worldClock && worldClock.IsWeekend;
 
             if (scheduledWork)
