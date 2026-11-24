@@ -12,6 +12,8 @@ namespace Hanger51.World
 
         bool gridElectricityAvailable = true;
         bool gridWaterAvailable = true;
+        bool outageApplied;
+        bool[] lightStatesBeforeOutage = new bool[0];
 
         public bool CriticalFacility => criticalFacility;
         public bool HasElectricity =>
@@ -38,11 +40,33 @@ namespace Hanger51.World
             gridElectricityAvailable = gridPower;
             gridWaterAvailable = gridWater;
 
-            if (HasElectricity) return;
+            if (!HasElectricity)
+            {
+                if (!outageApplied)
+                {
+                    lightStatesBeforeOutage = new bool[managedLights.Length];
+                    for (int i = 0; i < managedLights.Length; i++)
+                        lightStatesBeforeOutage[i] = managedLights[i] && managedLights[i].enabled;
+                    outageApplied = true;
+                }
+
+                for (int i = 0; i < managedLights.Length; i++)
+                    if (managedLights[i])
+                        managedLights[i].enabled = false;
+                return;
+            }
+
+            if (!outageApplied) return;
 
             for (int i = 0; i < managedLights.Length; i++)
-                if (managedLights[i])
-                    managedLights[i].enabled = false;
+            {
+                if (!managedLights[i]) continue;
+                bool restore =
+                    i < lightStatesBeforeOutage.Length &&
+                    lightStatesBeforeOutage[i];
+                managedLights[i].enabled = restore;
+            }
+            outageApplied = false;
         }
     }
 }
