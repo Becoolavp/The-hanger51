@@ -229,7 +229,7 @@ namespace Hanger51.NPCs
 
             if (IsEssentialShiftWorker())
             {
-                int shift = Mathf.Abs(identity.AppearanceSeed) % 3;
+                int shift = (identity.AppearanceSeed & 0x7fffffff) % 3;
                 float shiftStart = shift * 8f;
                 // Begin routing toward work shortly before the eight-hour shift starts.
                 return IsWrappedHourWindow(hour,shiftStart - .35f,shiftStart + 8.05f);
