@@ -309,8 +309,7 @@ namespace Hanger51.NPCs
             panelTitleStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 13,
-                fontStyle = FontStyle.Bold,
-                letterSpacing = 1
+                fontStyle = FontStyle.Bold
             };
             panelTitleStyle.normal.textColor = new Color(.72f,.78f,.86f);
         }
