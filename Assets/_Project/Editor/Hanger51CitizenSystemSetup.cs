@@ -127,7 +127,7 @@ namespace Hanger51.EditorTools
                 bool ok = modelA && modelB && clipsA >= 10 && clipsB >= 10;
                 if (ok)
                 {
-                    Debug.Log($"Step 128 complete. Imported both free modular citizen packs as Humanoid FBXs. Pack A clips={clipsA}, Pack B clips={clipsB}. Run Step 129 next.");
+                    Debug.Log($"Step 128 complete. Imported/repaired both free modular citizen packs as Generic Mecanim FBXs. Pack A clips={clipsA}, Pack B clips={clipsB}. Run Step 129 next.");
                 }
                 else
                 {
@@ -138,6 +138,44 @@ namespace Hanger51.EditorTools
             {
                 Debug.LogException(ex);
                 Debug.LogError("Step 128 failed while importing the free citizen packs: " + ex.Message);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        [MenuItem("Hanger 51/World/Current/128A - Repair Existing Citizen Rig Imports")]
+        public static void RepairExistingCitizenRigImports()
+        {
+            GameObject modelA = AssetDatabase.LoadAssetAtPath<GameObject>(PackAPath);
+            GameObject modelB = AssetDatabase.LoadAssetAtPath<GameObject>(PackBPath);
+            if (!modelA || !modelB)
+            {
+                Debug.LogError("Step 128A failed. The two citizen FBXs are not both present yet. Run Step 128 first.");
+                return;
+            }
+
+            try
+            {
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Repairing Pack A as Generic Mecanim", .25f);
+                ConfigureModelImporter(PackAPath);
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Repairing Pack B as Generic Mecanim", .65f);
+                ConfigureModelImporter(PackBPath);
+                AssetDatabase.SaveAssets();
+                AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+
+                int clipsA = AnimationClips(PackAPath).Count;
+                int clipsB = AnimationClips(PackBPath).Count;
+                ModelImporter ia = AssetImporter.GetAtPath(PackAPath) as ModelImporter;
+                ModelImporter ib = AssetImporter.GetAtPath(PackBPath) as ModelImporter;
+                int takesA = ia != null && ia.defaultClipAnimations != null ? ia.defaultClipAnimations.Length : 0;
+                int takesB = ib != null && ib.defaultClipAnimations != null ? ib.defaultClipAnimations.Length : 0;
+
+                if (clipsA > 0 && clipsB > 0)
+                    Debug.Log($"Step 128A complete. Repaired both packs to Generic Mecanim. Pack A clips={clipsA} (takes={takesA}), Pack B clips={clipsB} (takes={takesB}). Run Step 129 next.");
+                else
+                    Debug.LogError($"Step 128A still found missing clips. Pack A clips={clipsA}, takes={takesA}; Pack B clips={clipsB}, takes={takesB}. Send this exact line back before running Step 129.");
             }
             finally
             {
@@ -164,7 +202,28 @@ namespace Hanger51.EditorTools
 
             try
             {
-                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Resetting generated citizen library", .05f);
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Repairing Pack A Generic rig and animation takes", .04f);
+                ConfigureModelImporter(PackAPath);
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Repairing Pack B Generic rig and animation takes", .08f);
+                ConfigureModelImporter(PackBPath);
+
+                AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
+                modelA = AssetDatabase.LoadAssetAtPath<GameObject>(PackAPath);
+                modelB = AssetDatabase.LoadAssetAtPath<GameObject>(PackBPath);
+
+                int clipsA = AnimationClips(PackAPath).Count;
+                int clipsB = AnimationClips(PackBPath).Count;
+                if (clipsA == 0 || clipsB == 0)
+                {
+                    ModelImporter ia = AssetImporter.GetAtPath(PackAPath) as ModelImporter;
+                    ModelImporter ib = AssetImporter.GetAtPath(PackBPath) as ModelImporter;
+                    int takesA = ia != null && ia.defaultClipAnimations != null ? ia.defaultClipAnimations.Length : 0;
+                    int takesB = ib != null && ib.defaultClipAnimations != null ? ib.defaultClipAnimations.Length : 0;
+                    Debug.LogError($"Step 129 stopped before rebuilding anything because animation import is still empty. Pack A imported clips={clipsA}, FBX takes={takesA}; Pack B imported clips={clipsB}, FBX takes={takesB}. Do not run Step 130.");
+                    return;
+                }
+
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Resetting generated citizen library", .12f);
                 if (AssetDatabase.IsValidFolder(Generated)) AssetDatabase.DeleteAsset(Generated);
                 Ensure(PrefabFolder);
                 Ensure(ControllerFolder);
@@ -221,7 +280,7 @@ namespace Hanger51.EditorTools
                 AssetDatabase.Refresh();
 
                 if (catalog.entries.Count >= 12)
-                    Debug.Log($"Step 129 complete. Built {catalog.entries.Count} reusable citizen archetype prefabs with Humanoid idle/walk/run/wave/interact animation controllers. Run Step 130 next.", catalog);
+                    Debug.Log($"Step 129 complete. Built {catalog.entries.Count} reusable citizen archetype prefabs with Generic Mecanim idle/walk/run/wave/interact animation controllers. Run Step 130 next.", catalog);
                 else
                     Debug.LogError($"Step 129 completed but only {catalog.entries.Count} citizen archetypes were created. Expected at least 12.", catalog);
             }
@@ -462,25 +521,35 @@ namespace Hanger51.EditorTools
             ModelImporter importer = AssetImporter.GetAtPath(path) as ModelImporter;
             if (!importer) return;
 
-            importer.animationType = ModelImporterAnimationType.Human;
+            // These free packs use their own Blender-style skeleton (Foot.L / Foot.R).
+            // Forcing Unity Humanoid makes Unity reject the avatar before it imports the takes.
+            // Generic Mecanim keeps the authored skeleton intact and is correct because each
+            // pack's animations are played back on the same skeleton they were authored for.
+            importer.animationType = ModelImporterAnimationType.Generic;
             importer.avatarSetup = ModelImporterAvatarSetup.CreateFromThisModel;
             importer.importAnimation = true;
             importer.importBlendShapes = true;
             importer.importCameras = false;
             importer.importLights = false;
             importer.resampleCurves = true;
+            importer.preserveHierarchy = true;
             importer.optimizeGameObjects = false;
             importer.SaveAndReimport();
 
+            // Unity documents that clipAnimations can be empty on first import; repopulate it
+            // from the FBX TakeInfo after the Generic reimport so all embedded takes become clips.
             ModelImporterClipAnimation[] clips = importer.defaultClipAnimations;
             if (clips != null && clips.Length > 0)
             {
                 for (int i = 0; i < clips.Length; i++)
                 {
-                    string n = clips[i].name.ToLowerInvariant();
+                    string n = (clips[i].name ?? "").ToLowerInvariant();
                     bool loop = n.Contains("idle") || n.Contains("walk") || n.Contains("run");
                     clips[i].loopTime = loop;
                     clips[i].loopPose = loop;
+                    clips[i].lockRootHeightY = true;
+                    clips[i].lockRootPositionXZ = true;
+                    clips[i].lockRootRotation = true;
                 }
                 importer.clipAnimations = clips;
                 importer.SaveAndReimport();
