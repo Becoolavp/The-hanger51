@@ -1,0 +1,101 @@
+using System;
+using Hanger51.Inventory;
+using Hanger51.Player;
+using UnityEngine;
+using UnityEngine.InputSystem;
+
+namespace Hanger51.NPCs
+{
+    [DefaultExecutionOrder(650)]
+    [DisallowMultipleComponent]
+    public sealed class H51CitizenPlayerInteractor : MonoBehaviour
+    {
+        [SerializeField] Camera playerCamera;
+        [SerializeField] InventoryUI inventoryUI;
+        [SerializeField] H51CitizenDialogueUI dialogueUI;
+        [SerializeField, Min(1f)] float interactionDistance = 4.5f;
+        [SerializeField] LayerMask interactionLayers = ~0;
+
+        H51CitizenDialogue aimedCitizen;
+        bool ownsPrompt;
+
+        void Awake() => Resolve();
+
+        void OnEnable() => Resolve();
+
+        void Update()
+        {
+            Resolve();
+
+            if (!playerCamera || !dialogueUI) return;
+
+            if (dialogueUI.IsOpen)
+            {
+                ClearOwnedPrompt();
+                return;
+            }
+
+            if (inventoryUI != null && inventoryUI.IsOpen)
+            {
+                ClearOwnedPrompt();
+                return;
+            }
+
+            aimedCitizen = FindAimedCitizen();
+            if (!aimedCitizen)
+            {
+                ClearOwnedPrompt();
+                return;
+            }
+
+            if (inventoryUI)
+            {
+                inventoryUI.SetInteractionPrompt($"E  Talk to {aimedCitizen.Identity.DisplayName}");
+                ownsPrompt = true;
+            }
+
+            Keyboard keyboard = Keyboard.current;
+            if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
+            {
+                ClearOwnedPrompt();
+                dialogueUI.Open(aimedCitizen);
+            }
+        }
+
+        H51CitizenDialogue FindAimedCitizen()
+        {
+            Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
+            RaycastHit[] hits = Physics.RaycastAll(ray, interactionDistance, interactionLayers, QueryTriggerInteraction.Collide);
+            if (hits == null || hits.Length == 0) return null;
+
+            Array.Sort(hits, (a,b) => a.distance.CompareTo(b.distance));
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider collider = hits[i].collider;
+                if (!collider) continue;
+                H51CitizenDialogue npc = collider.GetComponentInParent<H51CitizenDialogue>();
+                if (npc) return npc;
+            }
+            return null;
+        }
+
+        void Resolve()
+        {
+            if (!playerCamera) playerCamera = GetComponentInChildren<Camera>(true);
+            if (!inventoryUI) inventoryUI = FindFirstObjectByType<InventoryUI>();
+            if (!dialogueUI) dialogueUI = GetComponent<H51CitizenDialogueUI>();
+            if (!dialogueUI) dialogueUI = gameObject.AddComponent<H51CitizenDialogueUI>();
+        }
+
+        void ClearOwnedPrompt()
+        {
+            if (!ownsPrompt) return;
+            if (inventoryUI) inventoryUI.SetInteractionPrompt(string.Empty);
+            ownsPrompt = false;
+        }
+
+        void OnDisable() => ClearOwnedPrompt();
+
+        void OnValidate() => interactionDistance = Mathf.Max(1f, interactionDistance);
+    }
+}
