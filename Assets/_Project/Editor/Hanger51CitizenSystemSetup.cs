@@ -601,7 +601,7 @@ namespace Hanger51.EditorTools
                         anchorById.TryGetValue(citizen.HomeAnchorId, out home);
                     if (!home || home.Kind != H51CitizenAnchorKind.Home)
                     {
-                        home = homes[Math.Abs(citizen.AppearanceSeed) % homes.Count];
+                        home = homes[(citizen.AppearanceSeed & 0x7fffffff) % homes.Count];
                         citizen.SetHomeAssignment(home.AnchorId);
                         assignmentsRepaired++;
                     }
@@ -1115,7 +1115,6 @@ namespace Hanger51.EditorTools
             {
                 Collider hit = hits[i];
                 if (!hit || hit is TerrainCollider) continue;
-                if (hit.GetComponentInParent<H51CitizenWorkplace>()) continue;
                 return false;
             }
             return true;
