@@ -613,6 +613,7 @@ namespace Hanger51.EditorTools
                 chosen = citizens
                     .Where(c => c &&
                                 c.TownName == town &&
+                                !string.IsNullOrWhiteSpace(c.Occupation) &&
                                 (c.Occupation.Contains("Community") ||
                                  c.Occupation.Contains("Town Worker")))
                     .OrderBy(c => StableHash(c.CitizenId + occupation))
