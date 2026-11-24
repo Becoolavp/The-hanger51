@@ -232,7 +232,7 @@ namespace Hanger51.NPCs
             H51CitizenActivitySpot[] spots = desired.GetComponentsInChildren<H51CitizenActivitySpot>(true);
             if (spots != null && spots.Length > 0)
             {
-                H51CitizenActivitySpot spot = spots[rng.Next(spots.Length)];
+                H51CitizenActivitySpot spot = PickActivitySpot(spots);
                 currentActivityDescription = ActivityDescriptionFor(desiredState, spot.ActivityLabel);
 
                 if (NavMesh.SamplePosition(spot.transform.position, out NavMeshHit activityHit, 4f, NavMesh.AllAreas))
@@ -254,6 +254,161 @@ namespace Hanger51.NPCs
             {
                 if (hasInteract && rng.NextDouble() < .75) animator.SetTrigger("Interact");
                 else if (hasWave) animator.SetTrigger("Wave");
+            }
+        }
+
+        void UpdateActiveActivity()
+        {
+            if (!activeActivitySpot || !agent || !agent.enabled || !agent.isOnNavMesh)
+            {
+                ClearActiveActivity();
+                return;
+            }
+
+            float distance = Planar(transform.position, activeActivitySpot.transform.position);
+            currentActivityDescription = ActivityDescriptionFor(state, activeActivitySpot.ActivityLabel);
+
+            if (distance > 1.05f)
+            {
+                agent.isStopped = false;
+                if (!agent.pathPending &&
+                    (agent.destination - activeActivitySpot.transform.position).sqrMagnitude > 1.25f &&
+                    NavMesh.SamplePosition(activeActivitySpot.transform.position, out NavMeshHit hit, 4f, NavMesh.AllAreas))
+                {
+                    agent.SetDestination(hit.position);
+                }
+                return;
+            }
+
+            agent.isStopped = true;
+            if (agent.hasPath) agent.ResetPath();
+
+            Vector3 facing = activeActivitySpot.transform.forward;
+            facing.y = 0f;
+            if (facing.sqrMagnitude > .01f)
+            {
+                Quaternion wanted = Quaternion.LookRotation(facing.normalized, Vector3.up);
+                transform.rotation = Quaternion.Slerp(
+                    transform.rotation,
+                    wanted,
+                    1f - Mathf.Exp(-8f * Time.deltaTime));
+            }
+
+            if (activeActivityUntil <= 0f)
+            {
+                float lift = 0f;
+                if (NavMesh.SamplePosition(activeActivitySpot.transform.position, out NavMeshHit floorHit, 2.5f, NavMesh.AllAreas))
+                    lift = Mathf.Clamp(activeActivitySpot.transform.position.y - floorHit.position.y, 0f, .65f);
+
+                agent.baseOffset = defaultAgentBaseOffset + lift;
+                activeActivityUntil = Time.time + Mathf.Lerp(
+                    activeActivitySpot.MinimumDuration,
+                    activeActivitySpot.MaximumDuration,
+                    (float)rng.NextDouble());
+                nextActivityGesture = Time.time + .15f;
+            }
+
+            if (Time.time >= nextActivityGesture)
+            {
+                nextActivityGesture = Time.time + Mathf.Lerp(3.2f, 5.8f, (float)rng.NextDouble());
+                if (animator && hasInteract && !string.IsNullOrWhiteSpace(activeActivitySpot.AnimationTrigger))
+                    animator.SetTrigger(activeActivitySpot.AnimationTrigger);
+            }
+
+            if (Time.time < activeActivityUntil) return;
+
+            CompleteRoleWorkIfApplicable(activeActivitySpot);
+            ClearActiveActivity();
+            nextThink = Time.time + .15f;
+        }
+
+        H51CitizenActivitySpot PickActivitySpot(H51CitizenActivitySpot[] spots)
+        {
+            if (spots == null || spots.Length == 0) return null;
+
+            bool mechanic =
+                identity &&
+                !string.IsNullOrWhiteSpace(identity.Occupation) &&
+                (identity.Occupation.IndexOf("mechanic", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                 identity.Occupation.IndexOf("repair", System.StringComparison.OrdinalIgnoreCase) >= 0);
+
+            if (!mechanic)
+                return spots[rng.Next(spots.Length)];
+
+            H51CitizenVehicle repairable = FindRepairableVehicle();
+            if (repairable)
+            {
+                for (int i=0;i<spots.Length;i++)
+                {
+                    H51CitizenActivitySpot spot = spots[(i + rng.Next(spots.Length)) % spots.Length];
+                    if (spot && spot.ActivityLabel.IndexOf("service bay", System.StringComparison.OrdinalIgnoreCase) >= 0)
+                        return spot;
+                }
+            }
+
+            H51CitizenActivitySpot[] nonService = System.Array.FindAll(
+                spots,
+                s => s && s.ActivityLabel.IndexOf("service bay", System.StringComparison.OrdinalIgnoreCase) < 0);
+
+            return nonService.Length > 0
+                ? nonService[rng.Next(nonService.Length)]
+                : spots[rng.Next(spots.Length)];
+        }
+
+        H51CitizenVehicle FindRepairableVehicle()
+        {
+            if (!work) return null;
+
+            H51CitizenVehicle[] vehicles = FindObjectsByType<H51CitizenVehicle>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+
+            H51CitizenVehicle best = null;
+            float bestDistance = 22f;
+            for (int i=0;i<vehicles.Length;i++)
+            {
+                H51CitizenVehicle vehicle = vehicles[i];
+                if (!vehicle || vehicle.Condition >= 85f) continue;
+
+                float distance = Planar(vehicle.transform.position, work.transform.position);
+                if (distance >= bestDistance) continue;
+
+                bestDistance = distance;
+                best = vehicle;
+            }
+            return best;
+        }
+
+        void CompleteRoleWorkIfApplicable(H51CitizenActivitySpot spot)
+        {
+            if (!spot || !identity) return;
+
+            bool mechanic =
+                identity.Occupation.IndexOf("mechanic", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                identity.Occupation.IndexOf("repair", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (!mechanic ||
+                spot.ActivityLabel.IndexOf("service bay", System.StringComparison.OrdinalIgnoreCase) < 0)
+                return;
+
+            H51CitizenVehicle vehicle = FindRepairableVehicle();
+            if (!vehicle) return;
+
+            vehicle.RepairFully();
+            currentActivityDescription = "I'm finishing up a vehicle repair at the shop.";
+        }
+
+        void ClearActiveActivity()
+        {
+            activeActivitySpot = null;
+            activeActivityUntil = 0f;
+            nextActivityGesture = 0f;
+
+            if (agent)
+            {
+                agent.baseOffset = defaultAgentBaseOffset;
+                if (agent.enabled && agent.isOnNavMesh)
+                    agent.isStopped = false;
             }
         }
 
