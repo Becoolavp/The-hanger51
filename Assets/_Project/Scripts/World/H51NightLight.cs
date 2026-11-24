@@ -60,6 +60,25 @@ namespace Hanger51.World
             Refresh(false);
         }
 
+        public void ConfigureFlightVisibility(
+            float lightDistance,
+            float emissionStrength,
+            float lightRange,
+            float lightIntensity)
+        {
+            realtimeLightDistance = Mathf.Max(10f,lightDistance);
+            emissionMultiplier = Mathf.Max(0f,emissionStrength);
+
+            if (realtimeLight)
+            {
+                realtimeLight.range = Mathf.Max(1f,lightRange);
+                realtimeLight.intensity = Mathf.Max(0f,lightIntensity);
+                realtimeLight.shadows = LightShadows.None;
+            }
+
+            Refresh(true);
+        }
+
         public void SetRequested(bool on)
         {
             requestedOn = on;
