@@ -52,6 +52,31 @@ namespace Hanger51.Aircraft
             ResolveReferences();
         }
 
+        public void RecordVisualPreviewBegin(
+            int wheelIndex,
+            P51LooseWheelAssembly wheelAssembly)
+        {
+            Write(
+                $"VISUAL_PREVIEW_BEGIN frame={Time.frameCount} realtime={Time.realtimeSinceStartup:F3} "
+                + $"wheel={WheelLabel(wheelIndex)} index={wheelIndex} "
+                + $"assembly={(wheelAssembly != null ? wheelAssembly.name : "<null>")} "
+                + $"isCarried={(wheelAssembly != null && wheelAssembly.IsCarried)} "
+                + $"isComplete={(wheelAssembly != null && wheelAssembly.IsComplete)} "
+                + $"canInstall={(wheelAssembly != null && wheelAssembly.CanInstallOn(wheelIndex))}");
+        }
+
+        public void RecordVisualPreviewReachedEnd(
+            int wheelIndex,
+            P51LooseWheelAssembly wheelAssembly)
+        {
+            Write(
+                $"VISUAL_PREVIEW_REACHED_END frame={Time.frameCount} realtime={Time.realtimeSinceStartup:F3} "
+                + $"wheel={WheelLabel(wheelIndex)} index={wheelIndex} "
+                + $"assembly={(wheelAssembly != null ? wheelAssembly.name : "<null>")} "
+                + $"currentCarried={(P51LooseWheelAssembly.CurrentCarried != null ? P51LooseWheelAssembly.CurrentCarried.name : "<null>")}");
+            Snapshot("VISUAL_PREVIEW_REACHED_END", wheelIndex, wheelAssembly);
+        }
+
         public void BeginInstall(
             int wheelIndex,
             P51LooseWheelAssembly wheelAssembly)
