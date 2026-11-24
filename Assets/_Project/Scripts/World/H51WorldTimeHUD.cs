@@ -23,6 +23,9 @@ namespace Hanger51.World
         public void Configure(H51WorldClock configuredClock)
         {
             clock = configuredClock;
+            if (!Application.isPlaying)
+                return;
+
             EnsureUI();
             Refresh();
         }
