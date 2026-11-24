@@ -676,7 +676,9 @@ namespace Hanger51.EditorTools
                 }
                 else
                 {
-                    p.y+=.45f;
+                    // Do not add to Y every time this pass is rerun. The old incremental
+                    // adjustment caused workplace signs to climb above their roofs after
+                    // repeated citizen/world rebuilds.
                     p.z+=.10f;
                 }
                 t.localPosition=p;
