@@ -60,6 +60,8 @@ namespace Hanger51.NPCs
         {
             identity = GetComponent<H51CitizenIdentity>();
             agent = GetComponent<NavMeshAgent>();
+            if (!GetComponent<H51CitizenGrounding>())
+                gameObject.AddComponent<H51CitizenGrounding>();
             animator = GetComponentInChildren<Animator>(true);
             rng = new System.Random(identity ? identity.AppearanceSeed : GetInstanceID());
             citizenRenderers = GetComponentsInChildren<Renderer>(true);
