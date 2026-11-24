@@ -144,6 +144,49 @@ The failure was isolated to runway-control placement. The original placement sel
 
 Do not mark this cleanup fully verified until Step 155 passes and Play mode confirms at least one town-house door opens/closes with its handles attached, at least one farmer returns to the rural farmhouse/work location as the clock changes, and the runway control is reachable from the inside of the airport wall.
 
+### Night visibility, runway control readability, visible moon, and wing-armament restoration — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The first extended Play-mode/night-flight test after Steps 152-155 exposed four important presentation/state issues:
+
+- The runway-light control text was readable from the wrong side, appeared mirrored from the airport side, and could be seen through the wall.
+- Runway bulbs were too dim/small and the real point lights were distance-limited too aggressively for an aircraft game, so the runway was not visually defined from the air.
+- Town road/street lights and house/building lights existed but were not visually strong enough from flight altitude/range.
+- The night cycle had moonlight but no visible moon body.
+- Opening the P-51 wing armament panels no longer revealed the installed M2 guns and ammunition boxes even though the armament geometry still existed in the hierarchy.
+
+The repair/validation path is:
+
+`Hanger 51 -> World -> Current -> 156 - Repair Night Visibility Moon Runway And Wing Armament`
+
+`Hanger 51 -> World -> Current -> 157 - Validate Night Visibility Moon Runway And Wing Armament`
+
+Step 156 currently does the following:
+
+- Corrects the runway-control TextMesh to face the airport interior.
+- Runtime-hides the runway label when the camera is on the exterior/wall-back side so it cannot appear mirrored or render through the wall.
+- Enlarges all runway-light lens spheres and gives every runway lens its own no-shadow point light.
+- Raises runway emission strength substantially and extends real-light visibility to flight-relevant range.
+- Strengthens town street lamps, airport/apron lights, and building/house exterior lights; increases their lens size and flight-relevant real-light distance while retaining grid-power/night scheduling.
+- Adds an actual visible moon sphere/disc that follows the moon directional-light path across the sky and stays camera-relative at long range.
+- Stores the moon material as a real asset so future Step 152 rebuilds keep the visible moon.
+- Adds runtime armament hierarchy self-repair to `P51WingArmamentSystem` so stale serialized bay/gun/ammo visual references can be rediscovered from the live aircraft.
+- Restores the master/current P-51 armament systems to the intended fully-equipped starting configuration: six installed M2 wing guns, six installed ammo boxes, and ammunition present.
+- Reconfigures `P51WingArmamentBayPersistence` so the bay geometry remains available when panels are opened and the closed wing skin physically conceals it when panels are shut.
+- Backports the stronger runway/town lighting, inward-facing runway-control label, and visible moon into the original Step 152 builder so future world regeneration does not recreate the old weak version.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51NightVisibilityAndArmamentRepair.cs`
+- `Assets/_Project/Editor/Hanger51TimeCalendarAndNightLightingSetup.cs`
+- `Assets/_Project/Scripts/World/H51RunwayLightSwitch.cs`
+- `Assets/_Project/Scripts/World/H51RunwayLightingController.cs`
+- `Assets/_Project/Scripts/World/H51NightLight.cs`
+- `Assets/_Project/Scripts/World/H51DayNightCycle.cs`
+- `Assets/_Project/Scripts/Aircraft/P51WingArmamentSystem.cs`
+- `Assets/_Project/Scripts/Aircraft/P51WingArmamentBayPersistence.cs`
+
+Do not mark this pass verified until Step 157 passes and a Development Build confirms: runway edges are clearly visible at night from the P-51, road/house lighting is visible when flying over populated areas, the visible moon crosses the night sky, the runway-control text is readable only from inside the airport wall, and opening either wing armament panel reveals all three installed guns and three adjacent ammo boxes for that wing.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
@@ -300,7 +343,8 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue improving maintenance animations and physical part visibility.
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
-- Apply and validate World Steps 154/155 for farm residency, house-door interaction, and the inside-wall runway-light control.
+- Apply and validate World Steps 156/157 for night visibility, visible moon, runway-control readability, and restored wing-armament bay visuals.
+- Recheck Step 155 after the night/control repair if the runway-control placement is changed again.
 - Continue testing the time system at dawn, daytime, dusk, and full night.
 - Verify ordinary citizens stop following weekday work routines on weekends.
 - Verify power-plant and emergency workers maintain rotating overnight coverage.
