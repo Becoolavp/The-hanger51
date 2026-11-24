@@ -310,12 +310,12 @@ namespace Hanger51.EditorTools
 
                     for (int i = 0; i < desired; i++)
                     {
-                        H51CitizenVisualCatalog.Entry visual = catalog.entries[(created * 7 + t * 3) % catalog.entries.Count];
-                        if (visual == null || !visual.prefab) continue;
-
                         H51CitizenAnchor home = homes[i % homes.Count];
                         H51CitizenAnchor work = PickLeastLoadedWork(works, workLoads, rng);
                         string occupation = work ? work.OccupationHint : "Resident";
+                        H51CitizenVisualCatalog.Entry visual = PickVisualForOccupation(catalog, occupation, created, t);
+                        if (visual == null || !visual.prefab) continue;
+
                         string displayName = UniqueName(usedNames, rng);
                         int seed = Math.Abs((displayName + townName + i).GetHashCode());
                         int age = rng.Next(19, 76);
@@ -812,6 +812,41 @@ namespace Hanger51.EditorTools
             surface.size = new Vector3(radius * 2f, 90f, radius * 2f);
             surface.BuildNavMesh();
             return surface;
+        }
+
+        static H51CitizenVisualCatalog.Entry PickVisualForOccupation(H51CitizenVisualCatalog catalog, string occupation, int citizenIndex, int townIndex)
+        {
+            if (catalog == null || catalog.entries == null || catalog.entries.Count == 0) return null;
+
+            string[] preferred;
+            string lower = (occupation ?? "").ToLowerInvariant();
+            if (lower.Contains("farmer") || lower.Contains("farm supply"))
+                preferred = new[] { "Farmer", "Worker", "Casual" };
+            else if (lower.Contains("mechanic"))
+                preferred = new[] { "Worker", "Adventurer", "Casual" };
+            else if (lower.Contains("fire"))
+                preferred = new[] { "Worker", "Swat", "Soldier" };
+            else if (lower.Contains("clinic"))
+                preferred = new[] { "Formal", "Suit", "Casual2", "Casual" };
+            else if (lower.Contains("municipal") || lower.Contains("postal"))
+                preferred = new[] { "Suit", "Formal", "Casual2", "Casual" };
+            else if (lower.Contains("store") || lower.Contains("cafe"))
+                preferred = new[] { "Casual", "Casual2", "Punk", "Suit" };
+            else
+                preferred = new[] { "Casual", "Casual2", "Worker", "Adventurer", "Punk", "Suit", "Formal" };
+
+            List<H51CitizenVisualCatalog.Entry> pool = new List<H51CitizenVisualCatalog.Entry>();
+            for (int p = 0; p < preferred.Length; p++)
+                for (int i = 0; i < catalog.entries.Count; i++)
+                {
+                    H51CitizenVisualCatalog.Entry e = catalog.entries[i];
+                    if (e != null && e.prefab && e.archetype.Equals(preferred[p], StringComparison.OrdinalIgnoreCase))
+                        pool.Add(e);
+                }
+
+            if (pool.Count == 0) pool.AddRange(catalog.entries.Where(e => e != null && e.prefab));
+            if (pool.Count == 0) return null;
+            return pool[Math.Abs(citizenIndex * 7 + townIndex * 11) % pool.Count];
         }
 
         static H51CitizenAnchor PickLeastLoadedWork(List<H51CitizenAnchor> works, Dictionary<string,int> loads, System.Random rng)
