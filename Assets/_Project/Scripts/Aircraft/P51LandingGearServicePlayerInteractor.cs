@@ -100,9 +100,14 @@ namespace Hanger51.Aircraft
             currentLooseWheel = null;
             currentCart = null;
 
-            bool validInstallTarget = aimedTarget != null
-                && aimedTarget.ServiceKind == P51LandingGearServiceKind.TireAndValve
-                && carriedWheel.CanInstallOn(aimedTarget.WheelIndex);
+            if (aimedTarget == null)
+            {
+                aimedTarget = FindBestCarriedWheelInstallTarget(carriedWheel);
+            }
+
+            bool validInstallTarget = IsValidCarriedWheelInstallTarget(
+                aimedTarget,
+                carriedWheel);
 
             P51LandingGearServiceTarget desiredTarget = validInstallTarget
                 ? aimedTarget
@@ -149,6 +154,90 @@ namespace Hanger51.Aircraft
 
             inventoryUI.SetInteractionPrompt(
                 $"E: set down carried {carriedWheel.WheelLabel} wheel | Carry it to a compatible highlighted axle and hold E to reinstall");
+        }
+
+        private bool IsValidCarriedWheelInstallTarget(
+            P51LandingGearServiceTarget target,
+            P51LooseWheelAssembly carriedWheel)
+        {
+            if (target == null
+                || carriedWheel == null
+                || target.ServiceKind != P51LandingGearServiceKind.TireAndValve
+                || target.Controller == null
+                || !target.Controller.IsGearInstalled(target.WheelIndex)
+                || !carriedWheel.CanInstallOn(target.WheelIndex))
+            {
+                return false;
+            }
+
+            P51LandingGearInventoryBridge bridge =
+                target.Controller.GetComponent<P51LandingGearInventoryBridge>();
+            if (bridge == null || !bridge.IsReady)
+            {
+                return false;
+            }
+
+            bridge.EnsureOriginAxleEmptyForCarriedWheel(
+                target.WheelIndex,
+                carriedWheel);
+
+            return !target.Controller.IsTireInstalled(target.WheelIndex)
+                && !bridge.IsRimInstalled(target.WheelIndex);
+        }
+
+        private P51LandingGearServiceTarget FindBestCarriedWheelInstallTarget(
+            P51LooseWheelAssembly carriedWheel)
+        {
+            if (playerCamera == null || carriedWheel == null)
+            {
+                return null;
+            }
+
+            P51LandingGearServiceTarget[] targets =
+                FindObjectsByType<P51LandingGearServiceTarget>(
+                    FindObjectsInactive.Include,
+                    FindObjectsSortMode.None);
+
+            P51LandingGearServiceTarget best = null;
+            float bestScore = float.PositiveInfinity;
+            Vector3 cameraPosition = playerCamera.transform.position;
+            Vector3 cameraForward = playerCamera.transform.forward;
+
+            for (int index = 0; index < targets.Length; index++)
+            {
+                P51LandingGearServiceTarget candidate = targets[index];
+                if (!IsValidCarriedWheelInstallTarget(candidate, carriedWheel))
+                {
+                    continue;
+                }
+
+                Vector3 toTarget = candidate.ServicePoint.position - cameraPosition;
+                float distance = toTarget.magnitude;
+                if (distance > interactionDistance || distance < .05f)
+                {
+                    continue;
+                }
+
+                float alignment = Vector3.Dot(
+                    cameraForward,
+                    toTarget / distance);
+                if (alignment < .90f)
+                {
+                    continue;
+                }
+
+                // Prefer the station nearest the center of the camera while still favoring
+                // closer axles. This lets the reinstall interaction work even if the small
+                // trigger sphere is missed by the exact center ray.
+                float score = distance + (1f - alignment) * 12f;
+                if (score < bestScore)
+                {
+                    bestScore = score;
+                    best = candidate;
+                }
+            }
+
+            return best;
         }
 
         private void HandleLooseWheel(
