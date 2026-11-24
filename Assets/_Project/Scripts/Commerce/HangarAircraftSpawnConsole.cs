@@ -419,6 +419,18 @@ namespace Hanger51.Commerce
             SetPrivateField(gear, "tirePressurePsi", new[] { 30f, 30f, 24f });
             SetPrivateField(gear, "gearCommandDown", true);
             SetPrivateField(gear, "deploymentFraction", 1f);
+
+            // The spawn source may be a live aircraft that currently has a wheel removed.
+            // Restore the inventory bridge's rim state too; otherwise a clone can start with
+            // tireInstalled=true but rimInstalled=false and the wheel reconciler correctly
+            // normalizes that impossible combination back to an empty axle.
+            P51LandingGearInventoryBridge bridge =
+                aircraft.GetComponent<P51LandingGearInventoryBridge>();
+            if (bridge != null)
+            {
+                SetPrivateField(bridge, "rimInstalled", FilledBoolArray(3, true));
+                SetPrivateField(bridge, "rimHealth", new[] { 100f, 100f, 100f });
+            }
         }
 
         private static bool[] FilledBoolArray(int count, bool value)
