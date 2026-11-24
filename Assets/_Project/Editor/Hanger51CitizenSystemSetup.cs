@@ -522,6 +522,256 @@ namespace Hanger51.EditorTools
             }
         }
 
+        [MenuItem("Hanger 51/World/Current/132 - Add Citizen Talk And Working Life")]
+        public static void AddCitizenTalkAndWorkingLife()
+        {
+            if (EditorApplication.isPlaying || EditorApplication.isCompiling)
+            {
+                Debug.LogError("Step 132 failed. Exit Play mode and let Unity finish compiling first.");
+                return;
+            }
+
+            GameObject world = Find(WorldName);
+            Terrain terrain = FindTerrain();
+            Transform citizenRoot = world ? FindChild(world.transform, CitizenRootName) : null;
+            Transform settlements = world ? FindChild(world.transform, "Settlements") : null;
+            H51CitizenRegistry registry = citizenRoot ? citizenRoot.GetComponent<H51CitizenRegistry>() : null;
+
+            if (!world || !terrain || !citizenRoot || !settlements || !registry)
+            {
+                Debug.LogError("Step 132 failed. Build the citizen population first with Steps 128A/129/130.");
+                return;
+            }
+
+            try
+            {
+                List<Transform> towns = new List<Transform>();
+                for (int i = 0; i < settlements.childCount; i++)
+                {
+                    Transform town = settlements.GetChild(i);
+                    if (Houses(town).Count > 0) towns.Add(town);
+                }
+
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Ensuring every town has real places to work", .10f);
+                int generatedSites = EnsureEmploymentSites(world.transform, terrain, towns);
+
+                Transform oldAnchors = FindChild(citizenRoot, "Citizen Anchors");
+                if (oldAnchors) UnityEngine.Object.DestroyImmediate(oldAnchors.gameObject);
+                Transform anchorsRoot = New("Citizen Anchors", citizenRoot);
+
+                List<H51CitizenAnchor> allAnchors = new List<H51CitizenAnchor>();
+                Dictionary<string,List<H51CitizenAnchor>> homesByTown = new Dictionary<string,List<H51CitizenAnchor>>();
+                Dictionary<string,List<H51CitizenAnchor>> worksByTown = new Dictionary<string,List<H51CitizenAnchor>>();
+
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Rebuilding home, workplace and activity anchors", .28f);
+                for (int i = 0; i < towns.Count; i++)
+                    BuildTownAnchors(world.transform, terrain, anchorsRoot, towns[i], i, allAnchors, homesByTown, worksByTown);
+
+                Dictionary<string,H51CitizenAnchor> anchorById = new Dictionary<string,H51CitizenAnchor>();
+                for (int i = 0; i < allAnchors.Count; i++)
+                {
+                    H51CitizenAnchor a = allAnchors[i];
+                    if (a && !string.IsNullOrEmpty(a.AnchorId)) anchorById[a.AnchorId] = a;
+                }
+
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Adding conversations and repairing job assignments", .52f);
+                H51CitizenIdentity[] citizens = citizenRoot.GetComponentsInChildren<H51CitizenIdentity>(true);
+                Dictionary<string,int> workLoads = new Dictionary<string,int>();
+                int conversationsAdded = 0;
+                int assignmentsRepaired = 0;
+
+                for (int i = 0; i < citizens.Length; i++)
+                {
+                    H51CitizenIdentity citizen = citizens[i];
+                    if (!citizen) continue;
+
+                    if (!citizen.GetComponent<H51CitizenDialogue>())
+                    {
+                        citizen.gameObject.AddComponent<H51CitizenDialogue>();
+                        conversationsAdded++;
+                    }
+
+                    if (!homesByTown.TryGetValue(citizen.TownName, out List<H51CitizenAnchor> homes) || homes.Count == 0)
+                        continue;
+                    if (!worksByTown.TryGetValue(citizen.TownName, out List<H51CitizenAnchor> works) || works.Count == 0)
+                        continue;
+
+                    H51CitizenAnchor home = null;
+                    if (!string.IsNullOrEmpty(citizen.HomeAnchorId))
+                        anchorById.TryGetValue(citizen.HomeAnchorId, out home);
+                    if (!home || home.Kind != H51CitizenAnchorKind.Home)
+                    {
+                        home = homes[Math.Abs(citizen.AppearanceSeed) % homes.Count];
+                        citizen.SetHomeAssignment(home.AnchorId);
+                        assignmentsRepaired++;
+                    }
+
+                    H51CitizenAnchor work = null;
+                    if (!string.IsNullOrEmpty(citizen.WorkAnchorId))
+                        anchorById.TryGetValue(citizen.WorkAnchorId, out work);
+
+                    if (!work || work.Kind != H51CitizenAnchorKind.Work)
+                    {
+                        System.Random rng = new System.Random(citizen.AppearanceSeed ^ 0x51A7);
+                        work = PickLeastLoadedWork(works, workLoads, rng);
+                        if (work)
+                        {
+                            citizen.SetWorkAssignment(work.AnchorId, work.OccupationHint);
+                            assignmentsRepaired++;
+                        }
+                    }
+                    else
+                    {
+                        citizen.SetWorkAssignment(work.AnchorId, work.OccupationHint);
+                        workLoads.TryGetValue(work.AnchorId, out int load);
+                        workLoads[work.AnchorId] = load + 1;
+                    }
+
+                    EditorUtility.SetDirty(citizen);
+                }
+
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Rebaking citizen navigation around workplaces", .72f);
+                NavMeshSurface[] surfaces = citizenRoot.GetComponentsInChildren<NavMeshSurface>(true);
+                for (int i = 0; i < surfaces.Length; i++)
+                {
+                    NavMeshSurface surface = surfaces[i];
+                    if (!surface) continue;
+                    surface.RemoveData();
+                    surface.BuildNavMesh();
+                    EditorUtility.SetDirty(surface);
+                }
+
+                ConfigureCitizenPlayerInteraction();
+                registry.RefreshSceneReferences();
+                EditorUtility.SetDirty(registry);
+                EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+                AssetDatabase.SaveAssets();
+                EditorSceneManager.SaveOpenScenes();
+
+                Debug.Log(
+                    $"Step 132 complete. citizens={citizens.Length}, talk components added={conversationsAdded}, assignment repairs={assignmentsRepaired}, workplaces generated={generatedSites}, anchors={allAnchors.Count}. Citizens can now be approached with E, questioned about identity/home/job/current activity/opinion/memories, and they have real work activity spots. Run Step 133.",
+                    citizenRoot.gameObject);
+            }
+            finally
+            {
+                EditorUtility.ClearProgressBar();
+            }
+        }
+
+        [MenuItem("Hanger 51/World/Current/133 - Validate Citizen Talk And Working Life")]
+        public static void ValidateCitizenTalkAndWorkingLife()
+        {
+            GameObject world = Find(WorldName);
+            Transform citizenRoot = world ? FindChild(world.transform, CitizenRootName) : null;
+            FirstPersonController player = UnityEngine.Object.FindFirstObjectByType<FirstPersonController>();
+
+            if (!world || !citizenRoot)
+            {
+                Debug.LogError("Step 133 failed. Run Step 132 first.");
+                return;
+            }
+
+            H51CitizenIdentity[] citizens = citizenRoot.GetComponentsInChildren<H51CitizenIdentity>(true);
+            H51CitizenAnchor[] anchors = citizenRoot.GetComponentsInChildren<H51CitizenAnchor>(true);
+            H51CitizenWorkplace[] workplaces = world.GetComponentsInChildren<H51CitizenWorkplace>(true);
+
+            Dictionary<string,H51CitizenAnchor> anchorById = new Dictionary<string,H51CitizenAnchor>();
+            int workAnchors = 0;
+            int workAnchorsWithoutActivities = 0;
+            int workAnchorsWithoutLabels = 0;
+            int totalActivities = 0;
+
+            for (int i = 0; i < anchors.Length; i++)
+            {
+                H51CitizenAnchor a = anchors[i];
+                if (!a) continue;
+                if (!string.IsNullOrEmpty(a.AnchorId)) anchorById[a.AnchorId] = a;
+                if (a.Kind != H51CitizenAnchorKind.Work) continue;
+
+                workAnchors++;
+                int activities = a.GetComponentsInChildren<H51CitizenActivitySpot>(true).Length;
+                totalActivities += activities;
+                if (activities < 3) workAnchorsWithoutActivities++;
+                if (string.IsNullOrWhiteSpace(a.DisplayLabel)) workAnchorsWithoutLabels++;
+            }
+
+            int missingDialogue = 0;
+            int missingWork = 0;
+            int residentWithoutJob = 0;
+            for (int i = 0; i < citizens.Length; i++)
+            {
+                H51CitizenIdentity citizen = citizens[i];
+                if (!citizen) continue;
+                if (!citizen.GetComponent<H51CitizenDialogue>()) missingDialogue++;
+
+                if (string.IsNullOrEmpty(citizen.WorkAnchorId) ||
+                    !anchorById.TryGetValue(citizen.WorkAnchorId, out H51CitizenAnchor work) ||
+                    !work || work.Kind != H51CitizenAnchorKind.Work)
+                    missingWork++;
+
+                if (string.IsNullOrWhiteSpace(citizen.Occupation) || citizen.Occupation == "Resident")
+                    residentWithoutJob++;
+            }
+
+            int workplacesWithoutPhysicalBuilding = 0;
+            Dictionary<string,int> workplacesByTown = new Dictionary<string,int>();
+            for (int i = 0; i < workplaces.Length; i++)
+            {
+                H51CitizenWorkplace workplace = workplaces[i];
+                if (!workplace) continue;
+                if (!workplace.GetComponentInChildren<Collider>(true)) workplacesWithoutPhysicalBuilding++;
+
+                string town = workplace.TownName ?? "";
+                workplacesByTown.TryGetValue(town, out int count);
+                workplacesByTown[town] = count + 1;
+            }
+
+            int townsBelowFourWorkplaces = 0;
+            Transform settlements = FindChild(world.transform, "Settlements");
+            if (settlements)
+            {
+                for (int i = 0; i < settlements.childCount; i++)
+                {
+                    Transform town = settlements.GetChild(i);
+                    if (Houses(town).Count == 0) continue;
+                    workplacesByTown.TryGetValue(town.name, out int count);
+                    if (count < 4) townsBelowFourWorkplaces++;
+                }
+            }
+
+            bool playerTalkReady =
+                player &&
+                player.GetComponent<H51CitizenPlayerInteractor>() &&
+                player.GetComponent<H51CitizenDialogueUI>();
+
+            bool ok =
+                citizens.Length > 0 &&
+                missingDialogue == 0 &&
+                missingWork == 0 &&
+                residentWithoutJob == 0 &&
+                workAnchors > 0 &&
+                workAnchorsWithoutActivities == 0 &&
+                workAnchorsWithoutLabels == 0 &&
+                totalActivities >= workAnchors * 3 &&
+                workplaces.Length >= 16 &&
+                workplacesWithoutPhysicalBuilding == 0 &&
+                townsBelowFourWorkplaces == 0 &&
+                playerTalkReady;
+
+            if (ok)
+            {
+                Debug.Log(
+                    $"Step 133 passed. citizens={citizens.Length}, interactive citizens={citizens.Length}, valid job assignments={citizens.Length}, workplaces={workplaces.Length}, work anchors={workAnchors}, activity spots={totalActivities}, towns below 4 workplaces=0, player E-to-talk system=ready.",
+                    citizenRoot.gameObject);
+            }
+            else
+            {
+                Debug.LogError(
+                    $"Step 133 failed. citizens={citizens.Length}, missing dialogue={missingDialogue}, missing work={missingWork}, citizens without jobs={residentWithoutJob}, workplaces={workplaces.Length}, physical workplace failures={workplacesWithoutPhysicalBuilding}, work anchors={workAnchors}, anchors missing activities={workAnchorsWithoutActivities}, anchors missing labels={workAnchorsWithoutLabels}, activity spots={totalActivities}, towns below 4 workplaces={townsBelowFourWorkplaces}, player talk ready={playerTalkReady}.",
+                    citizenRoot.gameObject);
+            }
+        }
+
         static void ConfigureModelImporter(string path)
         {
             ModelImporter importer = AssetImporter.GetAtPath(path) as ModelImporter;
