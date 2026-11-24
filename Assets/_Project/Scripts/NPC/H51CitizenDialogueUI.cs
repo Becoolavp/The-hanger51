@@ -4,6 +4,7 @@ using UnityEngine.InputSystem;
 
 namespace Hanger51.NPCs
 {
+    [DefaultExecutionOrder(-100)]
     public sealed class H51CitizenDialogueUI : MonoBehaviour
     {
         public static bool IsAnyDialogueOpen { get; private set; }
