@@ -333,7 +333,7 @@ namespace Hanger51.EditorTools
             body.gameObject.SetActive(false);
             bool service = workplace.Category.IndexOf("Garage", StringComparison.OrdinalIgnoreCase) >= 0 ||
                            workplace.Category.IndexOf("Fire", StringComparison.OrdinalIgnoreCase) >= 0 ||
-                           workplace.Category.IndexOf("Farm", StringComparison.OrdinalIgnoreCase) >= 0;
+                           string.Equals(workplace.Category, "Farm", StringComparison.OrdinalIgnoreCase);
             DisableDoorObjects(site, service);
 
             Transform old = DirectChild(site, "H51 Enterable Interior");
