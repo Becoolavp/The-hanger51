@@ -340,12 +340,18 @@ namespace Hanger51.EditorTools
             float doorWidth = service ? Mathf.Min(5.2f, size.x * .42f) : 2.4f;
             float doorHeight = service ? Mathf.Min(4.4f, size.y - .7f) : 3.35f;
             BuildShell(root, center, size, wallMaterial, mats.floor, doorWidth, doorHeight, service);
-            BuildWorkFurniture(root, workplace.Category, size.x, size.z, floorY, mats);
+
+            Transform furnitureFrame = New("Interior Furniture", root);
+            furnitureFrame.localPosition = new Vector3(center.x, 0f, center.z);
+            BuildWorkFurniture(furnitureFrame, workplace.Category, size.x, size.z, floorY, mats);
+
+            Transform activityFrame = New("Interior Activity Frame", root);
+            activityFrame.localPosition = new Vector3(center.x, 0f, center.z);
 
             Transform entrance = New("Entrance", root);
-            entrance.localPosition = new Vector3(0f, floorY + .05f, size.z * .5f + .9f);
+            entrance.localPosition = new Vector3(center.x, floorY + .05f, center.z + size.z * .5f + .9f);
             Transform inside = New("Interior Center", root);
-            inside.localPosition = new Vector3(0f, floorY + .05f, 0f);
+            inside.localPosition = new Vector3(center.x, floorY + .05f, center.z);
 
             H51EnterableBuildingKind kind =
                 workplace.Category.IndexOf("Store", StringComparison.OrdinalIgnoreCase) >= 0 ||
@@ -372,10 +378,10 @@ namespace Hanger51.EditorTools
 
             if (workAnchor)
             {
-                workAnchor.transform.position = site.TransformPoint(new Vector3(0f, floorY + .08f, -size.z * .12f));
+                workAnchor.transform.position = site.TransformPoint(new Vector3(center.x, floorY + .08f, center.z - size.z * .12f));
                 workAnchor.transform.rotation = site.rotation;
                 SpotDef[] defs = WorkplaceSpots(workplace.Category, size.x, size.z, floorY);
-                SetIndoorActivitySpots(workAnchor, site, defs);
+                SetIndoorActivitySpots(workAnchor, activityFrame, defs);
                 activitySpots += defs.Length;
             }
 
@@ -384,9 +390,9 @@ namespace Hanger51.EditorTools
                 H51CitizenAnchor visitor = visitors[i];
                 if (!visitor) continue;
                 visitor.transform.position = site.TransformPoint(new Vector3(
-                    Mathf.Lerp(-1.8f, 1.8f, visitors.Count <= 1 ? .5f : i / (float)(visitors.Count - 1)),
+                    center.x + Mathf.Lerp(-1.8f, 1.8f, visitors.Count <= 1 ? .5f : i / (float)(visitors.Count - 1)),
                     floorY + .08f,
-                    size.z * .12f));
+                    center.z + size.z * .12f));
                 visitor.transform.rotation = site.rotation;
 
                 SpotDef[] visitorDefs =
@@ -395,7 +401,7 @@ namespace Hanger51.EditorTools
                     new SpotDef("checking something at the counter", new Vector3(size.x*.18f, floorY+.05f, -size.z*.22f)),
                     new SpotDef("taking care of an errand", new Vector3(0f, floorY+.05f, size.z*.05f))
                 };
-                SetIndoorActivitySpots(visitor, site, visitorDefs);
+                SetIndoorActivitySpots(visitor, activityFrame, visitorDefs);
             }
 
             EditorUtility.SetDirty(site.gameObject);
@@ -754,6 +760,11 @@ namespace Hanger51.EditorTools
 
                 Material paint = mats.carPaint[(seed + made) % mats.carPaint.Length];
                 BuildCarVisual(car, paint, mats.carDark, mats.tire);
+                foreach (Transform child in car.GetComponentsInChildren<Transform>(true))
+                    child.gameObject.isStatic = false;
+
+                NavMeshModifier modifier = car.gameObject.AddComponent<NavMeshModifier>();
+                modifier.ignoreFromBuild = true;
 
                 BoxCollider collider = car.gameObject.AddComponent<BoxCollider>();
                 collider.center = new Vector3(0f,.72f,0f);
