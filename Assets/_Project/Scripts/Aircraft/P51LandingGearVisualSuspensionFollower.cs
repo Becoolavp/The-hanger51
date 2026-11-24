@@ -11,6 +11,7 @@ namespace Hanger51.Aircraft
 
         [SerializeField] private P51LandingGearMaintenanceController maintenance;
         [SerializeField] private Transform[] tireRoots = new Transform[3];
+        [SerializeField] private Transform[] rimRoots = new Transform[3];
         [SerializeField] private Transform[] physicsVisualProxies = new Transform[3];
 
         private Transform tailwheelStrut;
@@ -39,15 +40,17 @@ namespace Hanger51.Aircraft
             maintenance = configuredMaintenance;
             tireRoots = Copy(configuredTires);
             physicsVisualProxies = Copy(configuredProxies);
+            ResolveWheelRims();
             tailwheelStrutGeometryCaptured = false;
-            tailwheelRimRoot = null;
+            tailwheelRimRoot = rimRoots[2];
             ResolveTailwheelGeometry();
         }
 
         private void OnEnable()
         {
+            ResolveWheelRims();
             tailwheelStrutGeometryCaptured = false;
-            tailwheelRimRoot = null;
+            tailwheelRimRoot = rimRoots[2];
             ResolveTailwheelGeometry();
         }
 
@@ -60,6 +63,8 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            ResolveWheelRims();
+
             for (int wheelIndex = 0; wheelIndex < 3; wheelIndex++)
             {
                 if (!maintenance.IsGearInstalled(wheelIndex)
@@ -69,6 +74,7 @@ namespace Hanger51.Aircraft
                 }
 
                 Transform tire = wheelIndex < tireRoots.Length ? tireRoots[wheelIndex] : null;
+                Transform rim = wheelIndex < rimRoots.Length ? rimRoots[wheelIndex] : null;
                 Transform proxy = wheelIndex < physicsVisualProxies.Length
                     ? physicsVisualProxies[wheelIndex]
                     : null;
@@ -77,24 +83,79 @@ namespace Hanger51.Aircraft
                     continue;
                 }
 
+                // A complete installed wheel is a single moving visual assembly. The tire and
+                // metal rim must both follow the raycast-wheel proxy. Previously only the tire
+                // followed the main-gear proxy, which allowed the reinstall animation to finish
+                // while the permanent wheel visuals stayed hidden/orphaned at the strut root.
+                ForceVisible(tire);
                 tire.SetPositionAndRotation(proxy.position, proxy.rotation);
+
+                if (rim != null)
+                {
+                    ForceVisible(rim);
+                    rim.SetPositionAndRotation(proxy.position, proxy.rotation);
+                }
 
                 if (wheelIndex == 2)
                 {
+                    tailwheelRimRoot = rim;
                     ResolveTailwheelGeometry();
-
-                    // The rim/hub hierarchy was originally a sibling of the tire, so moving
-                    // only the tire made the metal wheel center appear to float above it.
-                    // Drive the rim from the same raycast proxy as the tire. The bolt and
-                    // valve service targets are parented to the tire by the service-attachment
-                    // follower and therefore travel with this complete lower wheel assembly.
-                    if (tailwheelRimRoot != null
-                        && !tailwheelRimRoot.IsChildOf(tire))
-                    {
-                        tailwheelRimRoot.SetPositionAndRotation(proxy.position, proxy.rotation);
-                    }
-
                     StretchTailwheelStrutToGroundedWheel(tire);
+                }
+            }
+        }
+
+        private void ResolveWheelRims()
+        {
+            rimRoots = Resize(rimRoots);
+            tireRoots = Resize(tireRoots);
+
+            string[] labels = { "Left Main", "Right Main", "Tailwheel" };
+            for (int wheelIndex = 0; wheelIndex < 3; wheelIndex++)
+            {
+                if (rimRoots[wheelIndex] != null)
+                {
+                    continue;
+                }
+
+                Transform tire = tireRoots[wheelIndex];
+                Transform gear = tire != null ? tire.parent : null;
+                if (gear == null)
+                {
+                    continue;
+                }
+
+                Transform[] all = gear.GetComponentsInChildren<Transform>(true);
+                string targetName = labels[wheelIndex] + " Rim Visual";
+                for (int index = 0; index < all.Length; index++)
+                {
+                    if (all[index] != null && all[index].name == targetName)
+                    {
+                        rimRoots[wheelIndex] = all[index];
+                        break;
+                    }
+                }
+            }
+        }
+
+        private static void ForceVisible(Transform root)
+        {
+            if (root == null)
+            {
+                return;
+            }
+
+            if (!root.gameObject.activeSelf)
+            {
+                root.gameObject.SetActive(true);
+            }
+
+            Renderer[] renderers = root.GetComponentsInChildren<Renderer>(true);
+            for (int index = 0; index < renderers.Length; index++)
+            {
+                if (renderers[index] != null && !renderers[index].enabled)
+                {
+                    renderers[index].enabled = true;
                 }
             }
         }
