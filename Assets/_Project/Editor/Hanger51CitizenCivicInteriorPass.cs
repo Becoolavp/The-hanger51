@@ -164,6 +164,8 @@ namespace Hanger51.EditorTools
 
                 EditorUtility.DisplayProgressBar("Hanger 51 Civic Interiors", "Building the regional police station and SWAT facilities", .38f);
 
+                Physics.SyncTransforms();
+
                 string primaryTown = towns[0];
                 Vector3 primaryCenter = TownCenter(primaryTown, citizens);
                 Vector3 policeSite = FindClearSite(
@@ -1186,6 +1188,9 @@ namespace Hanger51.EditorTools
                 {
                     Collider hit = hits[h];
                     if (!hit) continue;
+                    if (hit is TerrainCollider) continue;
+                    if (hit.GetComponentInParent<H51CitizenIdentity>()) continue;
+                    if (hit.GetComponentInParent<H51CitizenVehicle>()) continue;
                     string n = hit.name.ToLowerInvariant();
                     if (n.Contains("floor") || n.Contains("roof") || n.Contains("ceiling") ||
                         n.Contains("door frame") || n.Contains("civic door"))
