@@ -331,7 +331,7 @@ namespace Hanger51.EditorTools
             bool service =
                 lower.Contains("garage") ||
                 lower.Contains("fire") ||
-                lower.Contains("farm");
+                building.Kind == H51EnterableBuildingKind.Farm;
 
             bool home = building.Kind == H51EnterableBuildingKind.Home;
             bool farm = building.Kind == H51EnterableBuildingKind.Farm || lower.Contains("farm");
