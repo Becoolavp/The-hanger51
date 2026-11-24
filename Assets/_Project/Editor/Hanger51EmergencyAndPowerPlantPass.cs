@@ -57,6 +57,54 @@ namespace Hanger51.EditorTools
             "Sullivan","Turner","Walker","Young","Morgan","Brooks","Coleman","Fisher","Howard","Price"
         };
 
+        [MenuItem("Hanger 51/World/Current/Repair Power Plant Vapor Particles")]
+        public static void RepairPowerPlantVaporParticles()
+        {
+            if (EditorApplication.isPlaying || EditorApplication.isCompiling)
+            {
+                Debug.LogError("Power-plant vapor repair failed. Exit Play mode and let Unity finish compiling first.");
+                return;
+            }
+
+            GameObject world = GameObject.Find(WorldName);
+            Transform regional = world ? FindChild(world.transform,RegionalPassName) : null;
+            Transform plant = regional ? FindChild(regional,PlantName) : null;
+            H51PowerPlantController controller =
+                plant ? plant.GetComponent<H51PowerPlantController>() : null;
+
+            if (!world || !plant || !controller)
+            {
+                Debug.LogError("Power-plant vapor repair failed. The current countryside, power station, or plant controller is missing. Run Step 150 first.");
+                return;
+            }
+
+            Mats mats = BuildMaterials();
+            List<ParticleSystem> vapor = BuildPlantVapor(plant,mats.particle);
+
+            SerializedObject serialized = new SerializedObject(controller);
+            SerializedProperty systems = serialized.FindProperty("vaporSystems");
+            if (systems == null)
+            {
+                Debug.LogError("Power-plant vapor repair failed. Could not access the plant vapor-system list.",controller);
+                return;
+            }
+
+            systems.arraySize = vapor.Count;
+            for (int i=0;i<vapor.Count;i++)
+                systems.GetArrayElementAtIndex(i).objectReferenceValue = vapor[i];
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+
+            EditorUtility.SetDirty(controller);
+            EditorSceneManager.MarkSceneDirty(SceneManager.GetActiveScene());
+            AssetDatabase.SaveAssets();
+            EditorSceneManager.SaveOpenScenes();
+
+            Debug.Log(
+                "Power-plant vapor repair complete. Rebuilt "+vapor.Count+
+                " clean vapor system(s) with Velocity over Lifetime disabled and Play On Awake disabled. The plant controller will start/stop the clean plumes at runtime.",
+                plant.gameObject);
+        }
+
         [MenuItem("Hanger 51/World/Current/150 - Add Emergency Services And Functional Power Plant")]
         public static void Build()
         {
@@ -2070,6 +2118,7 @@ namespace Hanger51.EditorTools
             ParticleSystem ps = root.gameObject.AddComponent<ParticleSystem>();
             ParticleSystem.MainModule main = ps.main;
             main.loop = true;
+            main.playOnAwake = false;
             main.startLifetime = lifetime;
             main.startSpeed = speed;
             main.startSize = radius*.75f;
@@ -2093,7 +2142,7 @@ namespace Hanger51.EditorTools
             ParticleSystemRenderer renderer = root.GetComponent<ParticleSystemRenderer>();
             if (renderer && material) renderer.sharedMaterial = material;
 
-            ps.Play();
+            ps.Stop(true,ParticleSystemStopBehavior.StopEmittingAndClear);
             return ps;
         }
 
