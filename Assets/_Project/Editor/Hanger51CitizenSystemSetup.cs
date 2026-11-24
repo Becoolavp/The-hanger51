@@ -4,6 +4,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using Hanger51.NPCs;
+using Hanger51.Player;
 using Unity.AI.Navigation;
 using UnityEditor;
 using UnityEditor.Animations;
@@ -330,6 +331,9 @@ namespace Hanger51.EditorTools
                     if (Houses(town).Count > 0) towns.Add(town);
                 }
 
+                EditorUtility.DisplayProgressBar("Hanger 51 Citizens", "Verifying real workplaces in every town", .12f);
+                int generatedWorkplaces = EnsureEmploymentSites(world.transform, terrain, towns);
+
                 List<H51CitizenAnchor> allAnchors = new List<H51CitizenAnchor>();
                 Dictionary<string,List<H51CitizenAnchor>> homesByTown = new Dictionary<string,List<H51CitizenAnchor>>();
                 Dictionary<string,List<H51CitizenAnchor>> worksByTown = new Dictionary<string,List<H51CitizenAnchor>>();
@@ -424,6 +428,8 @@ namespace Hanger51.EditorTools
                     }
                 }
 
+                ConfigureCitizenPlayerInteraction();
+
                 registry.RefreshSceneReferences();
                 EditorUtility.SetDirty(clock);
                 EditorUtility.SetDirty(registry);
@@ -432,7 +438,7 @@ namespace Hanger51.EditorTools
                 EditorSceneManager.SaveOpenScenes();
                 Selection.activeGameObject = root.gameObject;
 
-                Debug.Log($"Step 130 complete. Created {created} persistent named citizens across {towns.Count} towns, anchors={allAnchors.Count}, local NavMesh surfaces={surfaces.Count}. Citizens now have homes, jobs, schedules, personalities, player relationship state and persistent memory storage. Run Step 131 to validate.", root.gameObject);
+                Debug.Log($"Step 130 complete. Created {created} persistent named citizens across {towns.Count} towns, anchors={allAnchors.Count}, local NavMesh surfaces={surfaces.Count}, newly generated workplaces={generatedWorkplaces}. Citizens now have real workplaces, work activity spots, E-to-talk interaction, homes, schedules, personalities, player relationship state and persistent memory storage. Run Step 131 to validate.", root.gameObject);
             }
             finally
             {
@@ -698,6 +704,7 @@ namespace Hanger51.EditorTools
             instance.AddComponent<H51CitizenIdentity>();
             instance.AddComponent<H51CitizenVisualVariation>();
             instance.AddComponent<H51CitizenBrain>();
+            instance.AddComponent<H51CitizenDialogue>();
 
             string path = PrefabFolder + "/H51_Citizen_" + packId + "_" + Safe(outfit) + ".prefab";
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(instance, path);
@@ -794,7 +801,9 @@ namespace Hanger51.EditorTools
                 Vector3 p = h.position + h.forward * 10f;
                 p.y = Ground(terrain, p) + .05f;
                 H51CitizenAnchor a = Anchor(townRoot, "Home Anchor " + (i+1).ToString("00"), p, h.forward,
-                    "HOME-" + townIndex.ToString("00") + "-" + i.ToString("000"), townName, H51CitizenAnchorKind.Home, "Resident", 5);
+                    "HOME-" + townIndex.ToString("00") + "-" + i.ToString("000"), townName,
+                    H51CitizenAnchorKind.Home, "Resident", 5,
+                    townName + " residence " + (i + 1).ToString("00"), "");
                 homes.Add(a); all.Add(a);
             }
 
@@ -803,12 +812,17 @@ namespace Hanger51.EditorTools
             {
                 if (!tr.name.StartsWith("Purpose - " + townName, StringComparison.Ordinal)) continue;
                 string type = PurposeType(tr.name);
+                string workplaceId = "SITE-" + townIndex.ToString("00") + "-" + workIndex.ToString("000");
+                H51CitizenWorkplace workplace = EnsureWorkplaceComponent(
+                    tr, workplaceId, type, townName, type, OccupationFor(type), type.Contains("Fire") ? 5 : 7);
+
                 Vector3 front = tr.position + tr.forward * 12f;
                 front.y = Ground(terrain, front) + .05f;
 
                 H51CitizenAnchor work = Anchor(townRoot, "Work - " + type, front, tr.forward,
                     "WORK-" + townIndex.ToString("00") + "-" + (workIndex++).ToString("000"), townName,
-                    H51CitizenAnchorKind.Work, OccupationFor(type), type.Contains("Fire") ? 5 : 7);
+                    H51CitizenAnchorKind.Work, OccupationFor(type), workplace.Capacity, workplace.DisplayName, workplace.WorkplaceId);
+                AddActivitySpots(work, type, terrain);
                 works.Add(work); all.Add(work);
 
                 H51CitizenAnchorKind visitorKind =
@@ -817,7 +831,7 @@ namespace Hanger51.EditorTools
 
                 H51CitizenAnchor visitor = Anchor(townRoot, "Visitor - " + type, front + tr.right * 3f, tr.forward,
                     "VISIT-" + townIndex.ToString("00") + "-" + workIndex.ToString("000"), townName,
-                    visitorKind, "", 12);
+                    visitorKind, "", 12, workplace.DisplayName, workplace.WorkplaceId);
                 all.Add(visitor);
             }
 
@@ -827,38 +841,51 @@ namespace Hanger51.EditorTools
                 Vector3 p = tr.position;
                 p.y = Ground(terrain, p) + .05f;
                 H51CitizenAnchor park = Anchor(townRoot, "Park Anchor", p, tr.forward,
-                    "PARK-" + townIndex.ToString("00"), townName, H51CitizenAnchorKind.Park, "", 20);
+                    "PARK-" + townIndex.ToString("00"), townName, H51CitizenAnchorKind.Park, "", 20,
+                    townName + " Community Park", "");
                 all.Add(park);
             }
 
+            int farmIndex = 0;
             foreach (Transform tr in world.GetComponentsInChildren<Transform>(true))
             {
                 if (tr.name != "Farmstead - " + townName) continue;
+                string siteId = "FARMSITE-" + townIndex.ToString("00") + "-" + farmIndex.ToString("00");
+                H51CitizenWorkplace workplace = EnsureWorkplaceComponent(
+                    tr, siteId, townName + " Farm " + (farmIndex + 1), townName, "Farm", "Farmer", 8);
+
                 Vector3 p = tr.position + tr.forward * 25f;
                 p.y = Ground(terrain, p) + .05f;
-                H51CitizenAnchor farm = Anchor(townRoot, "Farm Work Anchor", p, tr.forward,
-                    "FARM-" + townIndex.ToString("00"), townName, H51CitizenAnchorKind.Work, "Farmer", 8);
+                H51CitizenAnchor farm = Anchor(townRoot, "Farm Work Anchor " + (farmIndex + 1), p, tr.forward,
+                    "FARM-" + townIndex.ToString("00") + "-" + farmIndex.ToString("00"), townName,
+                    H51CitizenAnchorKind.Work, "Farmer", 8, workplace.DisplayName, workplace.WorkplaceId);
+                AddActivitySpots(farm, "Farm", terrain);
                 works.Add(farm); all.Add(farm);
+                farmIndex++;
             }
 
             if (works.Count == 0)
             {
-                Vector3 c = Average(houses);
-                H51CitizenAnchor fallback = Anchor(townRoot, "Community Work Anchor", c, town.forward,
-                    "WORK-" + townIndex.ToString("00") + "-COMMUNITY", townName, H51CitizenAnchorKind.Work, "Community Worker", 12);
+                Vector3 center = Average(houses);
+                center.y = Ground(terrain, center) + .05f;
+                H51CitizenAnchor fallback = Anchor(townRoot, "Community Work Anchor", center, town.forward,
+                    "WORK-" + townIndex.ToString("00") + "-COMMUNITY", townName,
+                    H51CitizenAnchorKind.Work, "Community Worker", 12, townName + " Public Works", "");
+                AddActivitySpots(fallback, "Public Works", terrain);
                 works.Add(fallback); all.Add(fallback);
             }
         }
 
         static H51CitizenAnchor Anchor(
             Transform parent, string name, Vector3 position, Vector3 forward,
-            string id, string town, H51CitizenAnchorKind kind, string occupation, int capacity)
+            string id, string town, H51CitizenAnchorKind kind, string occupation, int capacity,
+            string label = null, string workplaceId = "")
         {
             Transform t = New(name, parent);
             t.position = position;
             if (forward.sqrMagnitude > .01f) t.rotation = Quaternion.LookRotation(new Vector3(forward.x,0f,forward.z).normalized, Vector3.up);
             H51CitizenAnchor a = t.gameObject.AddComponent<H51CitizenAnchor>();
-            a.Configure(id, town, kind, occupation, capacity);
+            a.Configure(id, town, kind, occupation, capacity, label, workplaceId);
             return a;
         }
 
