@@ -104,15 +104,16 @@ namespace Hanger51.NPCs
             {
                 fontSize = 24,
                 fontStyle = FontStyle.Bold,
-                wordWrap = true,
-                normal = { textColor = Color.white }
+                wordWrap = true
             };
+            titleStyle.normal.textColor = Color.white;
+
             bodyStyle = new GUIStyle(GUI.skin.label)
             {
                 fontSize = 16,
-                wordWrap = true,
-                normal = { textColor = Color.white }
+                wordWrap = true
             };
+            bodyStyle.normal.textColor = Color.white;
             buttonStyle = new GUIStyle(GUI.skin.button)
             {
                 fontSize = 15,
