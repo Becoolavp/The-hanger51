@@ -11,6 +11,9 @@ namespace Hanger51.World
         [SerializeField] H51WorldClock clock;
         [SerializeField] Light sun;
         [SerializeField] Light moon;
+        [SerializeField] Transform moonVisual;
+        [SerializeField, Min(250f)] float moonVisualDistance = 1800f;
+        [SerializeField, Min(5f)] float moonVisualDiameter = 95f;
 
         [Header("Solar Timing")]
         [SerializeField, Range(0f,12f)] float baseSunriseHour = 6f;
@@ -52,6 +55,17 @@ namespace Hanger51.World
             moon = configuredMoon;
             Resolve();
             ApplyCycle();
+        }
+
+        public void ConfigureMoonVisual(
+            Transform visual,
+            float distance = 1800f,
+            float diameter = 95f)
+        {
+            moonVisual = visual;
+            moonVisualDistance = Mathf.Max(250f,distance);
+            moonVisualDiameter = Mathf.Max(5f,diameter);
+            ApplyMoonVisual();
         }
 
         void Awake()
@@ -193,6 +207,8 @@ namespace Hanger51.World
             RenderSettings.fogColor =
                 Color.Lerp(nightFogColor,dayFogColor,daylightFactor);
 
+            ApplyMoonVisual();
+
             Material sky = runtimeSky ? runtimeSky : RenderSettings.skybox;
             if (sky && sky.HasProperty("_Exposure"))
             {
@@ -200,6 +216,41 @@ namespace Hanger51.World
                     "_Exposure",
                     Mathf.Lerp(nightSkyExposure,daySkyExposure,daylightFactor));
             }
+        }
+
+        void ApplyMoonVisual()
+        {
+            if (!moonVisual || !moon)
+            {
+                return;
+            }
+
+            Camera camera = Camera.main;
+            Vector3 origin = camera
+                ? camera.transform.position
+                : transform.position;
+
+            Vector3 direction = moon.transform.forward.normalized;
+            moonVisual.position =
+                origin + direction * Mathf.Max(250f,moonVisualDistance);
+            moonVisual.localScale =
+                Vector3.one * Mathf.Max(5f,moonVisualDiameter);
+
+            if (camera)
+            {
+                moonVisual.rotation =
+                    Quaternion.LookRotation(
+                        moonVisual.position - camera.transform.position,
+                        Vector3.up);
+            }
+
+            bool aboveUsefulHorizon = direction.y > -.08f;
+            bool visible =
+                nightFactor > .08f &&
+                aboveUsefulHorizon;
+
+            if (moonVisual.gameObject.activeSelf != visible)
+                moonVisual.gameObject.SetActive(visible);
         }
 
         static float SmoothWindow(float value, float start, float end)
@@ -216,6 +267,8 @@ namespace Hanger51.World
             twilightHours = Mathf.Clamp(twilightHours,.1f,2f);
             daySunIntensity = Mathf.Max(0f,daySunIntensity);
             moonIntensity = Mathf.Max(0f,moonIntensity);
+            moonVisualDistance = Mathf.Max(250f,moonVisualDistance);
+            moonVisualDiameter = Mathf.Max(5f,moonVisualDiameter);
         }
     }
 }
