@@ -17,6 +17,7 @@ namespace Hanger51.NPCs
         [SerializeField] LayerMask interactionLayers = ~0;
 
         H51CitizenDialogue aimedCitizen;
+        H51TownDoor aimedDoor;
         bool ownsPrompt;
 
         void Awake() => Resolve();
@@ -41,8 +42,8 @@ namespace Hanger51.NPCs
                 return;
             }
 
-            aimedCitizen = FindAimedCitizen();
-            if (!aimedCitizen)
+            FindAimedTarget(out aimedCitizen, out aimedDoor);
+            if (!aimedCitizen && !aimedDoor)
             {
                 ClearOwnedPrompt();
                 return;
@@ -50,7 +51,10 @@ namespace Hanger51.NPCs
 
             if (inventoryUI)
             {
-                inventoryUI.SetInteractionPrompt($"E  Talk to {aimedCitizen.Identity.DisplayName}");
+                if (aimedCitizen && aimedCitizen.Identity)
+                    inventoryUI.SetInteractionPrompt($"E  Talk to {aimedCitizen.Identity.DisplayName}");
+                else if (aimedDoor)
+                    inventoryUI.SetInteractionPrompt(aimedDoor.InteractionText);
                 ownsPrompt = true;
             }
 
@@ -58,15 +62,27 @@ namespace Hanger51.NPCs
             if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
             {
                 ClearOwnedPrompt();
-                dialogueUI.Open(aimedCitizen);
+
+                if (aimedCitizen)
+                    dialogueUI.Open(aimedCitizen);
+                else if (aimedDoor)
+                    aimedDoor.ToggleFromPlayer();
             }
         }
 
-        H51CitizenDialogue FindAimedCitizen()
+        void FindAimedTarget(out H51CitizenDialogue npc, out H51TownDoor door)
         {
+            npc = null;
+            door = null;
+
             Ray ray = new Ray(playerCamera.transform.position, playerCamera.transform.forward);
-            RaycastHit[] hits = Physics.RaycastAll(ray, interactionDistance, interactionLayers, QueryTriggerInteraction.Collide);
-            if (hits == null || hits.Length == 0) return null;
+            RaycastHit[] hits = Physics.RaycastAll(
+                ray,
+                interactionDistance,
+                interactionLayers,
+                QueryTriggerInteraction.Collide);
+
+            if (hits == null || hits.Length == 0) return;
 
             Array.Sort(hits, (a,b) => a.distance.CompareTo(b.distance));
             for (int i = 0; i < hits.Length; i++)
@@ -74,13 +90,23 @@ namespace Hanger51.NPCs
                 Collider collider = hits[i].collider;
                 if (!collider) continue;
 
-                H51CitizenDialogue npc = collider.GetComponentInParent<H51CitizenDialogue>();
-                if (npc) return npc;
+                H51CitizenDialogue foundNpc = collider.GetComponentInParent<H51CitizenDialogue>();
+                if (foundNpc)
+                {
+                    npc = foundNpc;
+                    return;
+                }
 
-                // A solid object in front of the citizen blocks conversation targeting.
-                if (!collider.isTrigger) return null;
+                H51TownDoor foundDoor = collider.GetComponentInParent<H51TownDoor>();
+                if (foundDoor)
+                {
+                    door = foundDoor;
+                    return;
+                }
+
+                // The nearest solid object blocks interaction with anything behind it.
+                if (!collider.isTrigger) return;
             }
-            return null;
         }
 
         void Resolve()
