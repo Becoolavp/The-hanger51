@@ -186,7 +186,8 @@ namespace Hanger51.Aircraft
                 tireItem,
                 tireCondition,
                 rimItem,
-                rimCondition);
+                rimCondition,
+                this);
             if (looseWheel == null)
             {
                 resultMessage = "The complete wheel assembly could not be placed beside the aircraft.";
@@ -214,7 +215,7 @@ namespace Hanger51.Aircraft
                 || wheelAssembly == null
                 || !wheelAssembly.IsCarried
                 || !wheelAssembly.IsComplete
-                || wheelAssembly.OriginWheelIndex != wheelIndex
+                || !wheelAssembly.OriginatesFrom(this,wheelIndex)
                 || !maintenance.IsGearInstalled(wheelIndex))
             {
                 return false;
