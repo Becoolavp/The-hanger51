@@ -90,6 +90,7 @@ namespace Hanger51.Aircraft
         {
             ResolveReferences();
             EnsureArrays();
+            RepairVisualBindingsFromHierarchy(false);
             CapturePanelPose();
             ApplyImmediateVisualState();
         }
@@ -98,6 +99,7 @@ namespace Hanger51.Aircraft
         {
             ResolveReferences();
             EnsureArrays();
+            RepairVisualBindingsFromHierarchy(false);
             CapturePanelPose();
             ApplyImmediateVisualState();
         }
@@ -136,6 +138,81 @@ namespace Hanger51.Aircraft
             panelPoseCaptured = false;
             CapturePanelPose();
             ApplyImmediateVisualState();
+        }
+
+        public int RepairVisualBindingsFromHierarchy(bool restoreFullyEquippedState)
+        {
+            EnsureArrays();
+
+            Transform armamentRoot = transform.Find("P-51 Serviceable Wing Armament");
+            if (armamentRoot == null)
+            {
+                return 0;
+            }
+
+            int rebound = 0;
+            for (int wingIndex = 0; wingIndex < WingCount; wingIndex++)
+            {
+                string wingName = wingIndex == 0 ? "Left" : "Right";
+                Transform interior = FindDescendant(
+                    armamentRoot,
+                    wingName + " Wing Armament Bay Interior");
+                if (interior != null)
+                {
+                    bayInteriorRoots[wingIndex] = interior.gameObject;
+                }
+
+                for (int localStation = 1; localStation <= 3; localStation++)
+                {
+                    int stationIndex = wingIndex * 3 + localStation - 1;
+                    Transform gunTarget = interior != null
+                        ? FindDescendant(
+                            interior,
+                            wingName + " Gun Mount " + localStation)
+                        : null;
+                    Transform ammoTarget = interior != null
+                        ? FindDescendant(
+                            interior,
+                            wingName + " Ammo Bay " + localStation)
+                        : null;
+
+                    Transform gunVisual = gunTarget != null
+                        ? FindDescendant(gunTarget, "Installed M2 Wing Gun")
+                        : null;
+                    Transform ammoVisual = ammoTarget != null
+                        ? FindDescendant(ammoTarget, "Installed Wing Ammo Box")
+                        : null;
+
+                    if (gunVisual != null)
+                    {
+                        installedGunVisuals[stationIndex] = gunVisual.gameObject;
+                        rebound++;
+                    }
+                    if (ammoVisual != null)
+                    {
+                        installedAmmoVisuals[stationIndex] = ammoVisual.gameObject;
+                        rebound++;
+                    }
+
+                    if (restoreFullyEquippedState)
+                    {
+                        gunInstalled[stationIndex] = gunVisual != null;
+                        ammoBoxInstalled[stationIndex] =
+                            gunVisual != null && ammoVisual != null;
+                        ammoRemaining[stationIndex] =
+                            ammoBoxInstalled[stationIndex]
+                                ? Mathf.Max(
+                                    1,
+                                    ammoRemaining[stationIndex] > 0
+                                        ? ammoRemaining[stationIndex]
+                                        : gameRoundsPerAmmoBox)
+                                : 0;
+                    }
+                }
+            }
+
+            UpdateInstalledVisuals();
+            return rebound;
         }
 
         public bool IsPanelOpen(int wingIndex)
@@ -689,6 +766,28 @@ namespace Hanger51.Aircraft
             ammoBoxInstalled = Resize(ammoBoxInstalled, GunCount, false);
             ammoRemaining = Resize(ammoRemaining, GunCount, 0);
             gameRoundsPerAmmoBox = Mathf.Max(1, gameRoundsPerAmmoBox);
+        }
+
+        private static Transform FindDescendant(
+            Transform parent,
+            string objectName)
+        {
+            if (parent == null || string.IsNullOrWhiteSpace(objectName))
+            {
+                return null;
+            }
+
+            Transform[] all =
+                parent.GetComponentsInChildren<Transform>(true);
+            for (int index = 0; index < all.Length; index++)
+            {
+                Transform candidate = all[index];
+                if (candidate != null && candidate.name == objectName)
+                {
+                    return candidate;
+                }
+            }
+            return null;
         }
 
         private static T[] Copy<T>(T[] source, int length)
