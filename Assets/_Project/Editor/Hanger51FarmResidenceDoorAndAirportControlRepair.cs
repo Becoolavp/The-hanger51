@@ -290,28 +290,51 @@ namespace Hanger51.EditorTools
                 pivot.localPosition = hingePosition;
                 pivot.localRotation = Quaternion.identity;
 
-                GameObject leafObject = GameObject.CreatePrimitive(PrimitiveType.Cube);
-                Undo.RegisterCreatedObjectUndo(leafObject,"Create repaired house door leaf");
-                leafObject.name = "Door Leaf";
-                leafObject.transform.SetParent(pivot,false);
-                leafObject.transform.localPosition =
-                    new Vector3(leafWidth * .5f,0f,0f);
-                leafObject.transform.localRotation = Quaternion.identity;
-                leafObject.transform.localScale =
+                Transform leaf = New("Door Leaf",pivot);
+                leaf.localPosition = new Vector3(leafWidth * .5f,0f,0f);
+                leaf.localRotation = Quaternion.identity;
+                leaf.localScale = Vector3.one;
+
+                BoxCollider leafCollider =
+                    Undo.AddComponent<BoxCollider>(leaf.gameObject);
+                leafCollider.center = Vector3.zero;
+                leafCollider.size =
+                    new Vector3(leafWidth,leafHeight,leafDepth);
+                leafCollider.isTrigger = false;
+
+                GameObject leafVisual =
+                    GameObject.CreatePrimitive(PrimitiveType.Cube);
+                Undo.RegisterCreatedObjectUndo(
+                    leafVisual,
+                    "Create repaired house door visual");
+                leafVisual.name = "Door Leaf Visual";
+                leafVisual.transform.SetParent(leaf,false);
+                leafVisual.transform.localPosition = Vector3.zero;
+                leafVisual.transform.localRotation = Quaternion.identity;
+                leafVisual.transform.localScale =
                     new Vector3(leafWidth,leafHeight,leafDepth);
 
-                Renderer leafRenderer = leafObject.GetComponent<Renderer>();
+                Renderer leafRenderer = leafVisual.GetComponent<Renderer>();
                 if (leafRenderer) leafRenderer.sharedMaterial = doorMaterial;
+                Collider visualCollider = leafVisual.GetComponent<Collider>();
+                if (visualCollider)
+                    Undo.DestroyObjectImmediate(visualCollider);
 
                 CreateHandle(
-                    leafObject.transform,
+                    leaf,
                     "Outside Door Handle",
-                    new Vector3(leafWidth * .36f,0f,-leafDepth * .75f),
+                    new Vector3(
+                        leafWidth * .36f,
+                        0f,
+                        -(leafDepth * .5f + .055f)),
                     handleMaterial);
                 CreateHandle(
-                    leafObject.transform,
+                    leaf,
                     "Inside Door Handle",
-                    new Vector3(leafWidth * .36f,0f,leafDepth * .75f),
+                    new Vector3(
+                        leafWidth * .36f,
+                        0f,
+                        leafDepth * .5f + .055f),
                     handleMaterial);
 
                 H51TownDoor interactive =
@@ -370,13 +393,14 @@ namespace Hanger51.EditorTools
 
         static void DisableLegacyDoorLeaves(Transform home)
         {
+            Transform repairRoot = FindChild(home,DoorRepairRootName);
             Transform[] all = home.GetComponentsInChildren<Transform>(true);
             for (int i=0;i<all.Length;i++)
             {
                 Transform t = all[i];
                 if (!t || t == home) continue;
-                if (t.name == DoorRepairRootName || t.IsChildOf(
-                    FindChild(home,DoorRepairRootName)))
+                if (repairRoot &&
+                    (t == repairRoot || t.IsChildOf(repairRoot)))
                     continue;
 
                 string n = t.name;
