@@ -334,8 +334,13 @@ namespace Hanger51.EditorTools
                 lower.Contains("farm");
 
             bool home = building.Kind == H51EnterableBuildingKind.Home;
-            float width = service ? Mathf.Min(4.6f, size.x * .40f) : home ? 1.15f : 1.45f;
-            float height = service ? 3.65f : home ? 2.28f : 2.45f;
+            bool farm = building.Kind == H51EnterableBuildingKind.Farm || lower.Contains("farm");
+            float width = service
+                ? Mathf.Min(farm ? 5.05f : 4.9f, size.x * .42f)
+                : home ? 1.15f : 1.45f;
+            float height = service
+                ? Mathf.Min(farm ? 4.25f : 4.05f, size.y - .45f)
+                : home ? 2.28f : 2.45f;
             float jamb = service ? .18f : .12f;
 
             Material wall = FindExteriorWallMaterial(building) ?? mats.trim;
@@ -436,6 +441,8 @@ namespace Hanger51.EditorTools
                 AddClinicInterior(root, center, w, d, y, mats);
             else if (lower.Contains("garage") || lower.Contains("fire"))
                 AddServiceInterior(root, center, w, d, y, mats);
+            else if (lower.Contains("farm") || building.Kind == H51EnterableBuildingKind.Farm)
+                AddFarmInterior(root, center, w, d, y, mats);
             else if (lower.Contains("store") || lower.Contains("supply") || lower.Contains("post"))
                 AddStoreInterior(root, center, w, d, y, mats);
             else
@@ -513,16 +520,62 @@ namespace Hanger51.EditorTools
 
         static void AddStoreInterior(Transform root, Vector3 c, float w, float d, float y, Mats m)
         {
-            Box(root, "Checkout Counter", new Vector3(c.x+w*.16f,y+.56f,c.z-d*.30f),
-                new Vector3(w*.36f,1.12f,.72f), m.counter, true);
-            Box(root, "Register", new Vector3(c.x+w*.20f,y+1.24f,c.z-d*.30f),
+            // Keep the checkout zone at the back and leave a clear customer aisle from the entrance.
+            Box(root, "Checkout Counter", new Vector3(c.x+w*.13f,y+.56f,c.z-d*.33f),
+                new Vector3(w*.34f,1.12f,.68f), m.counter, true);
+            Box(root, "Register", new Vector3(c.x+w*.20f,y+1.24f,c.z-d*.33f),
                 new Vector3(.48f,.28f,.42f), m.appliance, false);
 
+            // One shelving bank per side wall. The old double banks overlapped the checkout counter.
             for (int side=-1; side<=1; side+=2)
             {
-                Shelf(root, new Vector3(c.x+side*w*.28f,y,c.z+d*.04f), 1.0f, d*.34f, 1.8f, m);
-                Shelf(root, new Vector3(c.x+side*w*.28f,y,c.z-d*.22f), 1.0f, d*.22f, 1.8f, m);
+                Shelf(root,
+                    new Vector3(c.x+side*w*.35f,y,c.z+d*.08f),
+                    .92f,
+                    Mathf.Clamp(d*.42f,2.4f,4.2f),
+                    1.85f,
+                    m);
             }
+
+            Box(root, "Store Display Table",
+                new Vector3(c.x-w*.05f,y+.43f,c.z+d*.14f),
+                new Vector3(1.55f,.86f,.82f), m.lightWood, true);
+        }
+
+        static void AddFarmInterior(Transform root, Vector3 c, float w, float d, float y, Mats m)
+        {
+            // Farm buildings need a work floor, not the generic office furniture.
+            Workbench(root,
+                new Vector3(c.x-w*.14f,y,c.z-d*.36f),
+                Mathf.Clamp(w*.42f,3.2f,5.0f),
+                m);
+
+            Shelf(root,
+                new Vector3(c.x+w*.39f,y,c.z-d*.12f),
+                .92f,
+                Mathf.Clamp(d*.34f,2.6f,4.4f),
+                2.15f,
+                m);
+
+            Box(root, "Feed Pallet Left",
+                new Vector3(c.x-w*.27f,y+.28f,c.z+d*.14f),
+                new Vector3(1.55f,.56f,1.45f), m.counter, true);
+            Box(root, "Feed Pallet Right",
+                new Vector3(c.x-w*.27f,y+.28f,c.z-d*.02f),
+                new Vector3(1.55f,.56f,1.45f), m.counter, true);
+
+            Box(root, "Tool Cabinet",
+                new Vector3(c.x+w*.18f,y+.92f,c.z-d*.38f),
+                new Vector3(1.45f,1.84f,.48f), m.metal, true);
+
+            Box(root, "Farm Parts Bin",
+                new Vector3(c.x+w*.12f,y+.45f,c.z+d*.16f),
+                new Vector3(1.2f,.90f,1.0f), m.cabinet, true);
+
+            Box(root, "Clear Farm Work Lane",
+                new Vector3(c.x,y+.015f,c.z+d*.02f),
+                new Vector3(Mathf.Clamp(w*.28f,2.4f,3.6f),.03f,Mathf.Clamp(d*.55f,4.0f,6.5f)),
+                m.floorWood,false);
         }
 
         static void AddCafeInterior(Transform root, Vector3 c, float w, float d, float y, Mats m)
@@ -538,8 +591,9 @@ namespace Hanger51.EditorTools
             {
                 Vector3 p = new Vector3(c.x+x*w*.22f,y,c.z+d*.08f);
                 Table(root,p,1.25f,1.25f,.72f,m.lightWood);
-                Chair(root,p+new Vector3(0,0,1.0f),Quaternion.identity,m);
-                Chair(root,p+new Vector3(0,0,-1.0f),Quaternion.Euler(0,180,0),m);
+                // Chair backs stay away from the table so the seat faces inward.
+                Chair(root,p+new Vector3(0,0,1.0f),Quaternion.Euler(0,180,0),m);
+                Chair(root,p+new Vector3(0,0,-1.0f),Quaternion.identity,m);
             }
         }
 
@@ -574,7 +628,7 @@ namespace Hanger51.EditorTools
             for (int side=-1;side<=1;side+=2)
             {
                 Desk(root,new Vector3(c.x+side*w*.22f,y,c.z-d*.08f),m);
-                Chair(root,new Vector3(c.x+side*w*.22f,y,c.z-d*.08f+1.0f),Quaternion.identity,m);
+                Chair(root,new Vector3(c.x+side*w*.22f,y,c.z-d*.08f+1.0f),Quaternion.Euler(0,180,0),m);
             }
             Box(root, "Records Cabinet", new Vector3(c.x+w*.38f,y+1.0f,c.z-d*.39f),
                 new Vector3(1.0f,2.0f,.56f), m.metal, true);
