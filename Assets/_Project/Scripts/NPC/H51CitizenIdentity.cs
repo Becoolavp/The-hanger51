@@ -91,10 +91,21 @@ namespace Hanger51.NPCs
             curiosity = Mathf.Clamp01(citizenCuriosity);
         }
 
+        public void SetHomeAssignment(string homeId)
+        {
+            homeAnchorId = homeId ?? string.Empty;
+        }
+
         public void SetWorkAssignment(string workId, string job)
         {
             workAnchorId = workId ?? string.Empty;
             occupation = string.IsNullOrWhiteSpace(job) ? "Resident" : job;
+        }
+
+        public void SetAssignments(string homeId, string workId, string job)
+        {
+            SetHomeAssignment(homeId);
+            SetWorkAssignment(workId, job);
         }
 
         public H51CitizenRelationship Relationship(string otherId, bool create = true)
