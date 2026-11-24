@@ -349,10 +349,22 @@ namespace Hanger51.Aircraft
                 return;
             }
 
+            float previousProgress = aircraftInstallProgress;
             aircraftInstallProgress = Mathf.Clamp01(
                 aircraftInstallProgress
                 + Time.deltaTime / HoldSeconds);
             float t = aircraftInstallProgress;
+
+            if (previousProgress < 1f
+                && aircraftInstallProgress >= 1f
+                && previewAxle.Controller != null)
+            {
+                P51WheelInstallDiagnostics diagnostics =
+                    P51WheelInstallDiagnostics.Ensure(previewAxle.Controller);
+                diagnostics?.RecordVisualPreviewReachedEnd(
+                    previewAxle.WheelIndex,
+                    previewWheel);
+            }
             float smooth = t * t * (3f - 2f * t);
 
             Vector3 targetPosition = previewAxle.ServicePoint.position;
@@ -387,6 +399,15 @@ namespace Hanger51.Aircraft
             previewWheelStartPosition = carriedWheel.transform.position;
             previewWheelStartRotation = carriedWheel.transform.rotation;
             aircraftInstallProgress = 0f;
+
+            if (target.Controller != null)
+            {
+                P51WheelInstallDiagnostics diagnostics =
+                    P51WheelInstallDiagnostics.Ensure(target.Controller);
+                diagnostics?.RecordVisualPreviewBegin(
+                    target.WheelIndex,
+                    carriedWheel);
+            }
         }
 
         private void CancelAircraftPreview(bool restoreCarryPose)
