@@ -278,7 +278,9 @@ namespace Hanger51.NPCs
             H51CitizenRoutineState desiredState,
             float destinationDistance)
         {
-            if (!desired || destinationDistance < 38f) return false;
+            // Towns are intentionally spread out, but citizens should still use cars for ordinary
+            // cross-town work/shopping trips rather than only for very long journeys.
+            if (!desired || destinationDistance < 26f) return false;
             if (Time.time < suppressVehicleUntil) return false;
 
             if (!string.IsNullOrEmpty(lastVehicleDestinationAnchorId))
