@@ -73,8 +73,8 @@ namespace Hanger51.EditorTools
             Transform regional = world ? FindChild(world.transform,RegionalPassName) : null;
             Transform plant = regional ? FindChild(regional,PlantName) : null;
             H51CitizenRegistry registry = citizenRoot ? citizenRoot.GetComponent<H51CitizenRegistry>() : null;
-            H51TrafficNetwork traffic = citizenRoot
-                ? citizenRoot.GetComponentInChildren<H51TrafficNetwork>(true)
+            H51TrafficNetwork traffic = world
+                ? world.GetComponentInChildren<H51TrafficNetwork>(true)
                 : null;
             H51CitizenVisualCatalog catalog =
                 AssetDatabase.LoadAssetAtPath<H51CitizenVisualCatalog>(CatalogPath);
@@ -82,7 +82,14 @@ namespace Hanger51.EditorTools
             if (!world || !terrain || !citizenRoot || !plant || !registry || !traffic)
             {
                 Debug.LogError(
-                    "Step 150 failed. The current countryside, power station, citizen registry, or traffic network is missing.");
+                    "Step 150 failed. Missing prerequisite(s): " +
+                    "world=" + (world ? "ready" : "MISSING") +
+                    ", terrain=" + (terrain ? "ready" : "MISSING") +
+                    ", citizen root=" + (citizenRoot ? "ready" : "MISSING") +
+                    ", power station=" + (plant ? "ready" : "MISSING") +
+                    ", citizen registry=" + (registry ? "ready" : "MISSING") +
+                    ", traffic network=" + (traffic ? "ready" : "MISSING") +
+                    ". The traffic network is created under 'Hanger 51 Enterable Town Interiors And Traffic', not under the citizen root.");
                 return;
             }
 
