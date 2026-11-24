@@ -100,8 +100,19 @@ namespace Hanger51.Aircraft
                     continue;
                 }
 
+                bool rimBefore = rims[wheelIndex];
+                bool tireBefore = tires[wheelIndex];
                 rims[wheelIndex] = false;
                 tires[wheelIndex] = false;
+
+                P51WheelInstallDiagnostics diagnostics =
+                    P51WheelInstallDiagnostics.Ensure(maintenance);
+                diagnostics?.RecordReconcilerChange(
+                    wheelIndex,
+                    rimBefore,
+                    tireBefore,
+                    rims[wheelIndex],
+                    tires[wheelIndex]);
                 repaired = true;
             }
 
