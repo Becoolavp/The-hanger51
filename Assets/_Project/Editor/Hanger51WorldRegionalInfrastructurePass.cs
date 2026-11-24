@@ -185,7 +185,10 @@ namespace Hanger51.EditorTools
         static void BuildParking(Transform root,Mats m)
         {
             Transform p=New("Employee Parking",root);p.localPosition=new Vector3(-52,0,58);Box(p,"Parking Surface",new Vector3(0,.04f,0),new Vector3(68,.08f,30),m.asphalt,false);
-            for(int x=-2;x<=2;x++)for(int z=-1;z<=1;z+=2){Box(p,"Parking Stripe",new Vector3(x*11,.09f,z*6),new Vector3(.15f,.03f,10),m.white,false);if((x+z)%2==0)Car(p,new Vector3(x*11,.1f,z*6),z>0?180:0,x+z,m);}
+            for(int x=-2;x<=2;x++)for(int z=-1;z<=1;z+=2)
+                Box(p,"Parking Stripe",new Vector3(x*11,.09f,z*6),new Vector3(.15f,.03f,10),m.white,false);
+            // Functional employee vehicles and reservable spaces are added by the current
+            // emergency/utility pass. Do not recreate the old decorative placeholder cars here.
         }
         static Mesh CoolingMesh()
         {
