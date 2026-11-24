@@ -36,6 +36,7 @@ namespace Hanger51.World
         float nightFactor;
         float sunriseHour;
         float sunsetHour;
+        Material sourceSky;
         Material runtimeSky;
 
         public float DaylightFactor => daylightFactor;
@@ -77,8 +78,14 @@ namespace Hanger51.World
         void OnDestroy()
         {
             if (Instance == this) Instance = null;
-            if (runtimeSky && runtimeSky != RenderSettings.skybox)
+
+            if (runtimeSky)
+            {
+                if (RenderSettings.skybox == runtimeSky)
+                    RenderSettings.skybox = sourceSky;
                 Destroy(runtimeSky);
+                runtimeSky = null;
+            }
         }
 
         void Update()
@@ -118,6 +125,7 @@ namespace Hanger51.World
             Material source = RenderSettings.skybox;
             if (!source || runtimeSky) return;
 
+            sourceSky = source;
             runtimeSky = new Material(source)
             {
                 name = source.name + " (H51 Runtime Day Night)"
