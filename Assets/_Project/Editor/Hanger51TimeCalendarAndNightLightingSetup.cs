@@ -579,6 +579,39 @@ namespace Hanger51.EditorTools
             GameObject airport = GameObject.Find(AirportRootName);
             if (!airport) return;
 
+            if (!TryFindInteriorWallPlacement(
+                    airport,
+                    out Renderer wall,
+                    out Vector3 innerSurface,
+                    out Vector3 inward))
+                return;
+
+            float y = Mathf.Clamp(
+                wall.bounds.min.y + 1.35f,
+                wall.bounds.min.y + .75f,
+                wall.bounds.max.y - .45f);
+
+            control.position =
+                new Vector3(innerSurface.x,y,innerSurface.z) +
+                inward * .62f;
+
+            // The cabinet indicator/text are authored on local -Z.
+            // Point local +Z outward so the readable face points into the airport.
+            control.rotation =
+                Quaternion.LookRotation(-inward,Vector3.up);
+        }
+
+        static bool TryFindInteriorWallPlacement(
+            GameObject airport,
+            out Renderer wall,
+            out Vector3 innerSurface,
+            out Vector3 inward)
+        {
+            wall = null;
+            innerSurface = Vector3.zero;
+            inward = Vector3.zero;
+            if (!airport) return false;
+
             GameObject hangar = GameObject.Find(HangarRootName);
             Vector3 interiorReference = hangar
                 ? hangar.transform.position
@@ -586,50 +619,65 @@ namespace Hanger51.EditorTools
 
             Renderer[] renderers =
                 airport.GetComponentsInChildren<Renderer>(true);
-            Renderer nearestWall = null;
-            float nearestSqr = float.PositiveInfinity;
 
+            float bestSqr = float.PositiveInfinity;
             for (int i=0;i<renderers.Length;i++)
             {
-                Renderer renderer = renderers[i];
-                if (!renderer) continue;
+                Renderer candidate = renderers[i];
+                if (!candidate) continue;
 
-                string n = renderer.name;
-                bool wall =
+                string n = candidate.name;
+                bool isWall =
                     n.IndexOf("Perimeter Wall",StringComparison.OrdinalIgnoreCase) >= 0 ||
                     n.IndexOf("Airport Wall",StringComparison.OrdinalIgnoreCase) >= 0;
-                if (!wall) continue;
+                if (!isWall) continue;
 
-                Vector3 closest = renderer.bounds.ClosestPoint(fallback);
-                float sqr = (closest - fallback).sqrMagnitude;
-                if (sqr >= nearestSqr) continue;
-                nearestSqr = sqr;
-                nearestWall = renderer;
+                Vector3 closest =
+                    candidate.bounds.ClosestPoint(interiorReference);
+                Vector3 planar =
+                    Vector3.ProjectOnPlane(
+                        closest - interiorReference,
+                        Vector3.up);
+                float sqr = planar.sqrMagnitude;
+
+                if (sqr >= bestSqr) continue;
+                bestSqr = sqr;
+                wall = candidate;
+                innerSurface = closest;
             }
 
-            if (!nearestWall) return;
+            if (!wall) return false;
 
-            Bounds bounds = nearestWall.bounds;
-            Vector3 inside = interiorReference - bounds.center;
-            inside.y = 0f;
-            if (inside.sqrMagnitude < .01f)
-                inside = -runway.forward;
-            inside.Normalize();
+            inward =
+                Vector3.ProjectOnPlane(
+                    interiorReference - innerSurface,
+                    Vector3.up);
+            if (inward.sqrMagnitude < .01f)
+            {
+                inward =
+                    Vector3.ProjectOnPlane(
+                        interiorReference - wall.bounds.center,
+                        Vector3.up);
+            }
+            if (inward.sqrMagnitude < .01f)
+                return false;
 
-            Vector3 closestPoint = bounds.ClosestPoint(fallback);
-            float surfaceY = Mathf.Clamp(
-                bounds.min.y + 1.35f,
-                bounds.min.y + .75f,
-                bounds.max.y - .45f);
+            inward.Normalize();
 
-            control.position =
-                new Vector3(closestPoint.x,surfaceY,closestPoint.z) +
-                inside * .48f;
+            Vector3 surfaceProbe =
+                new Vector3(
+                    interiorReference.x,
+                    wall.bounds.center.y,
+                    interiorReference.z);
+            Vector3 closestSurface =
+                wall.bounds.ClosestPoint(surfaceProbe);
 
-            // The cabinet indicator/text are authored on local -Z, so point local +Z
-            // toward the outside of the wall. The readable/control face then faces inward.
-            Vector3 outward = -inside;
-            control.rotation = Quaternion.LookRotation(outward,Vector3.up);
+            innerSurface =
+                new Vector3(
+                    closestSurface.x,
+                    wall.bounds.center.y,
+                    closestSurface.z);
+            return true;
         }
 
         static void BuildLamp(
