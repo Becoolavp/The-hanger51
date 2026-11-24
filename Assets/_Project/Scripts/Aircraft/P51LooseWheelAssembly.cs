@@ -259,6 +259,23 @@ namespace Hanger51.Aircraft
             return true;
         }
 
+        public bool BeginAircraftInstallationHandoff()
+        {
+            if (CurrentCarried != this)
+            {
+                return false;
+            }
+
+            // The service transaction has already accepted this complete wheel and copied
+            // its condition into the aircraft. From this point forward the temporary wheel
+            // is only an animation/handoff visual. Clear global carry ownership BEFORE the
+            // permanent tire hierarchy is re-enabled, otherwise the tire/valve target's
+            // OnEnable -> UpdateInstallHighlight path sees a still-carried source wheel and
+            // "self-heals" the newly installed axle back to empty.
+            CurrentCarried = null;
+            return true;
+        }
+
         public void CompleteAircraftInstallation()
         {
             if (CurrentCarried == this)
