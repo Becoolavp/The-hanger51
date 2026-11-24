@@ -15,6 +15,8 @@ namespace Hanger51.Aircraft
         [SerializeField, Range(-1, 2)] private int originWheelIndex = -1;
         [SerializeField, Min(0.2f)] private float serviceHoldSeconds = 1.15f;
 
+        [System.NonSerialized] private P51LandingGearInventoryBridge originBridge;
+
         private Collider interactionCollider;
         private Transform tireVisual;
         private Transform rimVisual;
@@ -32,6 +34,15 @@ namespace Hanger51.Aircraft
         public float ProperPressurePsi => IsTailWheel ? 24f : 30f;
         public Transform ServiceValveTarget => serviceValveTarget;
 
+        public bool OriginatesFrom(
+            P51LandingGearInventoryBridge bridge,
+            int wheelIndex)
+        {
+            return bridge != null
+                && originBridge == bridge
+                && originWheelIndex == wheelIndex;
+        }
+
         private bool IsTailWheel =>
             (rimItem != null && rimItem.ItemId == P51LandingGearInventoryBridge.TailRimItemId)
             || (tireItem != null && tireItem.ItemId == P51LandingGearInventoryBridge.TailTireItemId)
@@ -45,7 +56,8 @@ namespace Hanger51.Aircraft
             InventoryItemDefinition configuredTireItem,
             EnginePartConditionData configuredTireCondition,
             InventoryItemDefinition configuredRimItem,
-            EnginePartConditionData configuredRimCondition)
+            EnginePartConditionData configuredRimCondition,
+            P51LandingGearInventoryBridge configuredOriginBridge = null)
         {
             if (configuredTireItem == null || configuredRimItem == null)
             {
@@ -75,6 +87,7 @@ namespace Hanger51.Aircraft
                 : EnginePartConditionData.CreateDefaultForItem(configuredRimItem);
             loose.wheelLabel = string.IsNullOrWhiteSpace(label) ? "P-51 wheel" : label;
             loose.originWheelIndex = Mathf.Clamp(configuredOriginWheelIndex, -1, 2);
+            loose.originBridge = configuredOriginBridge;
             if (loose.rimCondition != null && loose.originWheelIndex >= 0)
             {
                 loose.rimCondition.SetWheelStationIndex(loose.originWheelIndex);
