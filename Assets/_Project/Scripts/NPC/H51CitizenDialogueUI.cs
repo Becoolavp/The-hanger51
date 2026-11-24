@@ -132,7 +132,7 @@ namespace Hanger51.NPCs
             GUILayout.EndHorizontal();
 
             GUILayout.FlexibleSpace();
-            if (GUILayout.Button("Goodbye  [Esc]", buttonStyle)) Close();
+            bool closeRequested = GUILayout.Button("Goodbye  [Esc]", buttonStyle);
             GUILayout.EndVertical();
 
             GUILayout.Space(20f);
@@ -142,6 +142,11 @@ namespace Hanger51.NPCs
 
             GUILayout.EndHorizontal();
             GUILayout.EndArea();
+
+            // Do not null the active citizen in the middle of this IMGUI frame.
+            // The relationship panel above still needs the reference until layout/drawing is complete.
+            if (closeRequested)
+                Close();
         }
 
         void DrawRelationshipPanel(float width)
