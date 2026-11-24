@@ -10,7 +10,10 @@ namespace Hanger51.NPCs
         Leisure,
         Park,
         Farm,
-        Civic
+        Civic,
+        Entertainment,
+        Medical,
+        Service
     }
 
     public sealed class H51CitizenAnchor : MonoBehaviour
