@@ -68,7 +68,7 @@ namespace Hanger51.NPCs
         public int DayOfYear => CurrentDateTime.DayOfYear;
         public string MonthName => CurrentDateTime.ToString("MMMM");
         public string DayName => CurrentDateTime.ToString("dddd");
-        public bool IsWeekend => DayOfWeek == DayOfWeek.Saturday || DayOfWeek == DayOfWeek.Sunday;
+        public bool IsWeekend => DayOfWeek == System.DayOfWeek.Saturday || DayOfWeek == System.DayOfWeek.Sunday;
         public bool IsWeekday => !IsWeekend;
 
         public string TimeText
