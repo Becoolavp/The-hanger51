@@ -125,6 +125,9 @@ namespace Hanger51.EditorTools
             H51EnterableBuilding[] buildings = world.GetComponentsInChildren<H51EnterableBuilding>(true);
             for (int i=0;i<spots.Length;i++)
             {
+                if (!spots[i] || spots[i].name.StartsWith("Outdoor Farm Activity", StringComparison.Ordinal))
+                    continue;
+
                 H51EnterableBuilding building = FindNearestBuilding(buildings, spots[i].transform.position, 45f);
                 if (!building) continue;
                 Transform floor = FindChild(building.transform, "Interior Floor");
