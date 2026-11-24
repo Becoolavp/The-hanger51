@@ -161,14 +161,17 @@ namespace Hanger51.EditorTools
             P51WingArmamentSystem[] systems =
                 UnityEngine.Object.FindObjectsByType<P51WingArmamentSystem>(
                     FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
+                    FindObjectsSortMode.None)
+                    .Where(s =>
+                        s &&
+                        s.transform.Find(ArmamentRootName))
+                    .ToArray();
 
             int equippedStations = 0;
             int systemsWithSixVisuals = 0;
             for (int s=0;s<systems.Length;s++)
             {
                 P51WingArmamentSystem system = systems[s];
-                if (!system) continue;
 
                 int stationEquipped = 0;
                 for (int i=0;i<6;i++)
@@ -570,12 +573,15 @@ namespace Hanger51.EditorTools
             P51WingArmamentSystem[] systems =
                 UnityEngine.Object.FindObjectsByType<P51WingArmamentSystem>(
                     FindObjectsInactive.Include,
-                    FindObjectsSortMode.None);
+                    FindObjectsSortMode.None)
+                    .Where(s =>
+                        s &&
+                        s.transform.Find(ArmamentRootName))
+                    .ToArray();
 
             for (int s=0;s<systems.Length;s++)
             {
                 P51WingArmamentSystem system = systems[s];
-                if (!system) continue;
 
                 visualBindings +=
                     system.RepairVisualBindingsFromHierarchy(true);
