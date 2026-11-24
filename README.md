@@ -130,7 +130,19 @@ Important files:
 - `Assets/_Project/Scripts/NPC/H51CitizenAnchor.cs`
 - `Assets/_Project/Scripts/NPC/H51CitizenWorkplace.cs`
 
-Do not mark this cleanup verified until Step 155 passes and Play mode confirms at least one town-house door opens/closes with its handles attached, at least one farmer returns to the rural farmhouse/work location as the clock changes, and the runway control is reachable from the inside of the airport wall.
+Unity Step 155 validation results from 2026-11-24:
+
+- Interactive home doors: **100/100 passed**
+- Detached/missing handles: **0**
+- Working farmsteads: **16**
+- Farm-resident farmers: **16**
+- Bad farmer assignments: **0**
+- Farm NavMeshes: **16/16**
+- Runway control inside airport wall: **failed**
+
+The failure was isolated to runway-control placement. The original placement selected a wall using the control's prior exterior location, which could preserve the wrong face. Commits `2bf19518` and `e5f31968` changed both Step 154 and the original Step 152 builder to choose the perimeter wall nearest the hangar/interior reference, project onto that wall's inner face, and offset the cabinet inward toward the hangar. Re-run Step 154 and Step 155 after pulling those commits.
+
+Do not mark this cleanup fully verified until Step 155 passes and Play mode confirms at least one town-house door opens/closes with its handles attached, at least one farmer returns to the rural farmhouse/work location as the clock changes, and the runway control is reachable from the inside of the airport wall.
 
 ### Wheel-install diagnostics
 
