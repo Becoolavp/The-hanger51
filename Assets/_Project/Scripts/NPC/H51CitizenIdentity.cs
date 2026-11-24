@@ -32,6 +32,13 @@ namespace Hanger51.NPCs
         [Range(0f,100f)] public float grudge;
     }
 
+    public enum H51CitizenPresentation
+    {
+        Unknown,
+        Male,
+        Female
+    }
+
     public sealed class H51CitizenIdentity : MonoBehaviour
     {
         [Header("Persistent Identity")]
@@ -43,6 +50,7 @@ namespace Hanger51.NPCs
         [SerializeField] string homeAnchorId;
         [SerializeField] string workAnchorId;
         [SerializeField] string visualArchetype;
+        [SerializeField] H51CitizenPresentation presentation = H51CitizenPresentation.Unknown;
         [SerializeField] int appearanceSeed;
 
         [Header("Personality")]
@@ -63,6 +71,7 @@ namespace Hanger51.NPCs
         public string HomeAnchorId => homeAnchorId;
         public string WorkAnchorId => workAnchorId;
         public string VisualArchetype => visualArchetype;
+        public H51CitizenPresentation Presentation => presentation;
         public int AppearanceSeed => appearanceSeed;
         public float Sociability => sociability;
         public float Responsibility => responsibility;
@@ -89,6 +98,17 @@ namespace Hanger51.NPCs
             responsibility = Mathf.Clamp01(responsible);
             temper = Mathf.Clamp01(citizenTemper);
             curiosity = Mathf.Clamp01(citizenCuriosity);
+        }
+
+        public void SetDisplayName(string name)
+        {
+            if (!string.IsNullOrWhiteSpace(name))
+                displayName = name.Trim();
+        }
+
+        public void SetPresentation(H51CitizenPresentation value)
+        {
+            presentation = value;
         }
 
         public void SetHomeAssignment(string homeId)
