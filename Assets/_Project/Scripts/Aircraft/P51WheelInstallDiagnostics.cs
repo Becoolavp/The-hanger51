@@ -56,6 +56,14 @@ namespace Hanger51.Aircraft
             int wheelIndex,
             P51LooseWheelAssembly wheelAssembly)
         {
+            string header =
+                $"{TracePrefix} NEW VISUAL INSTALL ATTEMPT\n"
+                + $"UTC={DateTime.UtcNow:O}\n"
+                + $"Realtime={Time.realtimeSinceStartup:F3}\n"
+                + $"SceneObject={name}\n"
+                + $"TraceFile={TraceFilePath}\n";
+            WriteFresh(header);
+
             Write(
                 $"VISUAL_PREVIEW_BEGIN frame={Time.frameCount} realtime={Time.realtimeSinceStartup:F3} "
                 + $"wheel={WheelLabel(wheelIndex)} index={wheelIndex} "
