@@ -302,6 +302,25 @@ namespace Hanger51.Aircraft
             rimInstalled[wheelIndex] = true;
             diagnostics?.Checkpoint("STATE_WRITTEN_INSTALLED_TRUE", wheelIndex, wheelAssembly);
 
+            bool carryOwnershipReleased =
+                wheelAssembly.BeginAircraftInstallationHandoff();
+            diagnostics?.Checkpoint(
+                $"CARRY_OWNERSHIP_RELEASED success={carryOwnershipReleased}",
+                wheelIndex,
+                wheelAssembly);
+
+            if (!carryOwnershipReleased)
+            {
+                // Roll the station back to empty rather than destroying a wheel whose
+                // carry ownership changed unexpectedly during the transaction.
+                installed[wheelIndex] = false;
+                rimInstalled[wheelIndex] = false;
+                RefreshMaintenanceVisualsAndPhysics();
+                resultMessage =
+                    "Wheel installation handoff was interrupted before the aircraft could take ownership of the assembly. Try the install again.";
+                return false;
+            }
+
             // Re-resolve the permanent wheel hierarchy on this exact aircraft before the
             // animated carried wheel is deleted. This is important for live-spawned P-51s:
             // their maintenance state can be correct while serialized visual references still
@@ -324,7 +343,7 @@ namespace Hanger51.Aircraft
             // Only remove the carried/animated loose-wheel object after the installed
             // aircraft tire and rim have been made visible. This gives the animation a
             // clean hand-off instead of making the wheel vanish at the axle.
-            diagnostics?.Checkpoint("BEFORE_DESTROY_CARRIED_WHEEL", wheelIndex, wheelAssembly);
+            diagnostics?.Checkpoint("BEFORE_DESTROY_HANDOFF_WHEEL", wheelIndex, wheelAssembly);
             wheelAssembly.CompleteAircraftInstallation();
             diagnostics?.CompleteInstall(wheelIndex);
             resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured. Diagnostic saved as Hanger51_WheelInstallTrace.txt beside the game EXE.";
