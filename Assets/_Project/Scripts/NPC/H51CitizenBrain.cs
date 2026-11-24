@@ -34,8 +34,10 @@ namespace Hanger51.NPCs
         bool hasSpeed;
         bool hasWave;
         bool hasInteract;
+        string currentActivityDescription = "I'm just going about my day.";
 
         public H51CitizenRoutineState State => state;
+        public string CurrentActivityDescription => currentActivityDescription;
 
         void Awake()
         {
@@ -119,12 +121,31 @@ namespace Hanger51.NPCs
                 desiredState = socialEvening && leisure ? H51CitizenRoutineState.Leisure : H51CitizenRoutineState.Home;
             }
 
-            if (!desired) return;
+            if (!desired)
+            {
+                currentActivityDescription = "I don't have anywhere I need to be right now.";
+                return;
+            }
+
+            if (desiredState == H51CitizenRoutineState.Home)
+                currentActivityDescription = $"I'm heading home in {identity.TownName}.";
+            else if (desiredState == H51CitizenRoutineState.Work)
+                currentActivityDescription = $"I'm working as a {identity.Occupation}.";
+            else if (desiredState == H51CitizenRoutineState.Shopping)
+                currentActivityDescription = "I'm out running errands.";
+            else
+                currentActivityDescription = "I'm taking some personal time around town.";
+
             float distance = Planar(transform.position, desired.transform.position);
 
             if (distance > Mathf.Max(2.2f, agent.stoppingDistance + .8f))
             {
                 state = H51CitizenRoutineState.Commuting;
+                currentActivityDescription = desiredState == H51CitizenRoutineState.Work
+                    ? $"I'm on my way to work as a {identity.Occupation}."
+                    : desiredState == H51CitizenRoutineState.Home
+                        ? "I'm on my way home."
+                        : "I'm on my way somewhere in town.";
                 if (!agent.pathPending && (agent.destination - desired.transform.position).sqrMagnitude > 2.5f)
                     agent.SetDestination(desired.transform.position);
                 return;
@@ -132,6 +153,23 @@ namespace Hanger51.NPCs
 
             state = desiredState;
             if (Time.time < pauseUntil) return;
+
+            if (desiredState == H51CitizenRoutineState.Work && desired == work)
+            {
+                H51CitizenActivitySpot[] spots = work.GetComponentsInChildren<H51CitizenActivitySpot>(true);
+                if (spots != null && spots.Length > 0)
+                {
+                    H51CitizenActivitySpot spot = spots[rng.Next(spots.Length)];
+                    currentActivityDescription = $"I'm {spot.ActivityLabel} at work.";
+                    if (NavMesh.SamplePosition(spot.transform.position, out NavMeshHit workHit, 4f, NavMesh.AllAreas))
+                        agent.SetDestination(workHit.position);
+
+                    pauseUntil = Time.time + Mathf.Lerp(spot.MinimumDuration, spot.MaximumDuration, (float)rng.NextDouble());
+                    if (animator && hasInteract && !string.IsNullOrWhiteSpace(spot.AnimationTrigger))
+                        animator.SetTrigger(spot.AnimationTrigger);
+                    return;
+                }
+            }
 
             pauseUntil = Time.time + Mathf.Lerp(3f, 10f, (float)rng.NextDouble());
             if (rng.NextDouble() < .38)
