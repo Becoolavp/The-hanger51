@@ -89,6 +89,8 @@ Compile note: the first pull exposed C# definite-assignment error CS0165 in `H51
 
 Compile note: the next pull exposed three parser errors on one malformed Step 152 completion-log line in `Hanger51TimeCalendarAndNightLightingSetup.cs`. All three came from a missing opening quotation mark and were fixed in commit `99550e07`.
 
+Integration note: the first Step 152 scene-build run then failed while creating the runway-light control because `H51RunwayLightSwitch` has a `RequireComponent(Collider)` contract and the setup code attempted to add the switch before its `BoxCollider`. Unity rejected the switch component, the subsequent `Configure` call hit a null reference, and Step 152 stopped before the player clock HUD/interactor were added. This was fixed in commit `80e614aa` by creating/configuring the `BoxCollider` first, then adding the runway-light switch with a null guard. Re-running Step 152 is safe: it rebuilds the generated lighting root and reuses existing runway runtime glow children.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
