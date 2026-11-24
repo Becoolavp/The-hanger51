@@ -37,6 +37,15 @@ namespace Hanger51.NPCs
         string currentActivityDescription = "I'm just going about my day.";
         bool conversationPaused;
 
+        H51CitizenVehicle ownedVehicle;
+        Transform parentBeforeVehicle;
+        Renderer[] citizenRenderers;
+        bool[] rendererStates;
+        Collider[] citizenColliders;
+        bool[] colliderStates;
+        bool ridingInVehicle;
+        H51CitizenRoutineState vehicleDestinationState;
+
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
 
@@ -46,6 +55,10 @@ namespace Hanger51.NPCs
             agent = GetComponent<NavMeshAgent>();
             animator = GetComponentInChildren<Animator>(true);
             rng = new System.Random(identity ? identity.AppearanceSeed : GetInstanceID());
+            citizenRenderers = GetComponentsInChildren<Renderer>(true);
+            rendererStates = new bool[citizenRenderers.Length];
+            citizenColliders = GetComponentsInChildren<Collider>(true);
+            colliderStates = new bool[citizenColliders.Length];
             CacheAnimatorParameters();
         }
 
@@ -54,6 +67,7 @@ namespace Hanger51.NPCs
             registry = H51CitizenRegistry.Instance;
             if (!registry) registry = FindFirstObjectByType<H51CitizenRegistry>();
             ResolveAnchors();
+            ResolveOwnedVehicle();
             SnapToNavMesh();
             nextThink = Time.time + (float)rng.NextDouble() * thinkInterval;
         }
@@ -61,9 +75,20 @@ namespace Hanger51.NPCs
         void Update()
         {
             if (hasSpeed && animator)
-                animator.SetFloat("Speed", conversationPaused ? 0f : (agent && agent.isOnNavMesh ? agent.velocity.magnitude : 0f), .15f, Time.deltaTime);
+                animator.SetFloat(
+                    "Speed",
+                    conversationPaused || ridingInVehicle
+                        ? 0f
+                        : (agent && agent.enabled && agent.isOnNavMesh ? agent.velocity.magnitude : 0f),
+                    .15f,
+                    Time.deltaTime);
 
             if (conversationPaused) return;
+            if (ridingInVehicle)
+            {
+                UpdateVehicleRide();
+                return;
+            }
             if (Time.time < nextThink) return;
             nextThink = Time.time + thinkInterval;
             Think();
@@ -111,6 +136,12 @@ namespace Hanger51.NPCs
 
         void Think()
         {
+            if (ridingInVehicle)
+            {
+                UpdateVehicleRide();
+                return;
+            }
+
             if (!agent || !agent.enabled) return;
             if (!agent.isOnNavMesh) { SnapToNavMesh(); if (!agent.isOnNavMesh) return; }
             if (!registry) { registry = H51CitizenRegistry.Instance; ResolveAnchors(); }
@@ -163,6 +194,9 @@ namespace Hanger51.NPCs
 
             float distance = Planar(transform.position, desired.transform.position);
 
+            if (TryHandleVehicleCommute(desired, desiredState, distance))
+                return;
+
             if (distance > Mathf.Max(2.2f, agent.stoppingDistance + .8f))
             {
                 state = H51CitizenRoutineState.Commuting;
@@ -179,21 +213,22 @@ namespace Hanger51.NPCs
             state = desiredState;
             if (Time.time < pauseUntil) return;
 
-            if (desiredState == H51CitizenRoutineState.Work && desired == work)
+            H51CitizenActivitySpot[] spots = desired.GetComponentsInChildren<H51CitizenActivitySpot>(true);
+            if (spots != null && spots.Length > 0)
             {
-                H51CitizenActivitySpot[] spots = work.GetComponentsInChildren<H51CitizenActivitySpot>(true);
-                if (spots != null && spots.Length > 0)
-                {
-                    H51CitizenActivitySpot spot = spots[rng.Next(spots.Length)];
-                    currentActivityDescription = $"I'm {spot.ActivityLabel} at work.";
-                    if (NavMesh.SamplePosition(spot.transform.position, out NavMeshHit workHit, 4f, NavMesh.AllAreas))
-                        agent.SetDestination(workHit.position);
+                H51CitizenActivitySpot spot = spots[rng.Next(spots.Length)];
+                currentActivityDescription = ActivityDescriptionFor(desiredState, spot.ActivityLabel);
+                if (NavMesh.SamplePosition(spot.transform.position, out NavMeshHit activityHit, 4f, NavMesh.AllAreas))
+                    agent.SetDestination(activityHit.position);
 
-                    pauseUntil = Time.time + Mathf.Lerp(spot.MinimumDuration, spot.MaximumDuration, (float)rng.NextDouble());
-                    if (animator && hasInteract && !string.IsNullOrWhiteSpace(spot.AnimationTrigger))
-                        animator.SetTrigger(spot.AnimationTrigger);
-                    return;
-                }
+                pauseUntil = Time.time + Mathf.Lerp(
+                    spot.MinimumDuration,
+                    spot.MaximumDuration,
+                    (float)rng.NextDouble());
+
+                if (animator && hasInteract && !string.IsNullOrWhiteSpace(spot.AnimationTrigger))
+                    animator.SetTrigger(spot.AnimationTrigger);
+                return;
             }
 
             pauseUntil = Time.time + Mathf.Lerp(3f, 10f, (float)rng.NextDouble());
@@ -205,6 +240,164 @@ namespace Hanger51.NPCs
                 if (hasInteract && rng.NextDouble() < .75) animator.SetTrigger("Interact");
                 else if (hasWave) animator.SetTrigger("Wave");
             }
+        }
+
+        void ResolveOwnedVehicle()
+        {
+            if (!identity) return;
+            H51CitizenVehicle[] vehicles = FindObjectsByType<H51CitizenVehicle>(
+                FindObjectsInactive.Include,
+                FindObjectsSortMode.None);
+            for (int i = 0; i < vehicles.Length; i++)
+            {
+                if (vehicles[i] && vehicles[i].IsOwnedBy(identity))
+                {
+                    ownedVehicle = vehicles[i];
+                    return;
+                }
+            }
+        }
+
+        bool TryHandleVehicleCommute(
+            H51CitizenAnchor desired,
+            H51CitizenRoutineState desiredState,
+            float destinationDistance)
+        {
+            if (!desired || destinationDistance < 38f) return false;
+            if (!ownedVehicle) ResolveOwnedVehicle();
+            if (!ownedVehicle || ownedVehicle.IsBrokenDown) return false;
+
+            float toCar = Planar(transform.position, ownedVehicle.transform.position);
+            if (toCar > 2.4f)
+            {
+                state = H51CitizenRoutineState.Commuting;
+                currentActivityDescription = desiredState == H51CitizenRoutineState.Work
+                    ? "I'm walking to my car so I can drive to work."
+                    : desiredState == H51CitizenRoutineState.Home
+                        ? "I'm walking to my car so I can drive home."
+                        : "I'm walking to my car so I can head into town.";
+
+                if (agent && agent.enabled && agent.isOnNavMesh &&
+                    (!agent.pathPending || (agent.destination - ownedVehicle.transform.position).sqrMagnitude > 3f))
+                {
+                    if (NavMesh.SamplePosition(ownedVehicle.transform.position, out NavMeshHit carHit, 8f, NavMesh.AllAreas))
+                        agent.SetDestination(carHit.position);
+                }
+                return true;
+            }
+
+            if (!ownedVehicle.BeginTrip(identity, desired.transform.position))
+                return false;
+
+            vehicleDestinationState = desiredState;
+            EnterVehicle();
+            return true;
+        }
+
+        void EnterVehicle()
+        {
+            if (!ownedVehicle || ridingInVehicle) return;
+
+            parentBeforeVehicle = transform.parent;
+
+            for (int i = 0; i < citizenRenderers.Length; i++)
+            {
+                if (!citizenRenderers[i]) continue;
+                rendererStates[i] = citizenRenderers[i].enabled;
+                citizenRenderers[i].enabled = false;
+            }
+
+            for (int i = 0; i < citizenColliders.Length; i++)
+            {
+                if (!citizenColliders[i]) continue;
+                colliderStates[i] = citizenColliders[i].enabled;
+                citizenColliders[i].enabled = false;
+            }
+
+            if (agent && agent.enabled)
+            {
+                if (agent.isOnNavMesh) agent.ResetPath();
+                agent.enabled = false;
+            }
+
+            transform.SetParent(ownedVehicle.transform, true);
+            transform.localPosition = new Vector3(-.35f, 1.05f, .05f);
+            transform.localRotation = Quaternion.identity;
+            ridingInVehicle = true;
+            state = H51CitizenRoutineState.Commuting;
+            currentActivityDescription = vehicleDestinationState == H51CitizenRoutineState.Work
+                ? "I'm driving to work."
+                : vehicleDestinationState == H51CitizenRoutineState.Home
+                    ? "I'm driving home."
+                    : "I'm driving into town.";
+        }
+
+        void UpdateVehicleRide()
+        {
+            if (!ridingInVehicle || !ownedVehicle)
+            {
+                ridingInVehicle = false;
+                return;
+            }
+
+            if (!ownedVehicle.TripComplete && !ownedVehicle.IsBrokenDown)
+            {
+                currentActivityDescription = vehicleDestinationState == H51CitizenRoutineState.Work
+                    ? "I'm driving to work."
+                    : vehicleDestinationState == H51CitizenRoutineState.Home
+                        ? "I'm driving home."
+                        : "I'm driving into town.";
+                return;
+            }
+
+            bool brokeDown = ownedVehicle.IsBrokenDown;
+            ExitVehicle();
+            currentActivityDescription = brokeDown
+                ? "My car broke down, so I'm dealing with that."
+                : vehicleDestinationState == H51CitizenRoutineState.Work
+                    ? "I just parked and I'm heading into work."
+                    : vehicleDestinationState == H51CitizenRoutineState.Home
+                        ? "I just parked and I'm heading home."
+                        : "I just parked and I'm finishing my errand.";
+        }
+
+        void ExitVehicle()
+        {
+            if (!ridingInVehicle || !ownedVehicle) return;
+
+            Vector3 exit = ownedVehicle.transform.position + ownedVehicle.transform.right * 1.8f;
+            transform.SetParent(parentBeforeVehicle, true);
+            transform.position = exit;
+            transform.rotation = ownedVehicle.transform.rotation;
+
+            for (int i = 0; i < citizenRenderers.Length; i++)
+                if (citizenRenderers[i]) citizenRenderers[i].enabled = rendererStates[i];
+
+            for (int i = 0; i < citizenColliders.Length; i++)
+                if (citizenColliders[i]) citizenColliders[i].enabled = colliderStates[i];
+
+            if (agent)
+            {
+                agent.enabled = true;
+                if (NavMesh.SamplePosition(exit, out NavMeshHit hit, 14f, NavMesh.AllAreas))
+                    agent.Warp(hit.position);
+            }
+
+            ownedVehicle.ReleaseDriver();
+            ridingInVehicle = false;
+            nextThink = Time.time + .25f;
+        }
+
+        string ActivityDescriptionFor(H51CitizenRoutineState activityState, string label)
+        {
+            string clean = string.IsNullOrWhiteSpace(label) ? "taking care of something" : label.Trim();
+            if (activityState == H51CitizenRoutineState.Home)
+                return $"I'm {clean} at home.";
+            if (activityState == H51CitizenRoutineState.Work)
+                return $"I'm {clean} at work.";
+            if (activityState == H51CitizenRoutineState.Shopping)
+                return $"I'm {clean} while I'm out shopping.";
+            return $"I'm {clean}.";
         }
 
         void SetLocalWander(Vector3 center)
