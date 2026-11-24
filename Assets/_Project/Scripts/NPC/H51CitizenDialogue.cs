@@ -20,6 +20,7 @@ namespace Hanger51.NPCs
         Home,
         CurrentActivity,
         Town,
+        TownGossip,
         OpinionOfPlayer,
         PlayerMemories
     }
@@ -100,6 +101,8 @@ namespace Hanger51.NPCs
                     return DescribeCurrentActivity();
                 case H51CitizenQuestion.Town:
                     return DescribeTown();
+                case H51CitizenQuestion.TownGossip:
+                    return DescribeTownGossip();
                 case H51CitizenQuestion.OpinionOfPlayer:
                     return DescribePlayerRelationship();
                 case H51CitizenQuestion.PlayerMemories:
@@ -286,6 +289,35 @@ namespace Hanger51.NPCs
                 $"I spend most of my time around {Identity.TownName}. There's usually something that needs doing."
             };
             return variants[(Identity.AppearanceSeed & 0x7fffffff) % variants.Length];
+        }
+
+        string DescribeTownGossip()
+        {
+            List<H51CitizenMemory> gossip = Identity.Memories
+                .Where(m =>
+                    m != null &&
+                    m.subjectId == "PLAYER" &&
+                    !string.IsNullOrWhiteSpace(m.eventKey) &&
+                    m.eventKey.StartsWith("gossip_", StringComparison.Ordinal))
+                .OrderByDescending(m => m.Importance)
+                .ThenByDescending(m => m.createdGameMinute)
+                .Take(2)
+                .ToList();
+
+            if (gossip.Count == 0)
+                return "I haven't heard anything important about you from other people yet.";
+
+            string result = "Around town, I've heard that ";
+            for (int i = 0; i < gossip.Count; i++)
+            {
+                string d = string.IsNullOrWhiteSpace(gossip[i].description)
+                    ? "someone had something to say about you"
+                    : gossip[i].description.Trim();
+
+                result += (i == 0 ? "" : " Also, ") + d;
+                if (!d.EndsWith(".", StringComparison.Ordinal)) result += ".";
+            }
+            return result;
         }
 
         string DescribePlayerRelationship()
