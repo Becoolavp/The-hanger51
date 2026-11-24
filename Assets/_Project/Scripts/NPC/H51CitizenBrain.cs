@@ -1,5 +1,6 @@
 using UnityEngine;
 using UnityEngine.AI;
+using Hanger51.World;
 
 namespace Hanger51.NPCs
 {
@@ -455,9 +456,37 @@ namespace Hanger51.NPCs
         {
             if (!spot || !identity) return;
 
+            string occupation = identity.Occupation ?? string.Empty;
+            bool powerPlantWorker =
+                occupation.IndexOf("power plant", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                occupation.IndexOf("turbine", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                occupation.IndexOf("electrical technician", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+            if (powerPlantWorker)
+            {
+                H51PowerPlantController plant = FindFirstObjectByType<H51PowerPlantController>();
+                if (plant)
+                {
+                    bool fuelService =
+                        spot.ActivityLabel.IndexOf("fuel service", System.StringComparison.OrdinalIgnoreCase) >= 0;
+
+                    if (fuelService)
+                    {
+                        if (plant.PerformScheduledFuelService())
+                            currentActivityDescription = "I'm completing the plant's scheduled fuel service.";
+                    }
+                    else
+                    {
+                        plant.PerformOperatorMaintenance();
+                        currentActivityDescription = "I'm completing a plant equipment inspection and maintenance round.";
+                    }
+                }
+                return;
+            }
+
             bool mechanic =
-                identity.Occupation.IndexOf("mechanic", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
-                identity.Occupation.IndexOf("repair", System.StringComparison.OrdinalIgnoreCase) >= 0;
+                occupation.IndexOf("mechanic", System.StringComparison.OrdinalIgnoreCase) >= 0 ||
+                occupation.IndexOf("repair", System.StringComparison.OrdinalIgnoreCase) >= 0;
 
             if (!mechanic ||
                 spot.ActivityLabel.IndexOf("service bay", System.StringComparison.OrdinalIgnoreCase) < 0)
