@@ -49,6 +49,11 @@ namespace Hanger51.NPCs
         string lastVehicleDestinationAnchorId;
         float suppressVehicleUntil;
 
+        H51CitizenActivitySpot activeActivitySpot;
+        float activeActivityUntil;
+        float nextActivityGesture;
+        float defaultAgentBaseOffset;
+
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
 
@@ -56,6 +61,7 @@ namespace Hanger51.NPCs
         {
             identity = GetComponent<H51CitizenIdentity>();
             agent = GetComponent<NavMeshAgent>();
+            defaultAgentBaseOffset = agent ? agent.baseOffset : 0f;
             animator = GetComponentInChildren<Animator>(true);
             rng = new System.Random(identity ? identity.AppearanceSeed : GetInstanceID());
             citizenRenderers = GetComponentsInChildren<Renderer>(true);
@@ -92,6 +98,13 @@ namespace Hanger51.NPCs
                 UpdateVehicleRide();
                 return;
             }
+
+            if (activeActivitySpot)
+            {
+                UpdateActiveActivity();
+                if (activeActivitySpot) return;
+            }
+
             if (Time.time < nextThink) return;
             nextThink = Time.time + thinkInterval;
             Think();
@@ -221,16 +234,15 @@ namespace Hanger51.NPCs
             {
                 H51CitizenActivitySpot spot = spots[rng.Next(spots.Length)];
                 currentActivityDescription = ActivityDescriptionFor(desiredState, spot.ActivityLabel);
+
                 if (NavMesh.SamplePosition(spot.transform.position, out NavMeshHit activityHit, 4f, NavMesh.AllAreas))
+                {
+                    activeActivitySpot = spot;
+                    activeActivityUntil = 0f;
+                    nextActivityGesture = 0f;
+                    agent.isStopped = false;
                     agent.SetDestination(activityHit.position);
-
-                pauseUntil = Time.time + Mathf.Lerp(
-                    spot.MinimumDuration,
-                    spot.MaximumDuration,
-                    (float)rng.NextDouble());
-
-                if (animator && hasInteract && !string.IsNullOrWhiteSpace(spot.AnimationTrigger))
-                    animator.SetTrigger(spot.AnimationTrigger);
+                }
                 return;
             }
 
@@ -349,6 +361,7 @@ namespace Hanger51.NPCs
         {
             if (!ownedVehicle || ridingInVehicle) return;
 
+            ClearActiveActivity();
             parentBeforeVehicle = transform.parent;
 
             for (int i = 0; i < citizenRenderers.Length; i++)
