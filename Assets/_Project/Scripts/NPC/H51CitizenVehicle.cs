@@ -169,6 +169,21 @@ namespace Hanger51.NPCs
                     vehicleId,
                     15f,
                     0f);
+
+                if (amount >= 22f)
+                {
+                    H51CitizenEmergencyState emergency =
+                        currentDriver.GetComponent<H51CitizenEmergencyState>();
+                    if (emergency)
+                    {
+                        emergency.TriggerMedicalEmergency(
+                            Mathf.Clamp(amount * 1.55f, 28f, 88f),
+                            string.IsNullOrWhiteSpace(reason)
+                                ? "a vehicle collision"
+                                : reason,
+                            true);
+                    }
+                }
             }
         }
 
