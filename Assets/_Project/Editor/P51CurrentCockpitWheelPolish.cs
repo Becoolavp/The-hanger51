@@ -42,6 +42,7 @@ namespace Hanger51.EditorTools
             int gaugeSets = 0;
             int tireTargets = 0;
             int reconcilers = 0;
+            int wheelVisualBindings = 0;
 
             for (int i=0;i<aircraft.Length;i++)
             {
@@ -88,6 +89,15 @@ namespace Hanger51.EditorTools
                         EditorUtility.SetDirty(oil);
                         gaugeSets++;
                     }
+                }
+
+                P51LandingGearMaintenanceController maintenance =
+                    flight.GetComponent<P51LandingGearMaintenanceController>();
+                if (maintenance)
+                {
+                    P51LandingGearVisualRuntimeBootstrap.EnsureConfiguredFor(maintenance);
+                    wheelVisualBindings += maintenance.RepairAllWheelVisualBindingsFromHierarchy();
+                    EditorUtility.SetDirty(maintenance);
                 }
 
                 P51LandingGearInventoryBridge bridge =
@@ -139,8 +149,9 @@ namespace Hanger51.EditorTools
                 "P-51 current usability repair complete. Gauge sets polished=" + gaugeSets +
                 ", tire/valve install targets enabled=" + tireTargets +
                 ", wheel state reconcilers added=" + reconcilers +
+                ", permanent wheel visual bindings repaired=" + wheelVisualBindings +
                 ", persistent wheel highlight feedback added=" + feedbackAdded +
-                ". Fuel/coolant/oil gauges are now round and evenly spaced, and carried complete wheels can self-heal stale origin-axle state before reinstall.");
+                ". Fuel/coolant/oil gauges are now round and evenly spaced, and carried complete wheels rebind the live aircraft tire/rim hierarchy before reinstall.");
         }
 
         [MenuItem("Hanger 51/P-51 Mustang/Current/Validate Cockpit Gauges And Wheel Reinstall")]
@@ -205,13 +216,17 @@ namespace Hanger51.EditorTools
                     }
                 }
 
+                P51LandingGearMaintenanceController maintenance =
+                    flight.GetComponent<P51LandingGearMaintenanceController>();
+                P51LandingGearVisualSuspensionFollower wheelFollower =
+                    flight.GetComponent<P51LandingGearVisualSuspensionFollower>();
                 P51LandingGearInventoryBridge bridge =
                     flight.GetComponent<P51LandingGearInventoryBridge>();
                 P51WheelInstallStateReconciler reconciler =
                     flight.GetComponent<P51WheelInstallStateReconciler>();
-                if (!bridge || !bridge.IsReady || !reconciler)
+                if (!maintenance || !wheelFollower || !bridge || !bridge.IsReady || !reconciler)
                 {
-                    Debug.LogError("P-51 wheel validation failed on '"+flight.name+"': inventory bridge or wheel-state reconciler is missing.",flight);
+                    Debug.LogError("P-51 wheel validation failed on '"+flight.name+"': maintenance controller, visual suspension follower, inventory bridge, or wheel-state reconciler is missing.",flight);
                     passed = false;
                 }
 
