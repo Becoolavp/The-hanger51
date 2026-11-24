@@ -71,13 +71,14 @@ namespace Hanger51.NPCs
             EnsureStyles();
 
             float width = Mathf.Min(720f, Screen.width - 40f);
-            float height = Mathf.Min(560f, Screen.height - 60f);
+            float height = Mathf.Min(760f, Screen.height - 40f);
             Rect window = new Rect((Screen.width - width) * .5f, Screen.height - height - 24f, width, height);
             GUI.Box(window, GUIContent.none);
 
             GUILayout.BeginArea(new Rect(window.x + 20f, window.y + 16f, window.width - 40f, window.height - 32f));
             GUILayout.Label(citizen.Identity.DisplayName, titleStyle);
             GUILayout.Label($"{citizen.Identity.Age} years old  •  {citizen.Identity.Occupation}  •  {citizen.Identity.TownName}", bodyStyle);
+            GUILayout.Label("Relationship: " + citizen.RelationshipStatus(), bodyStyle);
             GUILayout.Space(10f);
 
             scroll = GUILayout.BeginScrollView(scroll, GUILayout.Height(120f));
@@ -93,6 +94,19 @@ namespace Hanger51.NPCs
             if (GUILayout.Button("What do you think of me?", buttonStyle)) Ask(H51CitizenQuestion.OpinionOfPlayer);
             if (GUILayout.Button("What do you remember about me?", buttonStyle)) Ask(H51CitizenQuestion.PlayerMemories);
 
+            GUILayout.Space(8f);
+            GUILayout.Label("Build the relationship", bodyStyle);
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Chat for a while", buttonStyle)) Social(H51CitizenSocialAction.FriendlyChat);
+            if (GUILayout.Button("Give a compliment", buttonStyle)) Social(H51CitizenSocialAction.Compliment);
+            GUILayout.EndHorizontal();
+
+            GUILayout.BeginHorizontal();
+            if (GUILayout.Button("Offer to help", buttonStyle)) Social(H51CitizenSocialAction.OfferHelp);
+            if (GUILayout.Button("Apologize", buttonStyle)) Social(H51CitizenSocialAction.Apologize);
+            GUILayout.EndHorizontal();
+
             GUILayout.FlexibleSpace();
             if (GUILayout.Button("Goodbye  [Esc]", buttonStyle)) Close();
             GUILayout.EndArea();
@@ -102,6 +116,13 @@ namespace Hanger51.NPCs
         {
             if (!citizen) return;
             response = citizen.Answer(question);
+            scroll = Vector2.zero;
+        }
+
+        void Social(H51CitizenSocialAction action)
+        {
+            if (!citizen) return;
+            response = citizen.PerformSocialAction(action);
             scroll = Vector2.zero;
         }
 
