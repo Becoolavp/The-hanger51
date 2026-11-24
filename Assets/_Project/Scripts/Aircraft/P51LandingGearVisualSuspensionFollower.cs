@@ -238,6 +238,13 @@ namespace Hanger51.Aircraft
                 tailwheelStrutScaleZ);
         }
 
+        private static Transform[] Resize(Transform[] source)
+        {
+            return source != null && source.Length == 3
+                ? source
+                : Copy(source);
+        }
+
         private static Transform[] Copy(Transform[] source)
         {
             Transform[] result = new Transform[3];
