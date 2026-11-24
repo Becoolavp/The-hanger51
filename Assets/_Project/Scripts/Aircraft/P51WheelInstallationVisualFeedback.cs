@@ -126,7 +126,7 @@ namespace Hanger51.Aircraft
         private void RefreshAircraftTargets()
         {
             aircraftTargets = FindObjectsByType<P51LandingGearServiceTarget>(
-                FindObjectsInactive.Exclude,
+                FindObjectsInactive.Include,
                 FindObjectsSortMode.None);
             nextTargetRefreshTime = Time.unscaledTime + 1f;
         }
@@ -609,7 +609,6 @@ namespace Hanger51.Aircraft
                 || target.ServiceKind != P51LandingGearServiceKind.TireAndValve
                 || target.Controller == null
                 || !target.Controller.IsGearInstalled(target.WheelIndex)
-                || target.Controller.IsTireInstalled(target.WheelIndex)
                 || !carriedWheel.CanInstallOn(target.WheelIndex))
             {
                 return false;
@@ -617,8 +616,16 @@ namespace Hanger51.Aircraft
 
             P51LandingGearInventoryBridge bridge =
                 target.Controller.GetComponent<P51LandingGearInventoryBridge>();
-            return bridge != null
-                && bridge.IsReady
+            if (bridge == null || !bridge.IsReady)
+            {
+                return false;
+            }
+
+            bridge.EnsureOriginAxleEmptyForCarriedWheel(
+                target.WheelIndex,
+                carriedWheel);
+
+            return !target.Controller.IsTireInstalled(target.WheelIndex)
                 && !bridge.IsRimInstalled(target.WheelIndex);
         }
 
