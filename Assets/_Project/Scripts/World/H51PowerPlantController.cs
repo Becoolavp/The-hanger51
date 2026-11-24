@@ -185,15 +185,11 @@ namespace Hanger51.World
                 ParticleSystem ps = vaporSystems[i];
                 if (!ps) continue;
 
+                // The cone shape plus start speed already supplies the upward plume.
+                // Disable Velocity over Lifetime entirely so Unity never has to reconcile
+                // mixed serialized MinMaxCurve modes from older generated plant particles.
                 ParticleSystem.VelocityOverLifetimeModule velocity = ps.velocityOverLifetime;
-                if (!velocity.enabled) continue;
-
-                // Unity requires all three axes in Velocity over Lifetime to use the same
-                // MinMaxCurve mode. Keep all axes in TwoConstants mode, with zero added Y
-                // velocity because upward motion already comes from the cone/start speed.
-                velocity.x = new ParticleSystem.MinMaxCurve(-.15f,.15f);
-                velocity.y = new ParticleSystem.MinMaxCurve(0f,0f);
-                velocity.z = new ParticleSystem.MinMaxCurve(-.15f,.15f);
+                velocity.enabled = false;
             }
         }
 
