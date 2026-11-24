@@ -109,6 +109,129 @@ namespace Hanger51.NPCs
             }
         }
 
+        public string RelationshipStatus()
+        {
+            H51CitizenRelationship r = Identity.Relationship("PLAYER", false);
+            if (r == null) return "Stranger";
+            if (r.grudge >= 70f || r.trust <= -55f) return "Hostile";
+            if (r.fear >= 65f) return "Afraid";
+            if (r.trust >= 70f && r.affection >= 35f) return "Close friend";
+            if (r.trust >= 50f) return "Trusted";
+            if (r.trust >= 25f) return "Friendly";
+            if (r.trust <= -20f) return "Wary";
+            return "Acquaintance";
+        }
+
+        public string PerformSocialAction(H51CitizenSocialAction action)
+        {
+            H51CitizenRelationship relationship = Identity.Relationship("PLAYER");
+            double now = H51WorldClock.Instance ? H51WorldClock.Instance.TotalGameMinutes : 0d;
+
+            string eventKey;
+            string memory;
+            float valence;
+            float severity;
+            double cooldownMinutes;
+
+            switch (action)
+            {
+                case H51CitizenSocialAction.FriendlyChat:
+                    eventKey = "friendly_chat";
+                    memory = "We took some time to talk and get to know each other.";
+                    valence = Mathf.Lerp(2.2f, 4.2f, Identity.Sociability);
+                    severity = 4f;
+                    cooldownMinutes = 180d;
+                    break;
+
+                case H51CitizenSocialAction.Compliment:
+                    eventKey = "compliment";
+                    memory = "You gave me a sincere compliment.";
+                    valence = relationship.grudge > 45f
+                        ? .8f
+                        : Mathf.Lerp(1.8f, 3.8f, Identity.Sociability);
+                    severity = 3f;
+                    cooldownMinutes = 360d;
+                    break;
+
+                case H51CitizenSocialAction.OfferHelp:
+                    eventKey = "offered_help";
+                    memory = "You offered to lend a hand if I needed it.";
+                    valence = relationship.grudge > 60f ? 1f : 4.4f;
+                    severity = 6f;
+                    cooldownMinutes = 720d;
+                    break;
+
+                case H51CitizenSocialAction.Apologize:
+                    if (relationship.grudge < 5f && relationship.trust > -10f)
+                        return "I don't think you owe me an apology.";
+
+                    eventKey = "apology";
+                    memory = "You apologized for how things had gone between us.";
+                    valence = 3.5f;
+                    severity = 5f;
+                    cooldownMinutes = 360d;
+                    break;
+
+                default:
+                    return "I'm not sure how to respond to that.";
+            }
+
+            H51CitizenMemory previous = Identity.Memories
+                .Where(m => m != null && m.subjectId == "PLAYER" && m.eventKey == eventKey)
+                .OrderByDescending(m => m.createdGameMinute)
+                .FirstOrDefault();
+
+            if (previous != null &&
+                now > 0d &&
+                now - previous.createdGameMinute < cooldownMinutes)
+            {
+                switch (action)
+                {
+                    case H51CitizenSocialAction.FriendlyChat:
+                        return "We've already had a pretty good talk recently. Catch me again later.";
+                    case H51CitizenSocialAction.Compliment:
+                        return "That's kind of you, but you don't have to keep saying it.";
+                    case H51CitizenSocialAction.OfferHelp:
+                        return "I remember your offer. If I need a hand, I'll keep it in mind.";
+                    case H51CitizenSocialAction.Apologize:
+                        return "I heard your apology. Give me a little time.";
+                }
+            }
+
+            Identity.ApplyPlayerEvent(eventKey, memory, valence, severity);
+
+            if (action == H51CitizenSocialAction.Apologize)
+            {
+                relationship.grudge = Mathf.Max(
+                    0f,
+                    relationship.grudge - Mathf.Lerp(8f, 17f, 1f - Identity.Temper));
+                relationship.fear = Mathf.Max(0f, relationship.fear - 4f);
+                relationship.trust = Mathf.Clamp(relationship.trust + 2.5f, -100f, 100f);
+
+                return relationship.grudge > 45f
+                    ? "I appreciate you saying it. I'm still not ready to forget what happened."
+                    : "Thank you. That does mean something to me.";
+            }
+
+            if (action == H51CitizenSocialAction.FriendlyChat)
+            {
+                return Identity.Sociability > .55f
+                    ? "Yeah, I enjoyed that. It's nice actually getting to know somebody around here."
+                    : "That was nice. I'm usually a little quieter, but I don't mind talking with you.";
+            }
+
+            if (action == H51CitizenSocialAction.Compliment)
+            {
+                return relationship.grudge > 45f
+                    ? "Thanks. I'm still not sure where we stand, though."
+                    : "Thank you. That's genuinely nice of you to say.";
+            }
+
+            return relationship.grudge > 60f
+                ? "I'll remember that you offered. We'll see."
+                : "I appreciate that. If something comes up, I'll remember you offered to help.";
+        }
+
         string DescribeJob()
         {
             H51CitizenRegistry registry = H51CitizenRegistry.Instance;
