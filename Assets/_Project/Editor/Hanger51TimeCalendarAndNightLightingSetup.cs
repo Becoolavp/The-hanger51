@@ -69,9 +69,11 @@ namespace Hanger51.EditorTools
 
             Light sun = ResolveSun();
             Light moon = BuildMoon(root);
+            Transform moonVisual = BuildMoonVisual(root);
             H51DayNightCycle cycle =
                 Undo.AddComponent<H51DayNightCycle>(root.gameObject);
             cycle.Configure(clock,sun,moon);
+            cycle.ConfigureMoonVisual(moonVisual,1800f,95f);
 
             H51UtilityGridController grid =
                 UnityEngine.Object.FindFirstObjectByType<H51UtilityGridController>(
@@ -332,12 +334,12 @@ namespace Hanger51.EditorTools
                     "Town Street Lamp " + (count + 1),
                     position,
                     5.4f,
-                    16f,
-                    1.45f,
+                    28f,
+                    3.2f,
                     new Color(1f,.78f,.43f),
                     grid,
                     .0018f,
-                    105f,
+                    520f,
                     poleMaterial,
                     lampMaterial);
                 selected.Add(node);
@@ -423,12 +425,12 @@ namespace Hanger51.EditorTools
                     "Hanger 51 Apron Mast " + (i + 1),
                     position,
                     8.5f,
-                    29f,
-                    2.0f,
+                    42f,
+                    4.5f,
                     new Color(.76f,.88f,1f),
                     grid,
                     .006f,
-                    170f,
+                    950f,
                     poleMaterial,
                     lampMaterial);
             }
@@ -462,9 +464,8 @@ namespace Hanger51.EditorTools
             List<Light> realtime = new List<Light>();
             for (int i=0;i<lenses.Length;i++)
             {
-                if (i % 4 != 0) continue;
-
                 Transform lens = lenses[i].transform;
+                lens.localScale = Vector3.one * .28f;
                 Transform existing = lens.Find("H51 Runtime Runway Glow");
                 Light light;
                 if (existing)
@@ -479,8 +480,8 @@ namespace Hanger51.EditorTools
                 }
 
                 light.type = LightType.Point;
-                light.range = 17f;
-                light.intensity = 1.8f;
+                light.range = 34f;
+                light.intensity = 4.6f;
                 light.color = new Color(.72f,.88f,1f);
                 light.shadows = LightShadows.None;
                 light.enabled = false;
@@ -492,6 +493,7 @@ namespace Hanger51.EditorTools
             if (!controller)
                 controller = Undo.AddComponent<H51RunwayLightingController>(runway);
             controller.Configure(fixtures,realtime.ToArray(),grid,clock);
+            controller.ConfigureFlightVisibility(1800f,18f,34f,4.6f);
             controller.SetMode(H51RunwayLightMode.Auto);
 
             fixtureCount = fixtures.Length;
@@ -531,7 +533,7 @@ namespace Hanger51.EditorTools
 
             Transform textRoot = New("Runway Lighting Status",root);
             textRoot.localPosition = new Vector3(0f,1.85f,-.34f);
-            textRoot.localRotation = Quaternion.Euler(0f,180f,0f);
+            textRoot.localRotation = Quaternion.identity;
             TextMesh text = Undo.AddComponent<TextMesh>(textRoot.gameObject);
             text.anchor = TextAnchor.UpperCenter;
             text.alignment = TextAlignment.Center;
@@ -713,7 +715,8 @@ namespace Hanger51.EditorTools
             lens.name = "Lamp Lens";
             lens.transform.SetParent(root,false);
             lens.transform.localPosition = Vector3.up * height;
-            lens.transform.localScale = Vector3.one * .28f;
+            lens.transform.localScale =
+                Vector3.one * (height >= 7f ? .58f : .44f);
             Renderer lensRenderer = lens.GetComponent<Renderer>();
             if (lensRenderer) lensRenderer.sharedMaterial = lampMaterial;
             Collider lensCollider = lens.GetComponent<Collider>();
@@ -735,6 +738,11 @@ namespace Hanger51.EditorTools
                 demand,
                 realtimeDistance,
                 color);
+            schedule.ConfigureFlightVisibility(
+                realtimeDistance,
+                height >= 7f ? 13f : 11f,
+                range,
+                intensity);
         }
 
         static void BuildWallLight(
@@ -752,7 +760,7 @@ namespace Hanger51.EditorTools
             Undo.RegisterCreatedObjectUndo(lens,"Create building night light");
             lens.name = "Exterior Lamp Lens";
             lens.transform.SetParent(root,false);
-            lens.transform.localScale = Vector3.one * .20f;
+            lens.transform.localScale = Vector3.one * .34f;
             Renderer renderer = lens.GetComponent<Renderer>();
             if (renderer) renderer.sharedMaterial = lampMaterial;
             Collider collider = lens.GetComponent<Collider>();
@@ -760,8 +768,8 @@ namespace Hanger51.EditorTools
 
             Light light = Undo.AddComponent<Light>(lens);
             light.type = LightType.Point;
-            light.range = 10f;
-            light.intensity = 1.0f;
+            light.range = 16f;
+            light.intensity = 1.8f;
             light.color = new Color(1f,.76f,.40f);
             light.shadows = LightShadows.None;
             light.enabled = false;
@@ -772,8 +780,58 @@ namespace Hanger51.EditorTools
                 renderer ? new[] { renderer } : Array.Empty<Renderer>(),
                 grid,
                 demand,
-                72f,
+                300f,
                 light.color);
+            schedule.ConfigureFlightVisibility(
+                300f,
+                10f,
+                16f,
+                1.8f);
+        }
+
+        static Transform BuildMoonVisual(Transform parent)
+        {
+            Transform root = New("H51 Visible Moon",parent);
+
+            GameObject sphere =
+                GameObject.CreatePrimitive(PrimitiveType.Sphere);
+            Undo.RegisterCreatedObjectUndo(
+                sphere,
+                "Create visible Hanger 51 moon");
+            sphere.name = "Moon Disc";
+            sphere.transform.SetParent(root,false);
+            sphere.transform.localPosition = Vector3.zero;
+            sphere.transform.localRotation = Quaternion.identity;
+            sphere.transform.localScale = Vector3.one;
+
+            Collider collider = sphere.GetComponent<Collider>();
+            if (collider)
+                Undo.DestroyObjectImmediate(collider);
+
+            Shader shader =
+                Shader.Find("Universal Render Pipeline/Unlit");
+            if (!shader)
+                shader = Shader.Find("Unlit/Color");
+            if (!shader)
+                shader = Shader.Find("Standard");
+
+            Material material = new Material(shader)
+            {
+                name = "H51 Runtime Moon Material"
+            };
+            Color moonColor = new Color(.88f,.92f,1f,1f);
+            material.color = moonColor;
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor",moonColor);
+            if (material.HasProperty("_Color"))
+                material.SetColor("_Color",moonColor);
+
+            Renderer renderer = sphere.GetComponent<Renderer>();
+            if (renderer)
+                renderer.sharedMaterial = material;
+
+            root.gameObject.SetActive(false);
+            return root;
         }
 
         static Light BuildMoon(Transform parent)
