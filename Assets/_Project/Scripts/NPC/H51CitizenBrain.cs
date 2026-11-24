@@ -35,6 +35,7 @@ namespace Hanger51.NPCs
         bool hasWave;
         bool hasInteract;
         string currentActivityDescription = "I'm just going about my day.";
+        bool conversationPaused;
 
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
@@ -60,11 +61,35 @@ namespace Hanger51.NPCs
         void Update()
         {
             if (hasSpeed && animator)
-                animator.SetFloat("Speed", agent && agent.isOnNavMesh ? agent.velocity.magnitude : 0f, .15f, Time.deltaTime);
+                animator.SetFloat("Speed", conversationPaused ? 0f : (agent && agent.isOnNavMesh ? agent.velocity.magnitude : 0f), .15f, Time.deltaTime);
 
+            if (conversationPaused) return;
             if (Time.time < nextThink) return;
             nextThink = Time.time + thinkInterval;
             Think();
+        }
+
+        public void SetConversationPaused(bool paused, Vector3 speakerPosition)
+        {
+            conversationPaused = paused;
+            if (agent && agent.enabled && agent.isOnNavMesh)
+            {
+                agent.isStopped = paused;
+                if (paused) agent.ResetPath();
+            }
+
+            if (paused)
+            {
+                Vector3 look = speakerPosition - transform.position;
+                look.y = 0f;
+                if (look.sqrMagnitude > .01f)
+                    transform.rotation = Quaternion.LookRotation(look.normalized, Vector3.up);
+                currentActivityDescription = "I'm talking with you right now.";
+            }
+            else
+            {
+                nextThink = Time.time + .2f;
+            }
         }
 
         void ResolveAnchors()
