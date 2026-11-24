@@ -2088,6 +2088,7 @@ namespace Hanger51.EditorTools
             ParticleSystem.VelocityOverLifetimeModule velocity = ps.velocityOverLifetime;
             velocity.enabled = true;
             velocity.x = new ParticleSystem.MinMaxCurve(-.15f,.15f);
+            velocity.y = new ParticleSystem.MinMaxCurve(0f,0f);
             velocity.z = new ParticleSystem.MinMaxCurve(-.15f,.15f);
 
             ParticleSystemRenderer renderer = root.GetComponent<ParticleSystemRenderer>();
