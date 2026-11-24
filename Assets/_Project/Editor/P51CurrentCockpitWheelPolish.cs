@@ -15,10 +15,11 @@ namespace Hanger51.EditorTools
         const string CoolantGaugeName = "P-51 Coolant Temperature Gauge";
         const string OilGaugeName = "P-51 Oil Pressure Gauge";
 
-        static readonly Vector3 FuelPosition = new Vector3(0f,-.115f,-.072f);
-        static readonly Vector3 CoolantPosition = new Vector3(-.300f,-.115f,-.072f);
-        static readonly Vector3 OilPosition = new Vector3(.300f,-.115f,-.072f);
-        const float GaugeBaseScale = .64f;
+        const string GaugeMountName = "P-51 Live Gauge Cluster Mount";
+        static readonly Vector3 FuelPosition = new Vector3(0f,0f,0f);
+        static readonly Vector3 CoolantPosition = new Vector3(-.205f,0f,0f);
+        static readonly Vector3 OilPosition = new Vector3(.205f,0f,0f);
+        const float GaugeBaseScale = .62f;
 
         [MenuItem("Hanger 51/P-51 Mustang/Current/Repair Cockpit Gauges And Wheel Reinstall")]
         public static void Build()
@@ -57,25 +58,36 @@ namespace Hanger51.EditorTools
 
                 if (fuel && coolant && oil && fuel.transform.parent)
                 {
-                    Transform panel = fuel.transform.parent;
-                    Vector3 scale = GaugeScaleForPanel(panel);
+                    Transform panel = ResolveInstrumentPanel(fuel.transform);
+                    if (panel)
+                    {
+                        Transform mount = EnsureGaugeMount(panel);
 
-                    Undo.RecordObject(fuel.transform,"Polish P-51 fuel gauge");
-                    Undo.RecordObject(coolant.transform,"Polish P-51 coolant gauge");
-                    Undo.RecordObject(oil.transform,"Polish P-51 oil gauge");
+                        Undo.RecordObject(fuel.transform,"Polish P-51 fuel gauge");
+                        Undo.RecordObject(coolant.transform,"Polish P-51 coolant gauge");
+                        Undo.RecordObject(oil.transform,"Polish P-51 oil gauge");
 
-                    ApplyGaugePose(fuel.transform,FuelPosition,scale);
-                    ApplyGaugePose(coolant.transform,CoolantPosition,scale);
-                    ApplyGaugePose(oil.transform,OilPosition,scale);
+                        fuel.transform.SetParent(mount,false);
+                        coolant.transform.SetParent(mount,false);
+                        oil.transform.SetParent(mount,false);
 
-                    fuel.RefreshGauge();
-                    coolant.RefreshGauge();
-                    oil.RefreshGauge();
+                        ApplyGaugePose(fuel.transform,FuelPosition,Vector3.one*GaugeBaseScale);
+                        ApplyGaugePose(coolant.transform,CoolantPosition,Vector3.one*GaugeBaseScale);
+                        ApplyGaugePose(oil.transform,OilPosition,Vector3.one*GaugeBaseScale);
 
-                    EditorUtility.SetDirty(fuel);
-                    EditorUtility.SetDirty(coolant);
-                    EditorUtility.SetDirty(oil);
-                    gaugeSets++;
+                        ForceGaugeVisible(fuel.transform);
+                        ForceGaugeVisible(coolant.transform);
+                        ForceGaugeVisible(oil.transform);
+
+                        fuel.RefreshGauge();
+                        coolant.RefreshGauge();
+                        oil.RefreshGauge();
+
+                        EditorUtility.SetDirty(fuel);
+                        EditorUtility.SetDirty(coolant);
+                        EditorUtility.SetDirty(oil);
+                        gaugeSets++;
+                    }
                 }
 
                 P51LandingGearInventoryBridge bridge =
@@ -157,9 +169,11 @@ namespace Hanger51.EditorTools
 
                 if (!fuel || !coolant || !oil
                     || fuel.transform.parent != coolant.transform.parent
-                    || fuel.transform.parent != oil.transform.parent)
+                    || fuel.transform.parent != oil.transform.parent
+                    || !fuel.transform.parent
+                    || fuel.transform.parent.name != GaugeMountName)
                 {
-                    Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': fuel/coolant/oil gauge set is incomplete or split across different parents.",flight);
+                    Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': fuel/coolant/oil gauge set is incomplete or not mounted on the live unscaled gauge cluster.",flight);
                     passed = false;
                 }
                 else
@@ -168,7 +182,15 @@ namespace Hanger51.EditorTools
                         || !Approximately(coolant.transform.localPosition,CoolantPosition,.015f)
                         || !Approximately(oil.transform.localPosition,OilPosition,.015f))
                     {
-                        Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': the three engine gauges are not using the corrected evenly spaced panel positions.",flight);
+                        Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': the three engine gauges are not using the corrected evenly spaced cluster positions.",flight);
+                        passed = false;
+                    }
+
+                    if (!HasVisibleRenderer(fuel.transform)
+                        || !HasVisibleRenderer(coolant.transform)
+                        || !HasVisibleRenderer(oil.transform))
+                    {
+                        Debug.LogError("P-51 gauge validation failed on '"+flight.name+"': one or more live gauges have no enabled renderer.",flight);
                         passed = false;
                     }
 
@@ -245,14 +267,70 @@ namespace Hanger51.EditorTools
             EditorUtility.SetDirty(gauge);
         }
 
-        static Vector3 GaugeScaleForPanel(Transform panel)
+        static Transform ResolveInstrumentPanel(Transform gauge)
         {
-            float panelX = Mathf.Max(.001f,Mathf.Abs(panel.lossyScale.x));
-            float panelY = Mathf.Max(.001f,Mathf.Abs(panel.lossyScale.y));
-            return new Vector3(
-                GaugeBaseScale,
-                GaugeBaseScale * panelX / panelY,
-                GaugeBaseScale);
+            if (!gauge) return null;
+
+            Transform current = gauge.parent;
+            while (current)
+            {
+                if (current.name == "P-51 Cockpit Instrument Panel")
+                    return current;
+                current = current.parent;
+            }
+
+            P51FlightController flight =
+                gauge.GetComponentInParent<P51FlightController>();
+            if (!flight) return null;
+
+            Transform[] all = flight.GetComponentsInChildren<Transform>(true);
+            return all.FirstOrDefault(t => t && t.name == "P-51 Cockpit Instrument Panel");
+        }
+
+        static Transform EnsureGaugeMount(Transform panel)
+        {
+            Transform parent = panel.parent;
+            Transform mount = parent ? parent.Find(GaugeMountName) : null;
+            if (!mount)
+            {
+                GameObject go = new GameObject(GaugeMountName);
+                Undo.RegisterCreatedObjectUndo(go,"Create P-51 live gauge cluster mount");
+                mount = go.transform;
+                mount.SetParent(parent,false);
+            }
+            else
+            {
+                Undo.RecordObject(mount,"Move P-51 live gauge cluster mount");
+            }
+
+            // The panel primitive itself is non-uniformly scaled. Mount the instruments as a
+            // sibling in unscaled cockpit space, positioned just in front of the panel face.
+            Vector3 worldCenter = panel.TransformPoint(new Vector3(0f,-.115f,-.62f));
+            mount.position = worldCenter;
+            mount.rotation = panel.rotation;
+            mount.localScale = Vector3.one;
+            EditorUtility.SetDirty(mount);
+            return mount;
+        }
+
+        static void ForceGaugeVisible(Transform gauge)
+        {
+            if (!gauge) return;
+            gauge.gameObject.SetActive(true);
+            Renderer[] renderers = gauge.GetComponentsInChildren<Renderer>(true);
+            for (int i=0;i<renderers.Length;i++)
+            {
+                if (!renderers[i]) continue;
+                renderers[i].enabled = true;
+                EditorUtility.SetDirty(renderers[i]);
+            }
+        }
+
+        static bool HasVisibleRenderer(Transform gauge)
+        {
+            if (!gauge || !gauge.gameObject.activeInHierarchy) return false;
+            Renderer[] renderers = gauge.GetComponentsInChildren<Renderer>(true);
+            return renderers.Any(r => r && r.enabled);
         }
 
         static bool Approximately(Vector3 a,Vector3 b,float tolerance)
