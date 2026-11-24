@@ -9,6 +9,8 @@ namespace Hanger51.World
         [SerializeField] H51RunwayLightingController controller;
         [SerializeField] TextMesh statusLabel;
 
+        Transform viewer;
+
         public string InteractionText =>
             controller
                 ? "E: cycle runway lights  •  " + controller.StatusText
@@ -20,7 +22,12 @@ namespace Hanger51.World
         {
             controller = configuredController;
             statusLabel = configuredLabel;
+            if (statusLabel)
+            {
+                statusLabel.transform.localRotation = Quaternion.identity;
+            }
             RefreshLabel();
+            RefreshLabelVisibility();
         }
 
         void Awake()
@@ -33,6 +40,7 @@ namespace Hanger51.World
         void Update()
         {
             RefreshLabel();
+            RefreshLabelVisibility();
         }
 
         public bool TryCycle(out string message)
@@ -57,6 +65,36 @@ namespace Hanger51.World
                 message = controller.StatusText + ".";
             }
             return true;
+        }
+
+        void RefreshLabelVisibility()
+        {
+            if (!statusLabel) return;
+
+            if (!viewer)
+            {
+                Camera camera = Camera.main;
+                if (camera) viewer = camera.transform;
+            }
+
+            if (!viewer)
+            {
+                statusLabel.gameObject.SetActive(true);
+                return;
+            }
+
+            Vector3 toViewer = viewer.position - transform.position;
+            toViewer.y = 0f;
+
+            // The readable cabinet face is local -Z and is mounted toward the
+            // airport interior. Hide the TextMesh completely when viewed through
+            // the wall from the exterior so it cannot appear mirrored/through-wall.
+            bool viewerOnReadableSide =
+                toViewer.sqrMagnitude < .01f ||
+                Vector3.Dot(toViewer.normalized,-transform.forward) > .05f;
+
+            if (statusLabel.gameObject.activeSelf != viewerOnReadableSide)
+                statusLabel.gameObject.SetActive(viewerOnReadableSide);
         }
 
         void RefreshLabel()
