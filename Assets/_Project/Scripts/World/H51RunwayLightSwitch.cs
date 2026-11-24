@@ -34,7 +34,10 @@ namespace Hanger51.World
         {
             if (!controller)
                 controller = FindFirstObjectByType<H51RunwayLightingController>(FindObjectsInactive.Include);
+            if (statusLabel)
+                statusLabel.transform.localRotation = Quaternion.identity;
             RefreshLabel();
+            RefreshLabelVisibility();
         }
 
         void Update()
