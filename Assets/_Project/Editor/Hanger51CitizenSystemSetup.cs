@@ -781,6 +781,255 @@ namespace Hanger51.EditorTools
             root.localScale *= factor;
         }
 
+        static int EnsureEmploymentSites(Transform world, Terrain terrain, List<Transform> towns)
+        {
+            Transform oldGenerated = FindChild(world, "H51 Generated Employment Sites");
+            if (oldGenerated) UnityEngine.Object.DestroyImmediate(oldGenerated.gameObject);
+            Transform generatedRoot = New("H51 Generated Employment Sites", world);
+
+            int created = 0;
+            for (int t = 0; t < towns.Count; t++)
+            {
+                Transform town = towns[t];
+                string townName = town.name;
+                List<Transform> houses = Houses(town);
+                if (houses.Count == 0) continue;
+
+                List<string> existing = new List<string>();
+                foreach (Transform tr in world.GetComponentsInChildren<Transform>(true))
+                {
+                    if (!tr.name.StartsWith("Purpose - " + townName, StringComparison.Ordinal)) continue;
+                    string type = PurposeType(tr.name);
+                    if (!existing.Contains(type)) existing.Add(type);
+                }
+
+                string[] desired = t == 0
+                    ? new[] { "General Store","Fire Station","Post Office","Town Hall","Repair Garage","Clinic","Cafe","Farm Supply" }
+                    : new[] { "Community Store","Community Hall","Repair Garage","Farm Supply" };
+
+                Vector3 center = Average(houses);
+                float townRadius = 70f;
+                for (int i = 0; i < houses.Count; i++)
+                    townRadius = Mathf.Max(townRadius, Planar(center, houses[i].position) + 45f);
+
+                for (int d = 0; d < desired.Length; d++)
+                {
+                    string type = desired[d];
+                    if (existing.Contains(type)) continue;
+
+                    Quaternion rotation;
+                    Vector3 position = FindEmploymentSitePosition(
+                        terrain, center, townRadius + 35f, t * 17 + d * 29, out rotation);
+
+                    BuildGeneratedWorkplace(generatedRoot, terrain, townName, type, position, rotation, t, d);
+                    existing.Add(type);
+                    created++;
+                }
+            }
+
+            if (created == 0)
+                UnityEngine.Object.DestroyImmediate(generatedRoot.gameObject);
+
+            return created;
+        }
+
+        static Vector3 FindEmploymentSitePosition(
+            Terrain terrain, Vector3 townCenter, float baseRadius, int seed, out Quaternion rotation)
+        {
+            System.Random rng = new System.Random(70001 + seed);
+            for (int ring = 0; ring < 5; ring++)
+            {
+                float radius = baseRadius + ring * 32f;
+                for (int i = 0; i < 18; i++)
+                {
+                    float angle = ((i / 18f) * 360f + (float)rng.NextDouble() * 12f) * Mathf.Deg2Rad;
+                    Vector3 outward = new Vector3(Mathf.Cos(angle), 0f, Mathf.Sin(angle));
+                    Vector3 p = townCenter + outward * radius;
+                    p.y = Ground(terrain, p);
+                    rotation = Quaternion.LookRotation(-outward, Vector3.up);
+                    if (EmploymentSiteClear(p + Vector3.up * 3f, rotation))
+                        return p;
+                }
+            }
+
+            Vector3 fallback = townCenter + Vector3.right * (baseRadius + 180f);
+            fallback.y = Ground(terrain, fallback);
+            rotation = Quaternion.LookRotation(Vector3.left, Vector3.up);
+            return fallback;
+        }
+
+        static bool EmploymentSiteClear(Vector3 center, Quaternion rotation)
+        {
+            Collider[] hits = Physics.OverlapBox(center, new Vector3(13f, 3.5f, 11f), rotation, ~0, QueryTriggerInteraction.Ignore);
+            for (int i = 0; i < hits.Length; i++)
+            {
+                Collider hit = hits[i];
+                if (!hit || hit is TerrainCollider) continue;
+                if (hit.GetComponentInParent<H51CitizenWorkplace>()) continue;
+                return false;
+            }
+            return true;
+        }
+
+        static void BuildGeneratedWorkplace(
+            Transform parent, Terrain terrain, string townName, string type,
+            Vector3 position, Quaternion rotation, int townIndex, int siteIndex)
+        {
+            Transform site = New("Purpose - " + townName + " " + type, parent);
+            site.position = position;
+            site.rotation = rotation;
+
+            Material foundation = CitizenWorkMaterial("Foundation", new Color(.38f,.38f,.36f), 0f);
+            Material wall = CitizenWorkMaterial(
+                type.Contains("Fire") ? "Fire Red" :
+                type.Contains("Farm") ? "Farm Green" :
+                type.Contains("Clinic") ? "Clinic Blue" :
+                type.Contains("Garage") ? "Workshop Gray" : "Warm Siding",
+                type.Contains("Fire") ? new Color(.48f,.12f,.09f) :
+                type.Contains("Farm") ? new Color(.20f,.31f,.17f) :
+                type.Contains("Clinic") ? new Color(.24f,.40f,.48f) :
+                type.Contains("Garage") ? new Color(.38f,.40f,.39f) :
+                new Color(.74f,.71f,.62f), 0f);
+            Material roof = CitizenWorkMaterial("Dark Roof", new Color(.10f,.105f,.11f), .02f);
+            Material door = CitizenWorkMaterial("Door", new Color(.24f,.13f,.07f), 0f);
+            Material glass = CitizenWorkMaterial("Window", new Color(.07f,.14f,.17f), .08f);
+            Material concrete = CitizenWorkMaterial("Concrete", new Color(.48f,.48f,.45f), 0f);
+
+            bool large = type.Contains("Garage") || type.Contains("Fire") || type.Contains("Farm");
+            float width = large ? 20f : 15f;
+            float depth = large ? 16f : 13f;
+            float height = large ? 6.2f : 5.2f;
+
+            WorkBox(site, "Foundation", new Vector3(0f,.25f,0f), new Vector3(width+.8f,.5f,depth+.8f), foundation, true);
+            WorkBox(site, "Building", new Vector3(0f,height*.5f+.5f,0f), new Vector3(width,height,depth), wall, true);
+            WorkBox(site, "Roof", new Vector3(0f,height+.75f,0f), new Vector3(width+1.2f,.5f,depth+1.2f), roof, false);
+
+            if (large)
+            {
+                WorkBox(site, "Service Door Left", new Vector3(-width*.24f,2.4f,depth*.5f+.06f), new Vector3(width*.34f,4.2f,.12f), door, false);
+                WorkBox(site, "Service Door Right", new Vector3(width*.24f,2.4f,depth*.5f+.06f), new Vector3(width*.34f,4.2f,.12f), door, false);
+            }
+            else
+            {
+                WorkBox(site, "Front Door", new Vector3(0f,2f,depth*.5f+.06f), new Vector3(1.8f,3.2f,.12f), door, false);
+                WorkBox(site, "Window Left", new Vector3(-width*.28f,2.7f,depth*.5f+.07f), new Vector3(3f,2.3f,.10f), glass, false);
+                WorkBox(site, "Window Right", new Vector3(width*.28f,2.7f,depth*.5f+.07f), new Vector3(3f,2.3f,.10f), glass, false);
+            }
+
+            WorkBox(site, "Workplace Parking", new Vector3(0f,.04f,depth*.5f+8f), new Vector3(width+8f,.08f,10f), concrete, false);
+
+            string id = "GENSITE-" + townIndex.ToString("00") + "-" + siteIndex.ToString("00");
+            EnsureWorkplaceComponent(site, id, type, townName, type, OccupationFor(type), large ? 8 : 6);
+        }
+
+        static H51CitizenWorkplace EnsureWorkplaceComponent(
+            Transform site, string id, string label, string townName, string category, string occupation, int capacity)
+        {
+            H51CitizenWorkplace workplace = site.GetComponent<H51CitizenWorkplace>();
+            if (!workplace) workplace = site.gameObject.AddComponent<H51CitizenWorkplace>();
+            workplace.Configure(id, label, townName, category, occupation, capacity);
+            return workplace;
+        }
+
+        static void AddActivitySpots(H51CitizenAnchor work, string type, Terrain terrain)
+        {
+            if (!work) return;
+            H51CitizenActivitySpot[] existing = work.GetComponentsInChildren<H51CitizenActivitySpot>(true);
+            if (existing != null && existing.Length >= 3) return;
+
+            for (int i = work.transform.childCount - 1; i >= 0; i--)
+            {
+                Transform child = work.transform.GetChild(i);
+                if (child.GetComponent<H51CitizenActivitySpot>())
+                    UnityEngine.Object.DestroyImmediate(child.gameObject);
+            }
+
+            string[] labels = WorkActivityLabels(type);
+            Vector3[] offsets =
+            {
+                new Vector3(-2.8f,0f,1.5f),
+                new Vector3(2.8f,0f,1.5f),
+                new Vector3(0f,0f,-2.2f)
+            };
+
+            for (int i = 0; i < offsets.Length; i++)
+            {
+                Transform spot = New("Activity - " + labels[i], work.transform);
+                Vector3 world = work.transform.TransformPoint(offsets[i]);
+                world.y = Ground(terrain, world) + .05f;
+                spot.position = world;
+                spot.rotation = work.transform.rotation;
+                H51CitizenActivitySpot component = spot.gameObject.AddComponent<H51CitizenActivitySpot>();
+                component.Configure(labels[i], "Interact", 3f + i, 7f + i * 1.5f);
+            }
+        }
+
+        static string[] WorkActivityLabels(string type)
+        {
+            string lower = (type ?? "").ToLowerInvariant();
+            if (lower.Contains("garage")) return new[] { "checking a vehicle", "organizing tools", "working at the service bay" };
+            if (lower.Contains("fire")) return new[] { "checking emergency equipment", "inspecting the apparatus", "doing station work" };
+            if (lower.Contains("clinic")) return new[] { "doing clinic paperwork", "checking supplies", "helping around the clinic" };
+            if (lower.Contains("store") || lower.Contains("supply")) return new[] { "helping at the counter", "stocking inventory", "checking deliveries" };
+            if (lower.Contains("cafe")) return new[] { "working the counter", "cleaning up", "preparing an order" };
+            if (lower.Contains("post")) return new[] { "sorting mail", "checking parcels", "doing counter work" };
+            if (lower.Contains("town hall") || lower.Contains("community hall")) return new[] { "doing paperwork", "checking records", "handling town business" };
+            if (lower.Contains("farm")) return new[] { "checking farm equipment", "handling chores in the yard", "working around the farm" };
+            return new[] { "doing paperwork", "checking supplies", "working through the day's tasks" };
+        }
+
+        static Material CitizenWorkMaterial(string name, Color color, float smoothness)
+        {
+            string folder = Generated + "/Workplaces/Materials";
+            Ensure(folder);
+            string path = folder + "/" + Safe(name) + ".mat";
+            Material material = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (material) return material;
+
+            Shader shader = Shader.Find("Universal Render Pipeline/Lit") ?? Shader.Find("Standard");
+            material = new Material(shader) { name = "H51 NPC " + name, color = color };
+            if (material.HasProperty("_BaseColor")) material.SetColor("_BaseColor", color);
+            if (material.HasProperty("_Metallic")) material.SetFloat("_Metallic", 0f);
+            if (material.HasProperty("_Smoothness")) material.SetFloat("_Smoothness", smoothness);
+            material.enableInstancing = true;
+            AssetDatabase.CreateAsset(material, path);
+            return material;
+        }
+
+        static GameObject WorkBox(
+            Transform parent, string name, Vector3 localPosition, Vector3 localScale,
+            Material material, bool keepCollider)
+        {
+            GameObject box = GameObject.CreatePrimitive(PrimitiveType.Cube);
+            box.name = name;
+            box.transform.SetParent(parent, false);
+            box.transform.localPosition = localPosition;
+            box.transform.localRotation = Quaternion.identity;
+            box.transform.localScale = localScale;
+            Renderer renderer = box.GetComponent<Renderer>();
+            if (renderer) renderer.sharedMaterial = material;
+            Collider collider = box.GetComponent<Collider>();
+            if (!keepCollider && collider) UnityEngine.Object.DestroyImmediate(collider);
+            return box;
+        }
+
+        static void ConfigureCitizenPlayerInteraction()
+        {
+            FirstPersonController player = UnityEngine.Object.FindFirstObjectByType<FirstPersonController>();
+            if (!player)
+            {
+                Debug.LogWarning("Citizen system could not find the first-person player yet. Run Step 132 later to attach talk interaction.");
+                return;
+            }
+
+            H51CitizenDialogueUI ui = player.GetComponent<H51CitizenDialogueUI>();
+            if (!ui) ui = player.gameObject.AddComponent<H51CitizenDialogueUI>();
+
+            H51CitizenPlayerInteractor interactor = player.GetComponent<H51CitizenPlayerInteractor>();
+            if (!interactor) interactor = player.gameObject.AddComponent<H51CitizenPlayerInteractor>();
+            EditorUtility.SetDirty(player.gameObject);
+        }
+
         static void BuildTownAnchors(
             Transform world, Terrain terrain, Transform anchorsRoot, Transform town, int townIndex,
             List<H51CitizenAnchor> all,
