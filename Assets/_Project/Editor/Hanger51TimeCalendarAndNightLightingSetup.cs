@@ -199,7 +199,7 @@ namespace Hanger51.EditorTools
             Debug.Log(
                 "Step 152 complete. Installed the calendar-aware world clock, seasonal sun/moon day-night cycle, " +
                 "player clock/calendar HUD [K], weekday/weekend and essential-shift scheduling foundation, " +
-                street/building lights=" + (streetLights + buildingLights) +
+                "street/building lights=" + (streetLights + buildingLights) +
                 " (street=" + streetLights + ", building=" + buildingLights + "), airport apron lights=" +
                 facilityLights + ", runway fixtures=" + runwayFixtures +
                 ", nearby real runway lights=" + runwayRealtimeLights +
