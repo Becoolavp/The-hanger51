@@ -23,6 +23,24 @@ namespace Hanger51.Aircraft
         public static string TraceFilePath =>
             Path.Combine(Application.persistentDataPath, TraceFileName);
 
+        public static string BuildFolderTraceFilePath
+        {
+            get
+            {
+                try
+                {
+                    DirectoryInfo dataDirectory = Directory.GetParent(Application.dataPath);
+                    return dataDirectory != null
+                        ? Path.Combine(dataDirectory.FullName, TraceFileName)
+                        : string.Empty;
+                }
+                catch
+                {
+                    return string.Empty;
+                }
+            }
+        }
+
         public static P51WheelInstallDiagnostics Ensure(
             P51LandingGearMaintenanceController configuredMaintenance)
         {
@@ -61,7 +79,8 @@ namespace Hanger51.Aircraft
                 + $"UTC={DateTime.UtcNow:O}\n"
                 + $"Realtime={Time.realtimeSinceStartup:F3}\n"
                 + $"SceneObject={name}\n"
-                + $"TraceFile={TraceFilePath}\n";
+                + $"PersistentTraceFile={TraceFilePath}\n"
+                + $"BuildFolderTraceFile={BuildFolderTraceFilePath}\n";
             WriteFresh(header);
 
             Write(
@@ -99,7 +118,8 @@ namespace Hanger51.Aircraft
                 + $"UTC={DateTime.UtcNow:O}\n"
                 + $"Realtime={Time.realtimeSinceStartup:F3}\n"
                 + $"SceneObject={name}\n"
-                + $"TraceFile={TraceFilePath}\n";
+                + $"PersistentTraceFile={TraceFilePath}\n"
+                + $"BuildFolderTraceFile={BuildFolderTraceFilePath}\n";
             WriteFresh(header);
 
             Write(
@@ -389,18 +409,18 @@ namespace Hanger51.Aircraft
 
         private static void WriteFresh(string text)
         {
-            try
+            WriteFileSafe(TraceFilePath, text, false);
+
+            string buildPath = BuildFolderTraceFilePath;
+            if (!string.IsNullOrWhiteSpace(buildPath)
+                && !string.Equals(buildPath, TraceFilePath, StringComparison.OrdinalIgnoreCase))
             {
-                Directory.CreateDirectory(Application.persistentDataPath);
-                File.WriteAllText(TraceFilePath, text);
-            }
-            catch (Exception exception)
-            {
-                Debug.LogError(
-                    $"{TracePrefix} Could not create trace file: {exception.Message}");
+                WriteFileSafe(buildPath, text, false);
             }
 
             Debug.Log(text);
+            Debug.Log(
+                $"{TracePrefix} Easy-to-find trace copy: {buildPath}");
         }
 
         private static void Write(string message)
@@ -408,17 +428,48 @@ namespace Hanger51.Aircraft
             string line = $"{TracePrefix} {message}";
             Debug.Log(line);
 
+            string output = line + Environment.NewLine;
+            WriteFileSafe(TraceFilePath, output, true);
+
+            string buildPath = BuildFolderTraceFilePath;
+            if (!string.IsNullOrWhiteSpace(buildPath)
+                && !string.Equals(buildPath, TraceFilePath, StringComparison.OrdinalIgnoreCase))
+            {
+                WriteFileSafe(buildPath, output, true);
+            }
+        }
+
+        private static void WriteFileSafe(
+            string path,
+            string text,
+            bool append)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+            {
+                return;
+            }
+
             try
             {
-                Directory.CreateDirectory(Application.persistentDataPath);
-                File.AppendAllText(
-                    TraceFilePath,
-                    line + Environment.NewLine);
+                string directory = Path.GetDirectoryName(path);
+                if (!string.IsNullOrWhiteSpace(directory))
+                {
+                    Directory.CreateDirectory(directory);
+                }
+
+                if (append)
+                {
+                    File.AppendAllText(path, text);
+                }
+                else
+                {
+                    File.WriteAllText(path, text);
+                }
             }
             catch (Exception exception)
             {
                 Debug.LogError(
-                    $"{TracePrefix} Could not append trace file: {exception.Message}");
+                    $"{TracePrefix} Could not write trace file '{path}': {exception.Message}");
             }
         }
 
