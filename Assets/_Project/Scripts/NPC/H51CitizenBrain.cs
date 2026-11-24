@@ -52,7 +52,6 @@ namespace Hanger51.NPCs
         H51CitizenActivitySpot activeActivitySpot;
         float activeActivityUntil;
         float nextActivityGesture;
-        float defaultAgentBaseOffset;
 
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
@@ -61,7 +60,6 @@ namespace Hanger51.NPCs
         {
             identity = GetComponent<H51CitizenIdentity>();
             agent = GetComponent<NavMeshAgent>();
-            defaultAgentBaseOffset = agent ? agent.baseOffset : 0f;
             animator = GetComponentInChildren<Animator>(true);
             rng = new System.Random(identity ? identity.AppearanceSeed : GetInstanceID());
             citizenRenderers = GetComponentsInChildren<Renderer>(true);
@@ -296,11 +294,6 @@ namespace Hanger51.NPCs
 
             if (activeActivityUntil <= 0f)
             {
-                float lift = 0f;
-                if (NavMesh.SamplePosition(activeActivitySpot.transform.position, out NavMeshHit floorHit, 2.5f, NavMesh.AllAreas))
-                    lift = Mathf.Clamp(activeActivitySpot.transform.position.y - floorHit.position.y, 0f, .65f);
-
-                agent.baseOffset = defaultAgentBaseOffset + lift;
                 activeActivityUntil = Time.time + Mathf.Lerp(
                     activeActivitySpot.MinimumDuration,
                     activeActivitySpot.MaximumDuration,
@@ -404,12 +397,8 @@ namespace Hanger51.NPCs
             activeActivityUntil = 0f;
             nextActivityGesture = 0f;
 
-            if (agent)
-            {
-                agent.baseOffset = defaultAgentBaseOffset;
-                if (agent.enabled && agent.isOnNavMesh)
-                    agent.isStopped = false;
-            }
+            if (agent && agent.enabled && agent.isOnNavMesh)
+                agent.isStopped = false;
         }
 
         void ResolveOwnedVehicle()
