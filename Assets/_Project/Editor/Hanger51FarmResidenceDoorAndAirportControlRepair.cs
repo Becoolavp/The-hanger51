@@ -175,18 +175,23 @@ namespace Hanger51.EditorTools
 
                 ruralFarmers++;
 
+                H51CitizenAnchor home = null;
+                H51CitizenAnchor work = null;
                 bool homeReady =
                     !string.IsNullOrWhiteSpace(c.HomeAnchorId) &&
-                    anchorById.TryGetValue(c.HomeAnchorId,out H51CitizenAnchor home) &&
+                    anchorById.TryGetValue(c.HomeAnchorId,out home) &&
                     home &&
                     home.Kind == H51CitizenAnchorKind.Home;
                 bool workReady =
                     !string.IsNullOrWhiteSpace(c.WorkAnchorId) &&
-                    anchorById.TryGetValue(c.WorkAnchorId,out H51CitizenAnchor work) &&
+                    anchorById.TryGetValue(c.WorkAnchorId,out work) &&
                     work &&
                     work.Kind == H51CitizenAnchorKind.Work;
 
-                if (!homeReady || !workReady || home.TownName != c.TownName || work.TownName != c.TownName)
+                if (!homeReady ||
+                    !workReady ||
+                    home.TownName != c.TownName ||
+                    work.TownName != c.TownName)
                     badFarmerAssignments++;
             }
 
