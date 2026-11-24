@@ -87,6 +87,8 @@ Do not mark this milestone verified until Step 152 has been applied, Step 153 pa
 
 Compile note: the first pull exposed C# definite-assignment error CS0165 in `H51CitizenBrain.cs` for the medical-appointment local variable. This was fixed in commit `97356c9b` by initializing the appointment anchor before the short-circuited schedule check.
 
+Compile note: the next pull exposed three parser errors on one malformed Step 152 completion-log line in `Hanger51TimeCalendarAndNightLightingSetup.cs`. All three came from a missing opening quotation mark and were fixed in commit `99550e07`.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
