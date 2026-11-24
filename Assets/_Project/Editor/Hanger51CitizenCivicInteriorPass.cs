@@ -451,7 +451,10 @@ namespace Hanger51.EditorTools
             Clearance(modeled, new Vector3(0f,1.0f,-1.0f), new Vector3(1.15f,1.8f,2.2f), ref clearances);
 
             ConfigureEnterable(root, workplace, H51EnterableBuildingKind.Workplace, entrance, interior);
-            WorldText(root, workplace.DisplayName.ToUpperInvariant(), new Vector3(0,3.45f,7.15f), Quaternion.Euler(0,180,0), .19f);
+            string theaterLabel = workplace.DisplayName.IndexOf("Cinema", StringComparison.OrdinalIgnoreCase) >= 0
+                ? "CINEMA"
+                : "COMMUNITY THEATER";
+            WorldText(root, theaterLabel, new Vector3(0,3.45f,7.15f), Quaternion.Euler(0,180,0), .19f);
 
             H51CitizenAnchor leisure = FindAnchor(anchorRoot, workplace.TownName,
                 workplace.DisplayName.IndexOf("Cinema", StringComparison.OrdinalIgnoreCase) >= 0 ? "Cinema" : "Community Theater");
@@ -716,7 +719,10 @@ namespace Hanger51.EditorTools
                 new Vector3(0,doorHeight+headerHeight*.5f,frontZ),
                 new Vector3(doorWidth,headerHeight,.20f), exterior, true);
 
-            Box(root, "Roof", new Vector3(0,height+.14f,0), new Vector3(width+.6f,.28f,depth+.6f), m.ceiling, true);
+            Transform roof = Box(root, "Roof", new Vector3(0,height+.14f,0), new Vector3(width+.6f,.28f,depth+.6f), m.ceiling, true);
+            NavMeshModifier roofModifier = roof.gameObject.GetComponent<NavMeshModifier>();
+            if (!roofModifier) roofModifier = roof.gameObject.AddComponent<NavMeshModifier>();
+            roofModifier.ignoreFromBuild = true;
             Box(root, "Door Frame Left", new Vector3(-doorWidth*.5f-.07f,doorHeight*.5f,depth*.5f+.035f), new Vector3(.14f,doorHeight+.12f,.24f), m.trim, true);
             Box(root, "Door Frame Right", new Vector3(doorWidth*.5f+.07f,doorHeight*.5f,depth*.5f+.035f), new Vector3(.14f,doorHeight+.12f,.24f), m.trim, true);
             Box(root, "Door Frame Header", new Vector3(0,doorHeight+.06f,depth*.5f+.035f), new Vector3(doorWidth+.28f,.14f,.24f), m.trim, true);
