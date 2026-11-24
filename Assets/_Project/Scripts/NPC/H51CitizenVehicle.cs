@@ -64,6 +64,8 @@ namespace Hanger51.NPCs
             if (!trafficNetwork.TryBuildPath(transform.position, destination, route) || route.Count == 0)
                 return false;
 
+            OffsetRouteToRightLane();
+
             currentDriver = driver;
             routeIndex = 0;
             state = H51CitizenVehicleState.Driving;
@@ -143,10 +145,11 @@ namespace Hanger51.NPCs
                     1f - Mathf.Exp(-turnSpeed * Time.deltaTime));
             }
 
+            float actualSpeed = TrafficBlockedAhead() ? 0f : cruiseSpeed;
             Vector3 next = Vector3.MoveTowards(
                 transform.position,
                 target,
-                cruiseSpeed * Time.deltaTime);
+                actualSpeed * Time.deltaTime);
             transform.position = next;
 
             if (Time.time >= nextIncidentCheck)
@@ -171,6 +174,36 @@ namespace Hanger51.NPCs
                     }
                 }
             }
+        }
+
+        void OffsetRouteToRightLane()
+        {
+            if (route.Count < 2) return;
+            float laneOffset = 1.35f;
+
+            for (int i = 0; i < route.Count; i++)
+            {
+                Vector3 tangent;
+                if (i == 0) tangent = route[1] - route[0];
+                else if (i == route.Count - 1) tangent = route[i] - route[i - 1];
+                else tangent = route[i + 1] - route[i - 1];
+
+                tangent.y = 0f;
+                if (tangent.sqrMagnitude < .01f) continue;
+                tangent.Normalize();
+                Vector3 right = Vector3.Cross(Vector3.up, tangent);
+                route[i] += right * laneOffset;
+            }
+        }
+
+        bool TrafficBlockedAhead()
+        {
+            Vector3 origin = transform.position + transform.forward * 2.35f + Vector3.up * .75f;
+            if (!Physics.Raycast(origin, transform.forward, out RaycastHit hit, 7f, ~0, QueryTriggerInteraction.Ignore))
+                return false;
+
+            H51CitizenVehicle other = hit.collider ? hit.collider.GetComponentInParent<H51CitizenVehicle>() : null;
+            return other && other != this;
         }
 
         void OnCollisionEnter(Collision collision)
