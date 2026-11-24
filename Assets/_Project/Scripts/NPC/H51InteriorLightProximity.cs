@@ -1,4 +1,5 @@
 using UnityEngine;
+using Hanger51.World;
 
 namespace Hanger51.NPCs
 {
@@ -10,6 +11,7 @@ namespace Hanger51.NPCs
         [SerializeField, Min(.1f)] float refreshSeconds = .35f;
 
         Transform viewer;
+        H51UtilityConsumer utilityConsumer;
         float nextRefresh;
 
         public void Configure(Light target, float distance)
@@ -21,6 +23,7 @@ namespace Hanger51.NPCs
         void Awake()
         {
             if (!interiorLight) interiorLight = GetComponentInChildren<Light>(true);
+            utilityConsumer = GetComponentInParent<H51UtilityConsumer>();
             if (interiorLight) interiorLight.enabled = false;
         }
 
@@ -28,6 +31,15 @@ namespace Hanger51.NPCs
         {
             if (!interiorLight || Time.unscaledTime < nextRefresh) return;
             nextRefresh = Time.unscaledTime + refreshSeconds;
+
+            if (!utilityConsumer)
+                utilityConsumer = GetComponentInParent<H51UtilityConsumer>();
+
+            if (utilityConsumer && !utilityConsumer.HasElectricity)
+            {
+                interiorLight.enabled = false;
+                return;
+            }
 
             if (!viewer)
             {
