@@ -26,6 +26,7 @@ namespace Hanger51.NPCs
         H51CitizenAnchor work;
         H51CitizenAnchor leisure;
         H51CitizenAnchor shop;
+        H51CitizenAnchor medical;
         NavMeshAgent agent;
         Animator animator;
         float nextThink;
@@ -138,9 +139,71 @@ namespace Hanger51.NPCs
             if (!registry || !identity) return;
             home = registry.FindAnchor(identity.HomeAnchorId);
             work = registry.FindAnchor(identity.WorkAnchorId);
-            leisure = registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Park, identity.AppearanceSeed + 31)
+            leisure = registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Entertainment, identity.AppearanceSeed + 23)
+                      ?? registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Park, identity.AppearanceSeed + 31)
                       ?? registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Leisure, identity.AppearanceSeed + 41);
             shop = registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Shop, identity.AppearanceSeed + 53);
+            medical = registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Medical, identity.AppearanceSeed + 67);
+        }
+
+        H51CitizenAnchor PickCurrentLeisureDestination(float hour)
+        {
+            if (!registry || !identity) return leisure;
+
+            int bucket = DestinationTimeBucket(hour);
+            int seed = identity.AppearanceSeed + bucket * 97;
+            H51CitizenAnchorKind primary =
+                ((identity.AppearanceSeed + bucket) % 3 == 0)
+                    ? H51CitizenAnchorKind.Park
+                    : H51CitizenAnchorKind.Entertainment;
+
+            return registry.PickAnchor(identity.TownName, primary, seed)
+                   ?? registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Leisure, seed + 11)
+                   ?? registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Park, seed + 23)
+                   ?? registry.PickAnchor(identity.TownName, H51CitizenAnchorKind.Entertainment, seed + 37)
+                   ?? leisure;
+        }
+
+        H51CitizenAnchor PickCurrentShopDestination(float hour)
+        {
+            if (!registry || !identity) return shop;
+            int bucket = DestinationTimeBucket(hour);
+            return registry.PickAnchor(
+                       identity.TownName,
+                       H51CitizenAnchorKind.Shop,
+                       identity.AppearanceSeed + bucket * 131)
+                   ?? shop;
+        }
+
+        bool TryGetMedicalAppointment(float hour, out H51CitizenAnchor appointment)
+        {
+            appointment = null;
+            if (!registry || !identity) return false;
+
+            H51WorldClock clock = H51WorldClock.Instance;
+            int day = clock ? clock.DayIndex : Mathf.FloorToInt(Time.time / 480f);
+            int schedule = (identity.AppearanceSeed & 0x7fffffff) + day * 17;
+
+            // Roughly one scheduled visit every nine game-days per citizen.
+            if (schedule % 9 != 0) return false;
+
+            float appointmentHour = 9.25f + (schedule % 8) * .75f;
+            if (hour < appointmentHour || hour >= appointmentHour + .75f)
+                return false;
+
+            appointment = registry.PickAnchor(
+                              identity.TownName,
+                              H51CitizenAnchorKind.Medical,
+                              identity.AppearanceSeed + day * 211)
+                          ?? medical;
+            return appointment;
+        }
+
+        int DestinationTimeBucket(float hour)
+        {
+            H51WorldClock clock = H51WorldClock.Instance;
+            int day = clock ? clock.DayIndex : 0;
+            return day * 64 + Mathf.FloorToInt(hour * 2f);
         }
 
         void SnapToNavMesh()
@@ -166,9 +229,17 @@ namespace Hanger51.NPCs
             H51CitizenAnchor desired;
             H51CitizenRoutineState desiredState;
 
+            H51CitizenAnchor currentLeisure = PickCurrentLeisureDestination(hour);
+            H51CitizenAnchor currentShop = PickCurrentShopDestination(hour);
+            bool medicalAppointment = TryGetMedicalAppointment(hour, out H51CitizenAnchor appointment);
+
             if (hour < 5.5f || hour >= 22.5f)
             {
                 desired = home; desiredState = H51CitizenRoutineState.Home;
+            }
+            else if (medicalAppointment)
+            {
+                desired = appointment; desiredState = H51CitizenRoutineState.Leisure;
             }
             else if (hour < 12f)
             {
@@ -176,7 +247,7 @@ namespace Hanger51.NPCs
             }
             else if (hour < 13.25f)
             {
-                desired = leisure ?? shop ?? home; desiredState = H51CitizenRoutineState.Leisure;
+                desired = currentLeisure ?? currentShop ?? home; desiredState = H51CitizenRoutineState.Leisure;
             }
             else if (hour < 17.25f)
             {
@@ -184,13 +255,19 @@ namespace Hanger51.NPCs
             }
             else if (hour < 19.5f)
             {
-                desired = shop ?? leisure ?? home; desiredState = shop ? H51CitizenRoutineState.Shopping : H51CitizenRoutineState.Leisure;
+                desired = currentShop ?? currentLeisure ?? home;
+                desiredState = currentShop ? H51CitizenRoutineState.Shopping : H51CitizenRoutineState.Leisure;
             }
             else
             {
-                bool socialEvening = identity && identity.Sociability > .45f && rng.NextDouble() < .58;
-                desired = socialEvening ? (leisure ?? home) : home;
-                desiredState = socialEvening && leisure ? H51CitizenRoutineState.Leisure : H51CitizenRoutineState.Home;
+                int eveningBucket = DestinationTimeBucket(hour);
+                bool socialEvening = identity &&
+                    identity.Sociability > .38f &&
+                    ((identity.AppearanceSeed + eveningBucket * 7) & 3) != 0;
+                desired = socialEvening ? (currentLeisure ?? home) : home;
+                desiredState = socialEvening && currentLeisure
+                    ? H51CitizenRoutineState.Leisure
+                    : H51CitizenRoutineState.Home;
             }
 
             if (!desired)
