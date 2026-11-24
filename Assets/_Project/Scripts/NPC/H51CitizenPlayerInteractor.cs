@@ -73,8 +73,12 @@ namespace Hanger51.NPCs
             {
                 Collider collider = hits[i].collider;
                 if (!collider) continue;
+
                 H51CitizenDialogue npc = collider.GetComponentInParent<H51CitizenDialogue>();
                 if (npc) return npc;
+
+                // A solid object in front of the citizen blocks conversation targeting.
+                if (!collider.isTrigger) return null;
             }
             return null;
         }
