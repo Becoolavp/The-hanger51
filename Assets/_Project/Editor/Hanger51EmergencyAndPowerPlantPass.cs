@@ -130,8 +130,37 @@ namespace Hanger51.EditorTools
 
                 EditorUtility.DisplayProgressBar(
                     "Hanger 51 Emergency And Utilities",
+                    "Refreshing regional roads and connecting the power station",
+                    .09f);
+
+                int indexedRoadSurfaces = RefreshTrafficNetworkFromCurrentRoads(
+                    world.transform,
+                    traffic);
+
+                float initialGateDistance = DistanceToNearestTrafficNode(
+                    traffic,
+                    plant.TransformPoint(new Vector3(0f,0f,83f)));
+
+                int accessRoadSegments = EnsurePowerPlantTrafficConnector(
+                    world.transform,
+                    expansion,
+                    terrain,
+                    plant,
+                    traffic,
+                    mats);
+
+                indexedRoadSurfaces = RefreshTrafficNetworkFromCurrentRoads(
+                    world.transform,
+                    traffic);
+
+                float repairedGateDistance = DistanceToNearestTrafficNode(
+                    traffic,
+                    plant.TransformPoint(new Vector3(0f,0f,83f)));
+
+                EditorUtility.DisplayProgressBar(
+                    "Hanger 51 Emergency And Utilities",
                     "Rebuilding the power station as a walkable staffed facility",
-                    .12f);
+                    .14f);
 
                 BuildPlantUpgrade(
                     plant,
@@ -306,6 +335,11 @@ namespace Hanger51.EditorTools
                     ", utility consumers=" + utilityConsumers +
                     ", plant vapor systems=" + vapor.Count +
                     ", NavMeshes rebaked=" + navMeshes +
+                    ", indexed road surfaces=" + indexedRoadSurfaces +
+                    ", traffic nodes=" + traffic.NodeCount +
+                    ", plant access road segments=" + accessRoadSegments +
+                    ", gate distance before/after=" + initialGateDistance.ToString("F1") + "m/" +
+                    repairedGateDistance.ToString("F1") + "m" +
                     ". Civilians now carry an emergency phone state and can request police, fire, or ambulance response. Run Step 151.",
                     plant.gameObject);
             }
@@ -431,6 +465,16 @@ namespace Hanger51.EditorTools
             }
             bool roadAccessReady = accessRoad || trafficRoadAccess;
 
+            int totalTrafficTowns = 0;
+            int connectedTrafficTowns = CountTownsConnectedToPlant(
+                citizenRoot,
+                traffic,
+                plantGate,
+                out totalTrafficTowns);
+            bool allTownsConnected =
+                totalTrafficTowns > 0 &&
+                connectedTrafficTowns == totalTrafficTowns;
+
             Transform fluidRoot = FindChild(upgrade,"Plant External Fluid Network");
             int pipeSegments = fluidRoot
                 ? fluidRoot.GetComponentsInChildren<Transform>(true)
@@ -458,6 +502,7 @@ namespace Hanger51.EditorTools
                 criticalConsumers >= 3 &&
                 plantNav >= 1 &&
                 roadAccessReady &&
+                allTownsConnected &&
                 pipeSegments >= 12;
 
             if (ok)
@@ -476,6 +521,7 @@ namespace Hanger51.EditorTools
                     ", blocked walk clearances=0, utility consumers=" + consumers.Length +
                     ", critical backup consumers=" + criticalConsumers +
                     ", plant NavMesh=ready, road access=ready" +
+                    ", towns connected to plant=" + connectedTrafficTowns + "/" + totalTrafficTowns +
                     ", external pipe segments=" + pipeSegments + ".",
                     plant.gameObject);
             }
@@ -497,9 +543,490 @@ namespace Hanger51.EditorTools
                     ", plant NavMesh=" + plantNav +
                     ", road access=" + (roadAccessReady ? "ready" : "MISSING") +
                     " (traffic node distance=" + (float.IsInfinity(roadAccessDistance) ? "n/a" : roadAccessDistance.ToString("F1")+"m") + ")" +
+                    ", towns connected to plant=" + connectedTrafficTowns + "/" + totalTrafficTowns +
                     ", external pipe segments=" + pipeSegments + "/12.",
                     plant.gameObject);
             }
+        }
+
+        static int RefreshTrafficNetworkFromCurrentRoads(
+            Transform world,
+            H51TrafficNetwork traffic)
+        {
+            if (!world || !traffic) return 0;
+
+            Transform roads = FindChild(world,"Road Network");
+            if (!roads) return 0;
+
+            List<Vector3> nodes = new List<Vector3>();
+            List<H51TrafficNetwork.Edge> edges = new List<H51TrafficNetwork.Edge>();
+            HashSet<ulong> edgeKeys = new HashSet<ulong>();
+            List<int> roadEndpoints = new List<int>();
+
+            MeshFilter[] surfaces = roads.GetComponentsInChildren<MeshFilter>(true);
+            int indexedSurfaces = 0;
+
+            for (int r=0;r<surfaces.Length;r++)
+            {
+                MeshFilter mf = surfaces[r];
+                if (!mf || !mf.sharedMesh || mf.gameObject.name != "Road Surface")
+                    continue;
+
+                Vector3[] vertices = mf.sharedMesh.vertices;
+                if (vertices == null || vertices.Length < 4 || (vertices.Length & 1) != 0)
+                    continue;
+
+                List<Vector3> centers = new List<Vector3>();
+                for (int i=0;i+1<vertices.Length;i+=2)
+                {
+                    Vector3 center = mf.transform.TransformPoint(
+                        (vertices[i]+vertices[i+1])*.5f);
+                    centers.Add(center);
+                }
+
+                if (centers.Count < 2) continue;
+                indexedSurfaces++;
+
+                int firstRoadNode = -1;
+                int previousNode = -1;
+
+                for (int segment=0;segment<centers.Count-1;segment++)
+                {
+                    Vector3 a = centers[segment];
+                    Vector3 b = centers[segment+1];
+                    float distance = Vector3.Distance(a,b);
+                    int steps = Mathf.Max(1,Mathf.CeilToInt(distance/6f));
+
+                    if (segment == 0)
+                    {
+                        previousNode = nodes.Count;
+                        nodes.Add(a);
+                        firstRoadNode = previousNode;
+                    }
+
+                    for (int step=1;step<=steps;step++)
+                    {
+                        Vector3 sample = Vector3.Lerp(a,b,step/(float)steps);
+                        int current = nodes.Count;
+                        nodes.Add(sample);
+                        AddTrafficEdgeLocal(
+                            nodes,
+                            edges,
+                            edgeKeys,
+                            previousNode,
+                            current);
+                        previousNode = current;
+                    }
+                }
+
+                if (firstRoadNode >= 0)
+                    roadEndpoints.Add(firstRoadNode);
+                if (previousNode >= 0 && previousNode != firstRoadNode)
+                    roadEndpoints.Add(previousNode);
+            }
+
+            // Connect intersections and road seams. Use a spatial hash instead of O(n^2)
+            // because the regional network can contain thousands of sampled road nodes.
+            const float intersectionThreshold = 9.5f;
+            float cellSize = intersectionThreshold;
+            Dictionary<Vector2Int,List<int>> buckets =
+                new Dictionary<Vector2Int,List<int>>();
+
+            for (int i=0;i<nodes.Count;i++)
+            {
+                Vector2Int cell = TrafficCell(nodes[i],cellSize);
+                if (!buckets.TryGetValue(cell,out List<int> list))
+                {
+                    list = new List<int>();
+                    buckets.Add(cell,list);
+                }
+                list.Add(i);
+            }
+
+            float thresholdSqr = intersectionThreshold*intersectionThreshold;
+            for (int i=0;i<nodes.Count;i++)
+            {
+                Vector2Int cell = TrafficCell(nodes[i],cellSize);
+                for (int dx=-1;dx<=1;dx++)
+                {
+                    for (int dz=-1;dz<=1;dz++)
+                    {
+                        Vector2Int neighborCell =
+                            new Vector2Int(cell.x+dx,cell.y+dz);
+                        if (!buckets.TryGetValue(neighborCell,out List<int> candidates))
+                            continue;
+
+                        for (int cIndex=0;cIndex<candidates.Count;cIndex++)
+                        {
+                            int j = candidates[cIndex];
+                            if (j <= i) continue;
+
+                            Vector3 delta = nodes[i]-nodes[j];
+                            delta.y = 0f;
+                            if (delta.sqrMagnitude > thresholdSqr) continue;
+
+                            AddTrafficEdgeLocal(
+                                nodes,
+                                edges,
+                                edgeKeys,
+                                i,
+                                j);
+                        }
+                    }
+                }
+            }
+
+            // A slightly wider seam pass only at road endpoints bridges small authoring gaps
+            // between separately generated town, county and industrial road meshes.
+            const float seamThreshold = 18f;
+            float seamSqr = seamThreshold*seamThreshold;
+            for (int a=0;a<roadEndpoints.Count;a++)
+            {
+                int ia = roadEndpoints[a];
+                for (int b=a+1;b<roadEndpoints.Count;b++)
+                {
+                    int ib = roadEndpoints[b];
+                    Vector3 delta = nodes[ia]-nodes[ib];
+                    delta.y = 0f;
+                    if (delta.sqrMagnitude > seamSqr) continue;
+
+                    AddTrafficEdgeLocal(
+                        nodes,
+                        edges,
+                        edgeKeys,
+                        ia,
+                        ib);
+                }
+            }
+
+            traffic.Configure(nodes,edges);
+            EditorUtility.SetDirty(traffic);
+            return indexedSurfaces;
+        }
+
+        static Vector2Int TrafficCell(Vector3 point,float size)
+        {
+            return new Vector2Int(
+                Mathf.FloorToInt(point.x/size),
+                Mathf.FloorToInt(point.z/size));
+        }
+
+        static void AddTrafficEdgeLocal(
+            List<Vector3> nodes,
+            List<H51TrafficNetwork.Edge> edges,
+            HashSet<ulong> keys,
+            int a,
+            int b)
+        {
+            if (a == b || a < 0 || b < 0 || a >= nodes.Count || b >= nodes.Count)
+                return;
+
+            int lo = Mathf.Min(a,b);
+            int hi = Mathf.Max(a,b);
+            ulong key = ((ulong)(uint)lo << 32) | (uint)hi;
+            if (!keys.Add(key)) return;
+
+            edges.Add(
+                new H51TrafficNetwork.Edge(
+                    a,
+                    b,
+                    Vector3.Distance(nodes[a],nodes[b])));
+        }
+
+        static float DistanceToNearestTrafficNode(
+            H51TrafficNetwork traffic,
+            Vector3 point)
+        {
+            if (!traffic || traffic.NodeCount <= 0)
+                return float.PositiveInfinity;
+
+            int nearest = traffic.FindNearestNode(point);
+            if (nearest < 0)
+                return float.PositiveInfinity;
+
+            Vector3 delta = traffic.GetNode(nearest)-point;
+            delta.y = 0f;
+            return delta.magnitude;
+        }
+
+        static int EnsurePowerPlantTrafficConnector(
+            Transform world,
+            Transform expansion,
+            Terrain terrain,
+            Transform plant,
+            H51TrafficNetwork traffic,
+            Mats m)
+        {
+            if (!world || !expansion || !terrain || !plant || !traffic || traffic.NodeCount == 0)
+                return 0;
+
+            Transform roadNetwork = FindChild(world,"Road Network");
+            if (!roadNetwork) return 0;
+
+            Transform previous = DirectChild(
+                roadNetwork,
+                "H51 Power Plant Traffic Connector");
+            if (previous)
+                UnityEngine.Object.DestroyImmediate(previous.gameObject);
+
+            Vector3 gate = plant.TransformPoint(new Vector3(0f,0f,83f));
+            gate.y = Ground(terrain,gate)+.10f;
+
+            int nearestIndex = traffic.FindNearestNode(gate);
+            if (nearestIndex < 0) return 0;
+
+            Vector3 start = traffic.GetNode(nearestIndex);
+            start.y = Ground(terrain,start)+.10f;
+
+            float initialDistance = PlanarDistance(start,gate);
+            if (initialDistance <= 18f)
+                return 0;
+
+            Transform connector =
+                New("H51 Power Plant Traffic Connector",roadNetwork);
+
+            Vector3 direction = gate-start;
+            direction.y = 0f;
+            if (direction.sqrMagnitude < 1f)
+                return 0;
+            direction.Normalize();
+
+            Vector3 side = Vector3.Cross(Vector3.up,direction).normalized;
+            Vector3 midpoint = Vector3.Lerp(start,gate,.52f);
+            // A modest curve keeps the connector looking like an engineered access road
+            // instead of a perfectly straight grass-cutting line.
+            Vector3 control = midpoint + side*Mathf.Clamp(initialDistance*.08f,-10f,10f);
+
+            int samples = Mathf.Clamp(
+                Mathf.CeilToInt(initialDistance/6f)+1,
+                6,
+                36);
+
+            List<Vector3> path = new List<Vector3>();
+            for (int i=0;i<samples;i++)
+            {
+                float t = i/(float)(samples-1);
+                float u = 1f-t;
+                Vector3 p =
+                    u*u*start +
+                    2f*u*t*control +
+                    t*t*gate;
+                p.y = Ground(terrain,p)+.10f;
+                path.Add(p);
+            }
+
+            BuildTrafficRoadRibbon(
+                connector,
+                "Road Surface",
+                path,
+                7.5f,
+                m.asphalt,
+                true);
+
+            BuildTrafficRoadRibbon(
+                connector,
+                "Road Center Line",
+                path,
+                .18f,
+                m.line,
+                false,
+                .055f);
+
+            BuildTrafficRoadRibbon(
+                connector,
+                "Road Shoulder Left",
+                OffsetTrafficPath(path,-4.8f),
+                2.0f,
+                m.concrete,
+                false,
+                .015f);
+
+            BuildTrafficRoadRibbon(
+                connector,
+                "Road Shoulder Right",
+                OffsetTrafficPath(path,4.8f),
+                2.0f,
+                m.concrete,
+                false,
+                .015f);
+
+            Transform marker = New("Regional Road Marker",connector);
+            marker.position = path[path.Count/2];
+
+            EditorUtility.SetDirty(connector.gameObject);
+            return path.Count-1;
+        }
+
+        static List<Vector3> OffsetTrafficPath(
+            List<Vector3> path,
+            float offset)
+        {
+            List<Vector3> result = new List<Vector3>();
+            if (path == null || path.Count == 0) return result;
+
+            for (int i=0;i<path.Count;i++)
+            {
+                Vector3 tangent;
+                if (i == 0) tangent = path[1]-path[0];
+                else if (i == path.Count-1) tangent = path[i]-path[i-1];
+                else tangent = path[i+1]-path[i-1];
+
+                tangent.y = 0f;
+                if (tangent.sqrMagnitude < .01f)
+                    tangent = Vector3.forward;
+                tangent.Normalize();
+
+                Vector3 side = Vector3.Cross(Vector3.up,tangent).normalized;
+                result.Add(path[i]+side*offset);
+            }
+            return result;
+        }
+
+        static Transform BuildTrafficRoadRibbon(
+            Transform parent,
+            string name,
+            List<Vector3> worldPath,
+            float width,
+            Material material,
+            bool collider,
+            float verticalOffset = 0f)
+        {
+            if (!parent || worldPath == null || worldPath.Count < 2)
+                return null;
+
+            List<Vector3> vertices = new List<Vector3>();
+            List<int> triangles = new List<int>();
+            List<Vector2> uv = new List<Vector2>();
+
+            for (int i=0;i<worldPath.Count;i++)
+            {
+                Vector3 tangent;
+                if (i == 0) tangent = worldPath[1]-worldPath[0];
+                else if (i == worldPath.Count-1) tangent = worldPath[i]-worldPath[i-1];
+                else tangent = worldPath[i+1]-worldPath[i-1];
+
+                tangent.y = 0f;
+                if (tangent.sqrMagnitude < .01f) tangent = Vector3.forward;
+                tangent.Normalize();
+
+                Vector3 side = Vector3.Cross(Vector3.up,tangent).normalized;
+                Vector3 center =
+                    parent.InverseTransformPoint(
+                        worldPath[i]+Vector3.up*verticalOffset);
+
+                Vector3 localSide =
+                    parent.InverseTransformVector(side).normalized;
+
+                vertices.Add(center-localSide*width*.5f);
+                vertices.Add(center+localSide*width*.5f);
+                float v = i/(float)(worldPath.Count-1);
+                uv.Add(new Vector2(0f,v));
+                uv.Add(new Vector2(1f,v));
+
+                if (i >= worldPath.Count-1) continue;
+                int a=i*2;
+                int b=a+1;
+                int cIndex=a+2;
+                int d=a+3;
+                triangles.Add(a);
+                triangles.Add(cIndex);
+                triangles.Add(b);
+                triangles.Add(b);
+                triangles.Add(cIndex);
+                triangles.Add(d);
+            }
+
+            Mesh mesh = new Mesh
+            {
+                name = "H51 Power Plant Access "+name
+            };
+            mesh.SetVertices(vertices);
+            mesh.SetTriangles(triangles,0);
+            mesh.SetUVs(0,uv);
+            mesh.RecalculateNormals();
+            mesh.RecalculateBounds();
+
+            EnsureFolder(Generated+"/Meshes");
+            string safeName = name.Replace(" ","_");
+            string assetPath =
+                Generated+"/Meshes/H51_Power_Plant_Access_"+safeName+".asset";
+            AssetDatabase.DeleteAsset(assetPath);
+            AssetDatabase.CreateAsset(mesh,assetPath);
+
+            Transform root = New(name,parent);
+            MeshFilter filter = root.gameObject.AddComponent<MeshFilter>();
+            filter.sharedMesh = mesh;
+            MeshRenderer renderer = root.gameObject.AddComponent<MeshRenderer>();
+            renderer.sharedMaterial = material;
+
+            if (collider)
+            {
+                MeshCollider meshCollider =
+                    root.gameObject.AddComponent<MeshCollider>();
+                meshCollider.sharedMesh = mesh;
+            }
+
+            return root;
+        }
+
+        static int CountTownsConnectedToPlant(
+            Transform citizenRoot,
+            H51TrafficNetwork traffic,
+            Vector3 plantGate,
+            out int totalTowns)
+        {
+            totalTowns = 0;
+            if (!citizenRoot || !traffic || traffic.NodeCount == 0)
+                return 0;
+
+            H51CitizenIdentity[] citizens =
+                citizenRoot.GetComponentsInChildren<H51CitizenIdentity>(true);
+            H51CitizenAnchor[] anchors =
+                citizenRoot.GetComponentsInChildren<H51CitizenAnchor>(true);
+
+            string[] towns = citizens
+                .Where(c => c && !string.IsNullOrWhiteSpace(c.TownName))
+                .Select(c => c.TownName)
+                .Distinct()
+                .OrderBy(t => t)
+                .ToArray();
+
+            totalTowns = towns.Length;
+            int connected = 0;
+            List<Vector3> route = new List<Vector3>();
+
+            for (int i=0;i<towns.Length;i++)
+            {
+                string town = towns[i];
+                H51CitizenAnchor origin = anchors.FirstOrDefault(
+                    a =>
+                        a &&
+                        a.TownName == town &&
+                        a.Kind == H51CitizenAnchorKind.Home)
+                    ?? anchors.FirstOrDefault(
+                        a =>
+                            a &&
+                            a.TownName == town &&
+                            a.Kind == H51CitizenAnchorKind.Work);
+
+                if (!origin) continue;
+
+                route.Clear();
+                if (traffic.TryBuildPath(
+                    origin.transform.position,
+                    plantGate,
+                    route))
+                    connected++;
+            }
+
+            return connected;
+        }
+
+        static float PlanarDistance(Vector3 a,Vector3 b)
+        {
+            Vector3 delta=a-b;
+            delta.y=0f;
+            return delta.magnitude;
         }
 
         static void BuildPlantUpgrade(
