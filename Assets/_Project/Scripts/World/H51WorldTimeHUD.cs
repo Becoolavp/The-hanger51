@@ -46,7 +46,7 @@ namespace Hanger51.World
             Keyboard keyboard = Keyboard.current;
             if (keyboard != null)
             {
-                KeyControl key = keyboard[toggleKey];
+                var key = keyboard[toggleKey];
                 if (key != null && key.wasPressedThisFrame)
                 {
                     expanded = !expanded;
