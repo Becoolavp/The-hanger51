@@ -297,7 +297,12 @@ namespace Hanger51.Aircraft
             rimHealth[wheelIndex] = rimCondition.Health;
             rimInstalled[wheelIndex] = true;
             RefreshMaintenanceVisualsAndPhysics();
+            maintenance.ForceInstalledWheelVisuals(wheelIndex);
+            ApplyRimVisualState();
 
+            // Only remove the carried/animated loose-wheel object after the installed
+            // aircraft tire and rim have been made visible. This gives the animation a
+            // clean hand-off instead of making the wheel vanish at the axle.
             wheelAssembly.CompleteAircraftInstallation();
             resultMessage = $"Installed the complete {maintenance.GetWheelName(wheelIndex)} wheel assembly at {health[wheelIndex]:F0}% tire health and {pressure[wheelIndex]:F1} PSI, with the wheel retaining bolt secured.";
             return true;
