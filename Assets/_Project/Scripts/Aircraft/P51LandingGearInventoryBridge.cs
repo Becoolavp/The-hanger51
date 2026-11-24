@@ -296,6 +296,15 @@ namespace Hanger51.Aircraft
             installed[wheelIndex] = true;
             rimHealth[wheelIndex] = rimCondition.Health;
             rimInstalled[wheelIndex] = true;
+
+            // Re-resolve the permanent wheel hierarchy on this exact aircraft before the
+            // animated carried wheel is deleted. This is important for live-spawned P-51s:
+            // their maintenance state can be correct while serialized visual references still
+            // point at an older/master hierarchy. In that case the install succeeded logically
+            // but there was no visible wheel left on the spawned airplane.
+            P51LandingGearVisualRuntimeBootstrap.EnsureConfiguredFor(maintenance);
+            maintenance.RepairWheelVisualBindingsFromHierarchy(wheelIndex);
+
             RefreshMaintenanceVisualsAndPhysics();
             maintenance.ForceInstalledWheelVisuals(wheelIndex);
             ApplyRimVisualState();
