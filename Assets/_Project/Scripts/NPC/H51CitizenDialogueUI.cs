@@ -38,6 +38,7 @@ namespace Hanger51.NPCs
         {
             if (!target) return;
             citizen = target;
+            citizen.CaptureActivityBeforeConversation();
             response = citizen.Greeting();
             citizen.RegisterConversation();
             H51CitizenBrain brain = citizen.GetComponent<H51CitizenBrain>();
