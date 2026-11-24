@@ -34,6 +34,10 @@ namespace Hanger51.EditorTools
                 return;
             }
 
+            // Keep 134 self-contained: repair/upgrade the existing citizen jobs and talk system first.
+            // Step 132 preserves citizen identities and memories while rebuilding anchors/workplaces.
+            Hanger51CitizenSystemSetup.AddCitizenTalkAndWorkingLife();
+
             GameObject world = Find(WorldName);
             Terrain terrain = FindTerrain();
             Transform citizenRoot = world ? FindChild(world.transform, CitizenRootName) : null;
