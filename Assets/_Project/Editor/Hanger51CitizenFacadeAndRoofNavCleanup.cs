@@ -151,9 +151,10 @@ namespace Hanger51.EditorTools
                 if (lower.Contains("farm supply"))
                 {
                     Transform door = FindChild(cleanup,"Facade Door");
-                    Renderer dr = door ? door.GetComponent<Renderer>() : null;
-                    if (!dr || dr.bounds.size.y < 2.0f || dr.bounds.size.y > 2.75f ||
-                        Mathf.Min(dr.bounds.size.x,dr.bounds.size.z) > .25f)
+                    if (!door ||
+                        door.localScale.y < 2.0f ||
+                        door.localScale.y > 2.75f ||
+                        Mathf.Min(Mathf.Abs(door.localScale.x),Mathf.Abs(door.localScale.z)) > .25f)
                         farmSupplyBadDoors++;
                 }
 
