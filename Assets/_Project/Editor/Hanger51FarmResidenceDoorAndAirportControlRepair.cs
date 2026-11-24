@@ -695,44 +695,14 @@ namespace Hanger51.EditorTools
             GameObject airport = GameObject.Find(AirportRootName);
             if (!runwaySwitch || !airport) return false;
 
-            GameObject hangar = GameObject.Find(HangarRootName);
-            Vector3 interiorReference = hangar
-                ? hangar.transform.position
-                : airport.transform.position;
+            if (!TryFindInteriorWallPlacement(
+                    airport,
+                    out Renderer wall,
+                    out Vector3 innerSurface,
+                    out Vector3 inward))
+                return false;
 
-            Renderer[] renderers =
-                airport.GetComponentsInChildren<Renderer>(true);
-
-            Renderer nearestWall = null;
-            float bestSqr = float.PositiveInfinity;
-            for (int i=0;i<renderers.Length;i++)
-            {
-                Renderer r = renderers[i];
-                if (!r) continue;
-                string n = r.name;
-                bool wall =
-                    n.IndexOf("Perimeter Wall",StringComparison.OrdinalIgnoreCase) >= 0 ||
-                    n.IndexOf("Airport Wall",StringComparison.OrdinalIgnoreCase) >= 0;
-                if (!wall) continue;
-
-                Vector3 closest = r.bounds.ClosestPoint(runwaySwitch.transform.position);
-                float sqr =
-                    (closest - runwaySwitch.transform.position).sqrMagnitude;
-                if (sqr >= bestSqr) continue;
-                bestSqr = sqr;
-                nearestWall = r;
-            }
-
-            if (!nearestWall) return false;
-
-            Bounds bounds = nearestWall.bounds;
-            Vector3 inside = interiorReference - bounds.center;
-            inside.y = 0f;
-            if (inside.sqrMagnitude < .01f) return false;
-            inside.Normalize();
-
-            Vector3 closestPoint =
-                bounds.ClosestPoint(runwaySwitch.transform.position);
+            Bounds bounds = wall.bounds;
             float y = Mathf.Clamp(
                 bounds.min.y + 1.35f,
                 bounds.min.y + .75f,
@@ -743,10 +713,13 @@ namespace Hanger51.EditorTools
                 "Move runway light control inside airport wall");
 
             runwaySwitch.transform.position =
-                new Vector3(closestPoint.x,y,closestPoint.z) +
-                inside * .50f;
+                new Vector3(innerSurface.x,y,innerSurface.z) +
+                inward * .62f;
+
+            // The cabinet indicator/text are authored on local -Z.
+            // Point local +Z outward so the readable face looks inward.
             runwaySwitch.transform.rotation =
-                Quaternion.LookRotation(-inside,Vector3.up);
+                Quaternion.LookRotation(-inward,Vector3.up);
 
             EditorUtility.SetDirty(runwaySwitch.transform);
             return IsControlInsideAirportWall(runwaySwitch.transform);
@@ -757,48 +730,106 @@ namespace Hanger51.EditorTools
             GameObject airport = GameObject.Find(AirportRootName);
             if (!control || !airport) return false;
 
+            if (!TryFindInteriorWallPlacement(
+                    airport,
+                    out Renderer wall,
+                    out Vector3 innerSurface,
+                    out Vector3 inward))
+                return false;
+
+            Vector3 fromSurface =
+                Vector3.ProjectOnPlane(
+                    control.position - innerSurface,
+                    Vector3.up);
+
+            float inwardDistance = Vector3.Dot(fromSurface,inward);
+            float lateralDistance =
+                (fromSurface - inward * inwardDistance).magnitude;
+
+            return
+                inwardDistance > .15f &&
+                inwardDistance < 2.5f &&
+                lateralDistance < 3.0f;
+        }
+
+        static bool TryFindInteriorWallPlacement(
+            GameObject airport,
+            out Renderer wall,
+            out Vector3 innerSurface,
+            out Vector3 inward)
+        {
+            wall = null;
+            innerSurface = Vector3.zero;
+            inward = Vector3.zero;
+            if (!airport) return false;
+
             GameObject hangar = GameObject.Find(HangarRootName);
-            Vector3 interiorReference =
-                hangar ? hangar.transform.position : airport.transform.position;
+            Vector3 interiorReference = hangar
+                ? hangar.transform.position
+                : airport.transform.position;
 
             Renderer[] renderers =
                 airport.GetComponentsInChildren<Renderer>(true);
-            Renderer nearestWall = null;
-            float bestSqr = float.PositiveInfinity;
 
+            float bestSqr = float.PositiveInfinity;
             for (int i=0;i<renderers.Length;i++)
             {
-                Renderer r = renderers[i];
-                if (!r) continue;
-                string n = r.name;
-                bool wall =
+                Renderer candidate = renderers[i];
+                if (!candidate) continue;
+
+                string n = candidate.name;
+                bool isWall =
                     n.IndexOf("Perimeter Wall",StringComparison.OrdinalIgnoreCase) >= 0 ||
                     n.IndexOf("Airport Wall",StringComparison.OrdinalIgnoreCase) >= 0;
-                if (!wall) continue;
+                if (!isWall) continue;
 
-                float sqr =
-                    (r.bounds.ClosestPoint(control.position) - control.position)
-                    .sqrMagnitude;
+                Vector3 closest =
+                    candidate.bounds.ClosestPoint(interiorReference);
+                Vector3 planar =
+                    Vector3.ProjectOnPlane(
+                        closest - interiorReference,
+                        Vector3.up);
+                float sqr = planar.sqrMagnitude;
+
                 if (sqr >= bestSqr) continue;
                 bestSqr = sqr;
-                nearestWall = r;
+                wall = candidate;
+                innerSurface = closest;
             }
 
-            if (!nearestWall) return false;
+            if (!wall) return false;
 
-            Vector3 inside =
+            inward =
                 Vector3.ProjectOnPlane(
-                    interiorReference - nearestWall.bounds.center,
+                    interiorReference - innerSurface,
                     Vector3.up);
-            Vector3 controlSide =
-                Vector3.ProjectOnPlane(
-                    control.position - nearestWall.bounds.center,
-                    Vector3.up);
+            if (inward.sqrMagnitude < .01f)
+            {
+                inward =
+                    Vector3.ProjectOnPlane(
+                        interiorReference - wall.bounds.center,
+                        Vector3.up);
+            }
+            if (inward.sqrMagnitude < .01f)
+                return false;
 
-            return
-                inside.sqrMagnitude > .01f &&
-                controlSide.sqrMagnitude > .01f &&
-                Vector3.Dot(inside.normalized,controlSide.normalized) > .15f;
+            inward.Normalize();
+
+            // Re-evaluate the inner face at a useful player-height projection.
+            Vector3 surfaceProbe =
+                new Vector3(
+                    interiorReference.x,
+                    wall.bounds.center.y,
+                    interiorReference.z);
+            Vector3 closestSurface =
+                wall.bounds.ClosestPoint(surfaceProbe);
+
+            innerSurface =
+                new Vector3(
+                    closestSurface.x,
+                    wall.bounds.center.y,
+                    closestSurface.z);
+            return true;
         }
 
         static Material CreateMaterial(
