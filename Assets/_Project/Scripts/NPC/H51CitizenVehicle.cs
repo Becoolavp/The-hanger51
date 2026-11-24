@@ -23,6 +23,7 @@ namespace Hanger51.NPCs
         [SerializeField, Min(1f)] float turnSpeed = 4f;
         [SerializeField, Min(.5f)] float parkingSpeed = 3.2f;
         [SerializeField, Range(0f,100f)] float condition = 100f;
+        [SerializeField] float groundRideOffset = -.10f;
         [SerializeField] H51CitizenVehicleState state = H51CitizenVehicleState.Parked;
         [SerializeField] H51ParkingSpot currentParkingSpot;
         [SerializeField] H51ParkingSpot targetParkingSpot;
@@ -75,6 +76,7 @@ namespace Hanger51.NPCs
             if (!spot) return;
             spot.ForceReserve(this);
             transform.SetPositionAndRotation(spot.transform.position, spot.transform.rotation);
+            AlignToDrivingSurface(true);
             state = H51CitizenVehicleState.Parked;
         }
 
@@ -225,6 +227,7 @@ namespace Hanger51.NPCs
                 transform.position,
                 target,
                 actualSpeed * Time.deltaTime);
+            AlignToDrivingSurface(false);
 
             CheckMechanicalIncident();
         }
@@ -260,6 +263,7 @@ namespace Hanger51.NPCs
                 transform.SetPositionAndRotation(
                     targetParkingSpot.transform.position,
                     targetParkingSpot.transform.rotation);
+                AlignToDrivingSurface(true);
                 currentParkingSpot = targetParkingSpot;
                 targetParkingSpot = null;
                 state = H51CitizenVehicleState.Arrived;
@@ -283,6 +287,53 @@ namespace Hanger51.NPCs
                 transform.position,
                 target,
                 parkingSpeed * Time.deltaTime);
+            AlignToDrivingSurface(false);
+        }
+
+        void AlignToDrivingSurface(bool immediate)
+        {
+            Vector3 origin = transform.position + Vector3.up * 4f;
+            RaycastHit[] hits = Physics.RaycastAll(
+                origin,
+                Vector3.down,
+                12f,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+            bool found = false;
+            float bestY = float.NegativeInfinity;
+
+            for (int i = 0; i < hits.Length; i++)
+            {
+                RaycastHit hit = hits[i];
+                if (!hit.collider) continue;
+                if (hit.collider.transform == transform || hit.collider.transform.IsChildOf(transform)) continue;
+                if (hit.normal.y < .55f) continue;
+
+                string n = hit.collider.gameObject.name.ToLowerInvariant();
+                bool drivable =
+                    hit.collider is TerrainCollider ||
+                    n.Contains("road surface") ||
+                    n.Contains("driveway") ||
+                    n.Contains("parking") ||
+                    n.Contains("pad") ||
+                    n.Contains("ground");
+
+                if (!drivable) continue;
+                if (hit.point.y <= bestY) continue;
+
+                bestY = hit.point.y;
+                found = true;
+            }
+
+            if (!found) return;
+
+            Vector3 p = transform.position;
+            float targetY = bestY + groundRideOffset;
+            p.y = immediate
+                ? targetY
+                : Mathf.MoveTowards(p.y, targetY, 8f * Time.deltaTime);
+            transform.position = p;
         }
 
         void CheckMechanicalIncident()
