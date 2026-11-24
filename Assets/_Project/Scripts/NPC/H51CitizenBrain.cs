@@ -207,6 +207,53 @@ namespace Hanger51.NPCs
             return day * 64 + Mathf.FloorToInt(hour * 2f);
         }
 
+        bool IsEssentialShiftWorker()
+        {
+            if (!identity || string.IsNullOrWhiteSpace(identity.Occupation))
+                return false;
+
+            string job = identity.Occupation.ToLowerInvariant();
+            return
+                job.Contains("power plant") ||
+                job.Contains("utility") ||
+                job.Contains("police") ||
+                job.Contains("firefighter") ||
+                job.Contains("paramedic") ||
+                job.Contains("ambulance") ||
+                job.Contains("emergency");
+        }
+
+        bool ShouldBeAtWork(float hour, H51WorldClock clock)
+        {
+            if (!work || !identity) return false;
+
+            if (IsEssentialShiftWorker())
+            {
+                int shift = Mathf.Abs(identity.AppearanceSeed) % 3;
+                float shiftStart = shift * 8f;
+                // Begin routing toward work shortly before the eight-hour shift starts.
+                return IsWrappedHourWindow(hour,shiftStart - .35f,shiftStart + 8.05f);
+            }
+
+            if (clock && clock.IsWeekend) return false;
+
+            return
+                (hour >= 7.25f && hour < 12f) ||
+                (hour >= 13.0f && hour < 17.25f);
+        }
+
+        static bool IsWrappedHourWindow(float hour, float start, float end)
+        {
+            hour = Mathf.Repeat(hour,24f);
+            start = Mathf.Repeat(start,24f);
+            end = Mathf.Repeat(end,24f);
+
+            if (start < end)
+                return hour >= start && hour < end;
+
+            return hour >= start || hour < end;
+        }
+
         void SnapToNavMesh()
         {
             if (!agent || agent.isOnNavMesh) return;
@@ -226,38 +273,93 @@ namespace Hanger51.NPCs
             if (!agent.isOnNavMesh) { SnapToNavMesh(); if (!agent.isOnNavMesh) return; }
             if (!registry) { registry = H51CitizenRegistry.Instance; ResolveAnchors(); }
 
-            float hour = H51WorldClock.Instance ? H51WorldClock.Instance.Hour : Mathf.Repeat(Time.time / 60f + 7f, 24f);
+            H51WorldClock worldClock = H51WorldClock.Instance;
+            float hour = worldClock
+                ? worldClock.Hour
+                : Mathf.Repeat(Time.time / 60f + 7f,24f);
             H51CitizenAnchor desired;
             H51CitizenRoutineState desiredState;
 
             H51CitizenAnchor currentLeisure = PickCurrentLeisureDestination(hour);
             H51CitizenAnchor currentShop = PickCurrentShopDestination(hour);
-            bool medicalAppointment = TryGetMedicalAppointment(hour, out H51CitizenAnchor appointment);
+            bool essentialShiftWorker = IsEssentialShiftWorker();
+            bool scheduledWork = ShouldBeAtWork(hour,worldClock);
+            bool medicalAppointment =
+                !scheduledWork &&
+                TryGetMedicalAppointment(hour,out H51CitizenAnchor appointment);
+            bool weekend = worldClock && worldClock.IsWeekend;
 
-            if (hour < 5.5f || hour >= 22.5f)
+            if (scheduledWork)
             {
-                desired = home; desiredState = H51CitizenRoutineState.Home;
+                desired = work ?? home;
+                desiredState = work
+                    ? H51CitizenRoutineState.Work
+                    : H51CitizenRoutineState.Home;
             }
             else if (medicalAppointment)
             {
-                desired = appointment; desiredState = H51CitizenRoutineState.Leisure;
+                desired = appointment;
+                desiredState = H51CitizenRoutineState.Leisure;
             }
-            else if (hour < 12f)
+            else if (hour < 7.0f || hour >= 22.5f)
             {
-                desired = work ?? home; desiredState = work ? H51CitizenRoutineState.Work : H51CitizenRoutineState.Leisure;
+                desired = home;
+                desiredState = H51CitizenRoutineState.Home;
             }
-            else if (hour < 13.25f)
+            else if (weekend && !essentialShiftWorker)
             {
-                desired = currentLeisure ?? currentShop ?? home; desiredState = H51CitizenRoutineState.Leisure;
+                if (hour < 10f)
+                {
+                    desired = home;
+                    desiredState = H51CitizenRoutineState.Home;
+                }
+                else if (hour < 13f)
+                {
+                    desired = currentShop ?? currentLeisure ?? home;
+                    desiredState = currentShop
+                        ? H51CitizenRoutineState.Shopping
+                        : H51CitizenRoutineState.Leisure;
+                }
+                else if (hour < 19.5f)
+                {
+                    desired = currentLeisure ?? currentShop ?? home;
+                    desiredState = currentLeisure
+                        ? H51CitizenRoutineState.Leisure
+                        : currentShop
+                            ? H51CitizenRoutineState.Shopping
+                            : H51CitizenRoutineState.Home;
+                }
+                else
+                {
+                    int weekendEvening = DestinationTimeBucket(hour);
+                    bool social =
+                        identity &&
+                        identity.Sociability > .32f &&
+                        ((identity.AppearanceSeed + weekendEvening * 5) & 3) != 0;
+                    desired = social ? (currentLeisure ?? home) : home;
+                    desiredState = social && currentLeisure
+                        ? H51CitizenRoutineState.Leisure
+                        : H51CitizenRoutineState.Home;
+                }
             }
-            else if (hour < 17.25f)
+            else if (hour >= 12f && hour < 13.25f && !essentialShiftWorker)
             {
-                desired = work ?? home; desiredState = work ? H51CitizenRoutineState.Work : H51CitizenRoutineState.Leisure;
+                desired = currentLeisure ?? currentShop ?? home;
+                desiredState = H51CitizenRoutineState.Leisure;
             }
             else if (hour < 19.5f)
             {
-                desired = currentShop ?? currentLeisure ?? home;
-                desiredState = currentShop ? H51CitizenRoutineState.Shopping : H51CitizenRoutineState.Leisure;
+                bool errands =
+                    hour >= 17.25f ||
+                    (!essentialShiftWorker && hour >= 7f && hour < 7.25f);
+                desired = errands
+                    ? (currentShop ?? currentLeisure ?? home)
+                    : (currentLeisure ?? currentShop ?? home);
+                desiredState = errands && currentShop
+                    ? H51CitizenRoutineState.Shopping
+                    : currentLeisure
+                        ? H51CitizenRoutineState.Leisure
+                        : H51CitizenRoutineState.Home;
             }
             else
             {
