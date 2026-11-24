@@ -115,7 +115,7 @@ namespace Hanger51.NPCs
                 $"{Identity.TownName} is home. You get to know the roads and the people pretty quickly.",
                 $"I spend most of my time around {Identity.TownName}. There's usually something that needs doing."
             };
-            return variants[Math.Abs(Identity.AppearanceSeed) % variants.Length];
+            return variants[(Identity.AppearanceSeed & 0x7fffffff) % variants.Length];
         }
 
         string DescribePlayerRelationship()
