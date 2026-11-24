@@ -9,7 +9,7 @@ The Hanger 51 is a first-person aviation maintenance and flight game built in Un
 **Last updated:** 2026-11-24  
 **Active development branch:** `agent/merlin-engine-assembly`  
 **Primary scene:** `Assets/_Project/Scenes/FirstPersonMovementTest.unity`  
-**Current focus:** playable/serviceable P-51D Mustang, aircraft maintenance interactions, live-spawn inheritance, landing gear/wheel service, cockpit systems, Merlin engine service, and expanding aircraft systems.
+**Current focus:** playable/serviceable P-51D Mustang, aircraft maintenance interactions, world time/calendar, citizen schedules, day/night lighting, regional utilities/power demand, airport lighting, cockpit systems, Merlin engine service, and expanding aircraft systems.
 
 ### Latest verified milestone
 
@@ -40,6 +40,50 @@ Key fix commits immediately before this README update:
 
 - `f78eb330` — Release carried wheel ownership before install visual handoff.
 - `2ad4481d` — Prevent wheel self-heal from undoing committed install.
+
+### World calendar, day/night cycle, citizen schedules, and night lighting — IMPLEMENTED / PENDING UNITY VALIDATION
+
+A new shared world-time architecture has been added on top of the existing `H51WorldClock`.
+
+Editor setup:
+
+`Hanger 51 -> World -> Current -> 152 - Add Calendar Day-Night Cycle And Night Lighting`
+
+Validation:
+
+`Hanger 51 -> World -> Current -> 153 - Validate Calendar Day-Night And Night Lighting`
+
+The current implementation adds:
+
+- Calendar-aware time with year/month/day/day-of-week.
+- Player-readable clock/calendar HUD. Press **K** to expand/collapse the calendar details.
+- Seasonal sunrise/sunset timing.
+- Continuous sun/moon day-night lighting and ambient/sky/fog transitions.
+- Weekday/weekend citizen routines.
+- Rotating eight-hour shifts for essential workers such as power-plant operators and emergency-service occupations.
+- Grid-powered town street lamps and building/house exterior night lights.
+- Proximity-limited real point lights with emissive fixtures remaining visible farther away for performance.
+- Hanger 51 airport/apron night lighting.
+- Grid-powered runway fixtures with **OFF / AUTO / ON** modes.
+- A physical runway-lighting control cabinet near the airport end of the runway; aim at it and press **E** to cycle the mode.
+- Night-lighting and runway demand included in `H51UtilityGridController` load, so the regional power station's displayed grid demand increases when nighttime lighting is requested.
+
+Important new files:
+
+- `Assets/_Project/Scripts/NPC/H51WorldClock.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenBrain.cs`
+- `Assets/_Project/Scripts/World/H51DayNightCycle.cs`
+- `Assets/_Project/Scripts/World/H51NightLight.cs`
+- `Assets/_Project/Scripts/World/H51WorldTimeHUD.cs`
+- `Assets/_Project/Scripts/World/H51RunwayLightingController.cs`
+- `Assets/_Project/Scripts/World/H51RunwayLightSwitch.cs`
+- `Assets/_Project/Scripts/World/H51FacilityLightingPlayerInteractor.cs`
+- `Assets/_Project/Scripts/World/H51UtilityGridController.cs`
+- `Assets/_Project/Editor/Hanger51TimeCalendarAndNightLightingSetup.cs`
+
+The default configured calendar start is **June 1, 2026 at 6:30 AM**, with the existing `1.5 game minutes per real second` progression retained. The date is configuration data, not a hard-coded historical dependency, and can be changed later without rewriting citizen schedules.
+
+Do not mark this milestone verified until Step 152 has been applied, Step 153 passes, and a Play-mode/build test confirms daylight progression, nighttime lighting, citizen schedule transitions, grid demand, and runway-light switching.
 
 ### Wheel-install diagnostics
 
@@ -197,6 +241,11 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue improving maintenance animations and physical part visibility.
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
+- Apply and validate World Steps 152/153, then test at least dawn, daytime, dusk, and full night.
+- Verify ordinary citizens stop following weekday work routines on weekends.
+- Verify power-plant and emergency workers maintain rotating overnight coverage.
+- Verify town/building lights turn on at night only when the utility grid is powered.
+- Verify runway OFF/AUTO/ON behavior and loss of runway lighting during a grid outage.
 - Continue expanding aircraft systems, cockpit systems, engine maintenance, armament service, and flight behavior without regressing existing maintenance interactions.
 
 ## Repository History Note
