@@ -85,6 +85,8 @@ The default configured calendar start is **June 1, 2026 at 6:30 AM**, with the e
 
 Do not mark this milestone verified until Step 152 has been applied, Step 153 passes, and a Play-mode/build test confirms daylight progression, nighttime lighting, citizen schedule transitions, grid demand, and runway-light switching.
 
+Compile note: the first pull exposed C# definite-assignment error CS0165 in `H51CitizenBrain.cs` for the medical-appointment local variable. This was fixed in commit `97356c9b` by initializing the appointment anchor before the short-circuited schedule check.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
