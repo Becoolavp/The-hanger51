@@ -442,17 +442,27 @@ namespace Hanger51.EditorTools
         {
             Renderer[] all = runway.GetComponentsInChildren<Renderer>(true);
             Renderer[] fixtures = all
+                .Where(r =>
+                    r &&
+                    (r.name.IndexOf(
+                        "Runway Light Lens",
+                        StringComparison.OrdinalIgnoreCase) >= 0 ||
+                     r.name.IndexOf(
+                        "Runway Light Base",
+                        StringComparison.OrdinalIgnoreCase) >= 0))
+                .ToArray();
+            Renderer[] lenses = all
                 .Where(r => r && r.name.IndexOf(
                     "Runway Light Lens",
                     StringComparison.OrdinalIgnoreCase) >= 0)
                 .ToArray();
 
             List<Light> realtime = new List<Light>();
-            for (int i=0;i<fixtures.Length;i++)
+            for (int i=0;i<lenses.Length;i++)
             {
                 if (i % 4 != 0) continue;
 
-                Transform lens = fixtures[i].transform;
+                Transform lens = lenses[i].transform;
                 Transform existing = lens.Find("H51 Runtime Runway Glow");
                 Light light;
                 if (existing)
