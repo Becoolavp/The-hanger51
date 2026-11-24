@@ -32,8 +32,8 @@ namespace Hanger51.EditorTools
         private const string FixedFinPath = MeshFolder + "P51D_VerticalFin_Fixed.asset";
         private const string RudderPath = MeshFolder + "P51D_Rudder.asset";
 
-        private const float CoolantGaugeOffset = -0.285f;
-        private const float OilGaugeOffset = 0.285f;
+        private const float CoolantGaugeOffset = -0.300f;
+        private const float OilGaugeOffset = 0.300f;
 
         private readonly struct SurfaceAssetSet
         {
