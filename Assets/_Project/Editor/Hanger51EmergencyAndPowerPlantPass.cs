@@ -23,6 +23,7 @@ namespace Hanger51.EditorTools
         const string WorkAnchorRootName = "H51 Emergency And Utility Work Anchors";
         const string Generated = "Assets/_Project/Environment/Generated/FunctionalPowerPlant";
         const string CatalogPath = "Assets/_Project/Characters/H51Citizens/Generated/H51CitizenVisualCatalog.asset";
+        const string DepthTextShaderPath = "Assets/_Project/Shaders/Hanger51DepthWorldText.shader";
 
         struct Mats
         {
@@ -412,6 +413,30 @@ namespace Hanger51.EditorTools
             Transform accessRoad =
                 FindChild(world.transform,"Regional Industrial Access - Power Station");
 
+            H51TrafficNetwork traffic =
+                world.GetComponentInChildren<H51TrafficNetwork>(true);
+            Vector3 plantGate = plant.TransformPoint(new Vector3(0f,0f,83f));
+            float roadAccessDistance = float.PositiveInfinity;
+            bool trafficRoadAccess = false;
+            if (traffic)
+            {
+                int nearest = traffic.FindNearestNode(plantGate);
+                if (nearest >= 0)
+                {
+                    Vector3 delta = traffic.GetNode(nearest) - plantGate;
+                    delta.y = 0f;
+                    roadAccessDistance = delta.magnitude;
+                    trafficRoadAccess = roadAccessDistance <= 35f;
+                }
+            }
+            bool roadAccessReady = accessRoad || trafficRoadAccess;
+
+            Transform fluidRoot = FindChild(upgrade,"Plant External Fluid Network");
+            int pipeSegments = fluidRoot
+                ? fluidRoot.GetComponentsInChildren<Transform>(true)
+                    .Count(t => t && t.name.StartsWith("Pipe Segment",StringComparison.Ordinal))
+                : 0;
+
             bool ok =
                 controller &&
                 grid &&
@@ -432,7 +457,8 @@ namespace Hanger51.EditorTools
                 consumers.Length >= buildings.Length &&
                 criticalConsumers >= 3 &&
                 plantNav >= 1 &&
-                accessRoad;
+                roadAccessReady &&
+                pipeSegments >= 12;
 
             if (ok)
             {
@@ -449,7 +475,8 @@ namespace Hanger51.EditorTools
                     ", plant vapor systems=" + vapor +
                     ", blocked walk clearances=0, utility consumers=" + consumers.Length +
                     ", critical backup consumers=" + criticalConsumers +
-                    ", plant NavMesh=ready, industrial access road=ready.",
+                    ", plant NavMesh=ready, road access=ready" +
+                    ", external pipe segments=" + pipeSegments + ".",
                     plant.gameObject);
             }
             else
@@ -468,7 +495,9 @@ namespace Hanger51.EditorTools
                     ", utility consumers=" + consumers.Length + "/" + buildings.Length +
                     ", critical consumers=" + criticalConsumers +
                     ", plant NavMesh=" + plantNav +
-                    ", industrial access road=" + (accessRoad ? "ready" : "MISSING") + ".",
+                    ", road access=" + (roadAccessReady ? "ready" : "MISSING") +
+                    " (traffic node distance=" + (float.IsInfinity(roadAccessDistance) ? "n/a" : roadAccessDistance.ToString("F1")+"m") + ")" +
+                    ", external pipe segments=" + pipeSegments + "/12.",
                     plant.gameObject);
             }
         }
@@ -571,7 +600,9 @@ namespace Hanger51.EditorTools
 
             Transform displayRoot = New("Plant Status Display",control);
             displayRoot.localPosition = new Vector3(-38.42f,2.45f,2.5f);
-            displayRoot.localRotation = Quaternion.Euler(0,90f,0);
+            // TextMesh front faces toward local -Z. Rotate -90 so the status board faces
+            // into the control room (+X) rather than showing its mirrored back side.
+            displayRoot.localRotation = Quaternion.Euler(0,-90f,0);
             status = displayRoot.gameObject.AddComponent<TextMesh>();
             status.fontSize = 64;
             status.characterSize = .045f;
@@ -579,6 +610,7 @@ namespace Hanger51.EditorTools
             status.alignment = TextAlignment.Left;
             status.color = new Color(.55f,1f,.62f);
             status.text = "REGIONAL GENERATING STATION\nSTATUS: INITIALIZING";
+            ApplyDepthTextMaterial(status,new Color(.55f,1f,.62f));
 
             // Maintenance room.
             PartitionXWithDoor(operations,"Maintenance North Wall",-12f,-39f,-10f,-25f,1.4f,3.35f,m.wall,m.metal,ref doors);
@@ -649,7 +681,11 @@ namespace Hanger51.EditorTools
                 Box(pump,"Pump Skid "+(i+1),new Vector3(14f+i*6.5f,.35f,14.5f),new Vector3(5.2f,.7f,4.5f),m.metal,true);
                 Cylinder(pump,"Pump Motor "+(i+1),new Vector3(14f+i*6.5f,1.25f,14.5f),Quaternion.Euler(0,0,90f),new Vector3(1.4f,1.6f,1.4f),m.green,true);
             }
-            WorldText(operations,"TURBINE - GENERATOR HALL",new Vector3(15f,7.5f,-23.75f),Quaternion.Euler(0,0,0),.26f,m.white);
+
+            BuildExternalFluidNetwork(plant,upgrade,operations,m);
+
+            // This label is mounted to the inside face of the back wall and must face +Z.
+            WorldText(operations,"TURBINE - GENERATOR HALL",new Vector3(15f,7.5f,-23.75f),Quaternion.Euler(0,180f,0),.26f,m.white);
 
             // Front lobby, security, lockers and break area.
             Box(operations,"Security Desk",new Vector3(-31f,.65f,18f),new Vector3(5.2f,1.3f,1.2f),m.black,true);
@@ -680,8 +716,16 @@ namespace Hanger51.EditorTools
                 new Vector3(25.5f,2.75f,-11.82f),
                 new Vector3(-31f,2.75f,23.82f)
             };
+            Quaternion[] labelRotations =
+            {
+                Quaternion.Euler(0,180f,0), // Control room: inside face looks +Z.
+                Quaternion.identity,        // Maintenance: inside face looks -Z.
+                Quaternion.identity,        // Electrical: inside face looks -Z.
+                Quaternion.identity,        // Fuel service: inside face looks -Z.
+                Quaternion.identity         // Security/front wall: inside face looks -Z.
+            };
             for (int i=0;i<roomLabels.Length;i++)
-                WorldText(operations,roomLabels[i],labelPositions[i],Quaternion.identity,.15f,m.white);
+                WorldText(operations,roomLabels[i],labelPositions[i],labelRotations[i],.15f,m.white);
 
             Vector3[] clearanceLocal =
             {
@@ -1285,6 +1329,175 @@ namespace Hanger51.EditorTools
             return count;
         }
 
+        static void BuildExternalFluidNetwork(
+            Transform plant,
+            Transform upgrade,
+            Transform operations,
+            Mats m)
+        {
+            Transform old = DirectChild(upgrade,"Plant External Fluid Network");
+            if (old) UnityEngine.Object.DestroyImmediate(old.gameObject);
+
+            Transform root = New("Plant External Fluid Network",upgrade);
+
+            // The cooling towers need a believable physical connection to the condenser/pump area.
+            // These are visual/gameplay-scale circulating-water lines, not an engineering replica.
+            Vector3 pumpOutlet = plant.InverseTransformPoint(
+                operations.TransformPoint(new Vector3(38f,1.35f,14.5f)));
+
+            Vector3 supplyManifold = new Vector3(38f,1.35f,-31f);
+            Vector3 returnManifold = new Vector3(34f,.78f,-27f);
+
+            PipePath(
+                root,
+                "Cooling Water Supply Header",
+                new[]
+                {
+                    pumpOutlet,
+                    new Vector3(27f,1.35f,18.5f),
+                    new Vector3(38f,1.35f,8f),
+                    supplyManifold
+                },
+                .34f,
+                m.blue);
+
+            PipePath(
+                root,
+                "Cooling Water Return Header",
+                new[]
+                {
+                    pumpOutlet + new Vector3(0f,-.57f,-1.6f),
+                    new Vector3(24f,.78f,16.9f),
+                    new Vector3(34f,.78f,6f),
+                    returnManifold
+                },
+                .30f,
+                m.stainless);
+
+            for (int i=1;i<=2;i++)
+            {
+                Transform tower = FindChild(plant,"Cooling Tower "+i);
+                if (!tower) continue;
+
+                Vector3 towerBase = tower.localPosition;
+                Vector3 supplyTarget = towerBase + new Vector3(0f,1.35f,11.5f);
+                Vector3 returnTarget = towerBase + new Vector3(-2.2f,.78f,10.4f);
+
+                PipePath(
+                    root,
+                    "Cooling Tower "+i+" Supply",
+                    new[]
+                    {
+                        supplyManifold,
+                        new Vector3(towerBase.x,1.35f,supplyManifold.z),
+                        supplyTarget
+                    },
+                    .34f,
+                    m.blue);
+
+                PipePath(
+                    root,
+                    "Cooling Tower "+i+" Return",
+                    new[]
+                    {
+                        returnManifold,
+                        new Vector3(towerBase.x-2.2f,.78f,returnManifold.z),
+                        returnTarget
+                    },
+                    .30f,
+                    m.stainless);
+
+                Cylinder(
+                    root,
+                    "Cooling Tower "+i+" Water Riser",
+                    towerBase + new Vector3(0f,2.0f,11.5f),
+                    Quaternion.identity,
+                    new Vector3(.36f,2.0f,.36f),
+                    m.blue,
+                    false);
+            }
+
+            // The tall red/white structure is treated as a ventilation stack. Give it a visible
+            // duct connection from the plant rather than implying condenser water enters it.
+            Transform stack =
+                FindChild(plant,"Ventilation Stack") ??
+                FindChild(plant,"Exhaust Stack");
+            if (stack)
+            {
+                Vector3 ventilationStart = plant.InverseTransformPoint(
+                    operations.TransformPoint(new Vector3(35f,7.2f,-7f)));
+                Vector3 stackBase = stack.localPosition + new Vector3(0f,4.2f,7f);
+
+                PipePath(
+                    root,
+                    "Ventilation Duct",
+                    new[]
+                    {
+                        ventilationStart,
+                        new Vector3(26f,7.2f,-22f),
+                        new Vector3(stack.localPosition.x,7.2f,-36f),
+                        stackBase
+                    },
+                    .44f,
+                    m.metal);
+            }
+
+            WorldText(
+                root,
+                "COOLING WATER",
+                new Vector3(38f,2.15f,-26f),
+                Quaternion.Euler(0,90f,0),
+                .13f,
+                m.white);
+        }
+
+        static void PipePath(
+            Transform parent,
+            string prefix,
+            Vector3[] points,
+            float radius,
+            Material material)
+        {
+            if (points == null || points.Length < 2) return;
+            for (int i=0;i<points.Length-1;i++)
+                PipeBetweenLocal(
+                    parent,
+                    "Pipe Segment - "+prefix+" - "+(i+1).ToString("00"),
+                    points[i],
+                    points[i+1],
+                    radius,
+                    material);
+        }
+
+        static Transform PipeBetweenLocal(
+            Transform parent,
+            string name,
+            Vector3 localA,
+            Vector3 localB,
+            float radius,
+            Material material)
+        {
+            Vector3 delta = localB-localA;
+            float length = delta.magnitude;
+            if (length < .05f) return null;
+
+            GameObject go = GameObject.CreatePrimitive(PrimitiveType.Cylinder);
+            go.name = name;
+            go.transform.SetParent(parent,false);
+            go.transform.localPosition = (localA+localB)*.5f;
+            go.transform.localRotation =
+                Quaternion.FromToRotation(Vector3.up,delta.normalized);
+            go.transform.localScale =
+                new Vector3(radius,length*.5f,radius);
+
+            Renderer renderer = go.GetComponent<Renderer>();
+            if (renderer && material) renderer.sharedMaterial = material;
+
+            Collider collider = go.GetComponent<Collider>();
+            if (collider) UnityEngine.Object.DestroyImmediate(collider);
+            return go.transform;
+        }
+
         static List<ParticleSystem> BuildPlantVapor(
             Transform plant,
             Material particleMaterial)
@@ -1810,7 +2023,45 @@ namespace Hanger51.EditorTools
             tm.characterSize = characterSize;
             tm.anchor = TextAnchor.MiddleCenter;
             tm.alignment = TextAlignment.Center;
-            tm.color = material == null ? Color.white : Color.white;
+            tm.color = Color.white;
+            ApplyDepthTextMaterial(tm,Color.white);
+        }
+
+        static void ApplyDepthTextMaterial(TextMesh mesh,Color color)
+        {
+            if (!mesh) return;
+
+            Font font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            if (font) mesh.font = font;
+
+            Shader shader =
+                AssetDatabase.LoadAssetAtPath<Shader>(DepthTextShaderPath) ??
+                Shader.Find("Hanger51/Depth World Text");
+            if (!shader || !font || !font.material) return;
+
+            EnsureFolder(Generated+"/Materials");
+            string path = Generated+"/Materials/PlantDepthText.mat";
+            Material mat = AssetDatabase.LoadAssetAtPath<Material>(path);
+            if (!mat)
+            {
+                mat = new Material(shader) { name = "Plant Depth Text" };
+                mat.SetTexture("_MainTex",font.material.mainTexture);
+                if (mat.HasProperty("_Color")) mat.SetColor("_Color",Color.white);
+                if (mat.HasProperty("_Cutoff")) mat.SetFloat("_Cutoff",.02f);
+                mat.renderQueue = 2450;
+                AssetDatabase.CreateAsset(mat,path);
+            }
+
+            Renderer renderer = mesh.GetComponent<Renderer>();
+            if (renderer)
+            {
+                renderer.sharedMaterial = mat;
+                renderer.shadowCastingMode =
+                    UnityEngine.Rendering.ShadowCastingMode.Off;
+                renderer.receiveShadows = false;
+            }
+
+            mesh.color = color;
         }
 
         static Transform New(string name,Transform parent)
