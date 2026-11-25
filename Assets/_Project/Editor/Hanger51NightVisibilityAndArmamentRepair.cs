@@ -52,6 +52,22 @@ namespace Hanger51.EditorTools
                 return;
             }
 
+            H51PowerPlantController plant =
+                UnityEngine.Object.FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+            if (!plant)
+            {
+                Debug.LogError(
+                    "Step 156 failed. Regional power-plant controller is missing. Run Step 150 first.");
+                return;
+            }
+
+            plant.RestoreHealthyOperationalState();
+            grid.Configure(plant);
+            grid.RestoreAndRefreshGrid();
+            EditorUtility.SetDirty(plant);
+            EditorUtility.SetDirty(grid);
+
             int nightLights = UpgradeTownAndFacilityLights();
             int runwayBulbs;
             int runwayRealtimeLights;
@@ -278,10 +294,10 @@ namespace Hanger51.EditorTools
                         "Street",
                         StringComparison.OrdinalIgnoreCase) >= 0;
 
-                float distance = apron ? 950f : street ? 520f : 300f;
-                float emission = apron ? 13f : street ? 11f : 10f;
-                float range = apron ? 42f : street ? 28f : 16f;
-                float intensity = apron ? 4.5f : street ? 3.2f : 1.8f;
+                float distance = apron ? 1200f : street ? 800f : 500f;
+                float emission = apron ? 22f : street ? 20f : 16f;
+                float range = apron ? 65f : street ? 45f : 28f;
+                float intensity = apron ? 16f : street ? 12f : 7f;
 
                 light.ConfigureFlightVisibility(
                     distance,
@@ -310,7 +326,7 @@ namespace Hanger51.EditorTools
                             StringComparison.OrdinalIgnoreCase) >= 0)
                     {
                         float target =
-                            apron ? .58f : street ? .44f : .34f;
+                            apron ? .80f : street ? .70f : .48f;
                         renderer.transform.localScale =
                             Vector3.one * target;
                         EditorUtility.SetDirty(renderer.transform);
@@ -360,7 +376,7 @@ namespace Hanger51.EditorTools
                 Renderer lensRenderer = lenses[i];
                 Transform lens = lensRenderer.transform;
 
-                lens.localScale = Vector3.one * .28f;
+                lens.localScale = Vector3.one * .42f;
                 EditorUtility.SetDirty(lens);
 
                 Material material = lensRenderer.sharedMaterial;
@@ -402,8 +418,8 @@ namespace Hanger51.EditorTools
                     real = Undo.AddComponent<Light>(glow.gameObject);
 
                 real.type = LightType.Point;
-                real.range = 34f;
-                real.intensity = 4.6f;
+                real.range = 48f;
+                real.intensity = 10f;
                 real.color = new Color(.72f,.88f,1f,1f);
                 real.shadows = LightShadows.None;
                 real.enabled = false;
@@ -423,10 +439,10 @@ namespace Hanger51.EditorTools
                 grid,
                 clock);
             controller.ConfigureFlightVisibility(
-                1800f,
-                18f,
-                34f,
-                4.6f);
+                2200f,
+                24f,
+                48f,
+                10f);
             EditorUtility.SetDirty(controller);
 
             bulbCount = lenses.Length;
