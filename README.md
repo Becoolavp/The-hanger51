@@ -211,6 +211,8 @@ The same Step 156/157 repair path has now been strengthened rather than adding a
 - Step 156 explicitly serializes these lift values onto existing P-51 armament systems.
 - Step 157 now verifies the saved power plant is healthy and each P-51 armament system has the new service-visibility lift values in addition to the six installed guns/ammo boxes.
 
+Additional armament-service bug found after the bay visuals were restored: removing a full ammunition box caused the corresponding gun barrel to glow red-hot. The heat controller estimated firing by comparing the previous ammo count to the current ammo count, so service removal from roughly 200 rounds to 0 looked like 200 rounds fired in one frame. Commit `9dd51ddf` fixes this by only treating downward ammo deltas as firing while the ammo box is still installed; ammo-box removal now resets the heat baseline and lets any real residual heat cool normally.
+
 Do not mark this pass verified until the strengthened Step 157 passes and a Development Build confirms: runway edges are clearly visible at night from the P-51, road/house lighting is visible when flying over populated areas, the visible moon crosses the night sky, the runway-control text is readable only from inside the airport wall, and opening either wing armament panel reveals all three installed guns and three adjacent ammo boxes for that wing.
 
 ### Wheel-install diagnostics
