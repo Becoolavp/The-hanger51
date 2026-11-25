@@ -44,12 +44,6 @@ namespace Hanger51.EditorTools
             H51DayNightCycle cycle =
                 UnityEngine.Object.FindFirstObjectByType<H51DayNightCycle>(
                     FindObjectsInactive.Include);
-            H51PowerPlantController plant =
-                UnityEngine.Object.FindFirstObjectByType<H51PowerPlantController>(
-                    FindObjectsInactive.Include);
-            H51UtilityGridController grid =
-                UnityEngine.Object.FindFirstObjectByType<H51UtilityGridController>(
-                    FindObjectsInactive.Include);
 
             if (!world || !runway || !clock || !grid || !cycle)
             {
@@ -174,6 +168,12 @@ namespace Hanger51.EditorTools
 
             H51DayNightCycle cycle =
                 UnityEngine.Object.FindFirstObjectByType<H51DayNightCycle>(
+                    FindObjectsInactive.Include);
+            H51PowerPlantController plant =
+                UnityEngine.Object.FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+            H51UtilityGridController grid =
+                UnityEngine.Object.FindFirstObjectByType<H51UtilityGridController>(
                     FindObjectsInactive.Include);
             Transform moon =
                 cycle ? FindDescendant(cycle.transform,"H51 Visible Moon") : null;
