@@ -163,13 +163,15 @@ namespace Hanger51.World
                 Material shared = renderer.sharedMaterial;
                 if (shared && shared.HasProperty("_EmissionColor"))
                     block.SetColor("_EmissionColor",emission);
+                Color visibleColor = on
+                    ? Color.Lerp(emissionColor,Color.white,.28f)
+                    : Color.Lerp(Color.black,emissionColor,.06f);
+
                 if (shared && shared.HasProperty("_BaseColor"))
-                {
-                    Color baseColor = on
-                        ? Color.Lerp(Color.black,emissionColor,.65f)
-                        : Color.Lerp(Color.black,emissionColor,.10f);
-                    block.SetColor("_BaseColor",baseColor);
-                }
+                    block.SetColor("_BaseColor",visibleColor);
+                if (shared && shared.HasProperty("_Color"))
+                    block.SetColor("_Color",visibleColor);
+
                 renderer.SetPropertyBlock(block);
             }
         }
