@@ -20,6 +20,8 @@ namespace Hanger51.NPCs
         [SerializeField] H51CitizenRoutineState state = H51CitizenRoutineState.Home;
         [SerializeField] float thinkInterval = .7f;
         [SerializeField] float localWanderRadius = 8f;
+        [SerializeField, Range(18f, 23.9f)] float civilianCurfewHour = 21.5f;
+        [SerializeField, Range(4f, 8f)] float civilianMorningReleaseHour = 6.5f;
 
         H51CitizenIdentity identity;
         H51CitizenRegistry registry;
@@ -296,6 +298,16 @@ namespace Hanger51.NPCs
                 desiredState = work
                     ? H51CitizenRoutineState.Work
                     : H51CitizenRoutineState.Home;
+            }
+            else if (!essentialShiftWorker &&
+                     (hour < civilianMorningReleaseHour ||
+                      hour >= civilianCurfewHour))
+            {
+                // Non-essential citizens have a hard overnight home period.
+                // This takes priority over leisure, shopping, and appointments
+                // so towns actually settle down once night is established.
+                desired = home;
+                desiredState = H51CitizenRoutineState.Home;
             }
             else if (medicalAppointment)
             {
