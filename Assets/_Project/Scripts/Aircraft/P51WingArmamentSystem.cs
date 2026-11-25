@@ -32,6 +32,9 @@ namespace Hanger51.Aircraft
         [SerializeField] private bool[] panelOpen = { false, false };
         [SerializeField, Range(25f, 120f)] private float panelOpenAngle = 78f;
         [SerializeField, Min(1f)] private float panelAnimationSpeed = 4.5f;
+        [SerializeField, Range(0f, 0.35f)] private float openBayPresentationLift = 0.14f;
+        [SerializeField, Range(0f, 0.25f)] private float openGunPresentationLift = 0.08f;
+        [SerializeField, Range(0f, 0.25f)] private float openAmmoPresentationLift = 0.06f;
 
         [Header("Six Gun Stations")]
         [SerializeField] private GameObject[] installedGunVisuals = new GameObject[GunCount];
@@ -50,7 +53,11 @@ namespace Hanger51.Aircraft
 
         private readonly Quaternion[] panelClosedRotations = new Quaternion[WingCount];
         private readonly float[] panelBlend = new float[WingCount];
+        private readonly Vector3[] bayClosedPositions = new Vector3[WingCount];
+        private readonly Vector3[] gunClosedPositions = new Vector3[GunCount];
+        private readonly Vector3[] ammoClosedPositions = new Vector3[GunCount];
         private bool panelPoseCaptured;
+        private bool serviceVisualPoseCaptured;
         private float nextVolleyTime;
         private float nextEmptyMessageTime;
         private Material muzzleFlashMaterial;
@@ -92,6 +99,7 @@ namespace Hanger51.Aircraft
             EnsureArrays();
             RepairVisualBindingsFromHierarchy(false);
             CapturePanelPose();
+            CaptureServiceVisualPose();
             ApplyImmediateVisualState();
         }
 
@@ -101,6 +109,7 @@ namespace Hanger51.Aircraft
             EnsureArrays();
             RepairVisualBindingsFromHierarchy(false);
             CapturePanelPose();
+            CaptureServiceVisualPose();
             ApplyImmediateVisualState();
         }
 
@@ -109,6 +118,7 @@ namespace Hanger51.Aircraft
             ResolveReferences();
             EnsureArrays();
             CapturePanelPose();
+            CaptureServiceVisualPose();
             AnimatePanels();
             UpdateInstalledVisuals();
             HandlePilotFiring();
@@ -136,7 +146,9 @@ namespace Hanger51.Aircraft
             ejectionPorts = Copy(configuredEjectionPorts, GunCount);
             EnsureArrays();
             panelPoseCaptured = false;
+            serviceVisualPoseCaptured = false;
             CapturePanelPose();
+            CaptureServiceVisualPose();
             ApplyImmediateVisualState();
         }
 
@@ -211,6 +223,8 @@ namespace Hanger51.Aircraft
                 }
             }
 
+            serviceVisualPoseCaptured = false;
+            CaptureServiceVisualPose();
             UpdateInstalledVisuals();
             return rebound;
         }
@@ -692,6 +706,55 @@ namespace Hanger51.Aircraft
             panelPoseCaptured = any;
         }
 
+        private void CaptureServiceVisualPose()
+        {
+            if (serviceVisualPoseCaptured) return;
+            EnsureArrays();
+
+            bool any = false;
+            for (int wingIndex = 0; wingIndex < WingCount; wingIndex++)
+            {
+                GameObject interior =
+                    wingIndex < bayInteriorRoots.Length
+                        ? bayInteriorRoots[wingIndex]
+                        : null;
+                if (interior != null)
+                {
+                    bayClosedPositions[wingIndex] =
+                        interior.transform.localPosition;
+                    any = true;
+                }
+            }
+
+            for (int stationIndex = 0; stationIndex < GunCount; stationIndex++)
+            {
+                GameObject gun =
+                    stationIndex < installedGunVisuals.Length
+                        ? installedGunVisuals[stationIndex]
+                        : null;
+                GameObject ammo =
+                    stationIndex < installedAmmoVisuals.Length
+                        ? installedAmmoVisuals[stationIndex]
+                        : null;
+
+                if (gun != null)
+                {
+                    gunClosedPositions[stationIndex] =
+                        gun.transform.localPosition;
+                    any = true;
+                }
+
+                if (ammo != null)
+                {
+                    ammoClosedPositions[stationIndex] =
+                        ammo.transform.localPosition;
+                    any = true;
+                }
+            }
+
+            serviceVisualPoseCaptured = any;
+        }
+
         private void AnimatePanels()
         {
             for (int wingIndex = 0; wingIndex < WingCount; wingIndex++)
@@ -717,6 +780,16 @@ namespace Hanger51.Aircraft
                 if (interior != null)
                 {
                     interior.SetActive(panelBlend[wingIndex] >= 0.18f);
+
+                    if (serviceVisualPoseCaptured)
+                    {
+                        interior.transform.localPosition =
+                            Vector3.Lerp(
+                                bayClosedPositions[wingIndex],
+                                bayClosedPositions[wingIndex] +
+                                    Vector3.up * openBayPresentationLift,
+                                panelBlend[wingIndex]);
+                    }
                 }
             }
         }
@@ -737,14 +810,70 @@ namespace Hanger51.Aircraft
         {
             for (int stationIndex = 0; stationIndex < GunCount; stationIndex++)
             {
-                if (stationIndex < installedGunVisuals.Length && installedGunVisuals[stationIndex] != null)
+                int wingIndex = GetWingForStation(stationIndex);
+                bool exposed =
+                    wingIndex >= 0 &&
+                    wingIndex < panelBlend.Length &&
+                    (panelOpen[wingIndex] || panelBlend[wingIndex] >= 0.18f);
+
+                GameObject gun =
+                    stationIndex < installedGunVisuals.Length
+                        ? installedGunVisuals[stationIndex]
+                        : null;
+                if (gun != null)
                 {
-                    installedGunVisuals[stationIndex].SetActive(gunInstalled[stationIndex]);
+                    gun.SetActive(gunInstalled[stationIndex]);
+                    if (gunInstalled[stationIndex])
+                    {
+                        ForceRenderersVisible(gun);
+
+                        if (serviceVisualPoseCaptured)
+                        {
+                            Vector3 position =
+                                gunClosedPositions[stationIndex];
+                            if (exposed)
+                                position.y += openGunPresentationLift;
+                            gun.transform.localPosition = position;
+                        }
+                    }
                 }
-                if (stationIndex < installedAmmoVisuals.Length && installedAmmoVisuals[stationIndex] != null)
+
+                GameObject ammo =
+                    stationIndex < installedAmmoVisuals.Length
+                        ? installedAmmoVisuals[stationIndex]
+                        : null;
+                if (ammo != null)
                 {
-                    installedAmmoVisuals[stationIndex].SetActive(ammoBoxInstalled[stationIndex]);
+                    ammo.SetActive(ammoBoxInstalled[stationIndex]);
+                    if (ammoBoxInstalled[stationIndex])
+                    {
+                        ForceRenderersVisible(ammo);
+
+                        if (serviceVisualPoseCaptured)
+                        {
+                            Vector3 position =
+                                ammoClosedPositions[stationIndex];
+                            if (exposed)
+                                position.y += openAmmoPresentationLift;
+                            ammo.transform.localPosition = position;
+                        }
+                    }
                 }
+            }
+        }
+
+        private static void ForceRenderersVisible(GameObject root)
+        {
+            if (root == null) return;
+
+            Renderer[] renderers =
+                root.GetComponentsInChildren<Renderer>(true);
+            for (int index = 0; index < renderers.Length; index++)
+            {
+                Renderer renderer = renderers[index];
+                if (renderer == null) continue;
+                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
             }
         }
 
@@ -851,6 +980,9 @@ namespace Hanger51.Aircraft
             EnsureArrays();
             panelOpenAngle = Mathf.Clamp(panelOpenAngle, 25f, 120f);
             panelAnimationSpeed = Mathf.Max(1f, panelAnimationSpeed);
+            openBayPresentationLift = Mathf.Clamp(openBayPresentationLift, 0f, 0.35f);
+            openGunPresentationLift = Mathf.Clamp(openGunPresentationLift, 0f, 0.25f);
+            openAmmoPresentationLift = Mathf.Clamp(openAmmoPresentationLift, 0f, 0.25f);
             secondsBetweenVolleys = Mathf.Max(0.04f, secondsBetweenVolleys);
             visualRangeMeters = Mathf.Max(50f, visualRangeMeters);
             casingLifetimeSeconds = Mathf.Max(1f, casingLifetimeSeconds);
