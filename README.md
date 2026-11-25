@@ -308,6 +308,52 @@ then:
 
 Do not mark this refinement fully verified until a Development Build confirms a gradual star-sky fade across dusk/dawn and verifies that overnight civilians are actually at their homes while legitimate on-shift hospital staff remain at the hospital.
 
+### Runway sign occlusion, obsolete fixed gun stubs, radiator leftover, and spawned-aircraft tow-bar targeting — IMPLEMENTED / PENDING UNITY VALIDATION
+
+A later Development Build exposed three independent cleanup issues:
+
+- The runway-light controller's TextMesh could still be visible through the airport/hangar wall.
+- Six obsolete fixed gun cylinders from the original P-51 visual builder were still present in addition to the real serviceable M2 system. The exact legacy names are `Left Wing Gun 1-3` and `Right Wing Gun 1-3`.
+- The portable tow bar remained bound to the first `P51FlightController` it found. With a spawned P-51 nearby, the interaction could still measure the distance to the original/master aircraft tailwheel (for example reporting roughly 19 m even while the tow-bar fork was beside the spawned tailwheel).
+- The older obsolete radiator transition object `Radiator Scoop Transition Fairing` is also removed by this cleanup because it is known to overlap the newer functional radiator/belly geometry if it survives an older build pass.
+
+A new repair/validation path was added:
+
+`Hanger 51 -> World -> Current -> 160 - Repair Runway Sign Legacy Guns And Spawned Tow Bar`
+
+`Hanger 51 -> World -> Current -> 161 - Validate Runway Sign Legacy Guns And Spawned Tow Bar`
+
+Runtime changes:
+
+- `P51TowBarController` now resolves the **nearest active P-51 tailwheel** whenever the tow bar is loose. It updates the flight controller, landing-gear controller, rigidbody, and tailwheel anchor together and locks those references once attached.
+- The tow-bar interaction text also refreshes nearest-aircraft targeting, so distance prompts should refer to the airplane physically nearest the fork instead of the original master.
+- `H51RunwayLightSwitch` now requires three conditions before showing its TextMesh: the player must be on the readable side, within the configured nearby range, and have a clear physics line of sight to the label. A wall between the camera and the switch therefore hides the sign even if the old facing test would have shown it.
+- `P51WingArmamentSystem` defensively disables the six exact obsolete fixed-gun objects at runtime, so cloned/spawned aircraft cannot visibly resurrect those placeholders.
+
+Step 160 permanently cleans the saved scene by:
+
+- destroying all six exact legacy fixed-gun objects on every scene P-51;
+- destroying any remaining `Radiator Scoop Transition Fairing` objects;
+- setting the runway-light label viewing distance to 8 m;
+- preserving the real serviceable `Installed M2 Wing Gun` visuals and the existing tow-bar object.
+
+Step 161 verifies:
+
+- zero obsolete fixed wing-gun stubs remain;
+- zero obsolete radiator transition fairings remain;
+- at least six real `Installed M2 Wing Gun` visuals still exist;
+- the runway sign nearby/occlusion setting is present;
+- the tow bar remains configured for runtime nearest-aircraft targeting.
+
+Important files:
+
+- `Assets/_Project/Scripts/Aircraft/P51TowBarController.cs`
+- `Assets/_Project/Scripts/Aircraft/P51WingArmamentSystem.cs`
+- `Assets/_Project/Scripts/World/H51RunwayLightSwitch.cs`
+- `Assets/_Project/Editor/Hanger51RunwaySignLegacyGunAndTowBarRepair.cs`
+
+Do not mark this pass verified until Step 161 passes and a Development Build confirms that the runway-light sign cannot be seen through the wall, no old fixed gun cylinders remain outside the real serviceable M2 system, the obsolete radiator transition fairing is absent, and the tow bar can connect to a newly spawned P-51 rather than only the master aircraft.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
@@ -465,6 +511,7 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
 - Apply and validate World Steps 158/159 for the CC0/procedural starry night sky, visibly glowing lamp bulbs, clip-safe visible moon, and civilian overnight curfew.
+- Apply and validate World Steps 160/161 for runway-sign occlusion, obsolete fixed-gun/radiator cleanup, and spawned-aircraft tow-bar targeting.
 - Continue regression testing World Steps 156/157 for runway visibility, runway-control readability, and restored wing-armament bay visuals.
 - Recheck Step 155 after the night/control repair if the runway-control placement is changed again.
 - Continue testing the time system at dawn, daytime, dusk, and full night.
