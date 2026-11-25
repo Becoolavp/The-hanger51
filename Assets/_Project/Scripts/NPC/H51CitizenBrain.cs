@@ -719,17 +719,10 @@ namespace Hanger51.NPCs
                     transform.position,
                     lastCurfewProgressPosition);
 
-            bool pathBad =
-                !agent.pathPending &&
-                ((agent.hasPath &&
-                  agent.pathStatus != NavMeshPathStatus.PathComplete) ||
-                 (!agent.hasPath &&
-                  agent.velocity.sqrMagnitude < .04f));
-
             bool stalled =
                 moved < .30f &&
                 agent.velocity.sqrMagnitude < .05f &&
-                pathBad;
+                !agent.pathPending;
 
             curfewStalledSeconds =
                 stalled
