@@ -137,7 +137,7 @@ namespace Hanger51.World
 
         void Refresh(bool force)
         {
-            bool gridPower = grid && grid.GridOnline;
+            bool gridPower = grid && grid.PowerAvailable;
             bool wanted = WantsLights();
             bool nextEffective = wanted && gridPower;
 
