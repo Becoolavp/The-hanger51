@@ -219,6 +219,9 @@ Do not mark this pass verified until the strengthened Step 157 passes and a Deve
 
 ### Night-sky art, visibly lit lamp bulbs, and civilian overnight curfew — IMPLEMENTED / PENDING UNITY VALIDATION
 
+Compile note: the first pull of the Step 158/159 night-immersion pass exposed `CS0102` because `H51DayNightCycle` already had the original `nightSkyExposure` field for dimming the normal daytime skybox at night, while the new dedicated HDRI/procedural night-sky path accidentally introduced a second field with the same name. Commit `d1529d2c` separates these concerns into `nightSkyExposure` (legacy/day-sky dimming) and `dedicatedNightSkyExposure` (the star-sky/HDRI material exposure).
+
+
 A later 11:10 PM Development Build showed that the exterior point lights were finally casting some illumination onto the ground, but the lamp bulbs themselves still looked like dull brown geometry. The visible moon also still did not appear in the sky.
 
 A new focused setup/validation pass was added:
