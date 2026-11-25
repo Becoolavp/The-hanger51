@@ -102,7 +102,7 @@ namespace Hanger51.World
             if (!grid)
                 grid = FindFirstObjectByType<H51UtilityGridController>(FindObjectsInactive.Include);
 
-            bool power = !requiresGridPower || (grid && grid.GridOnline);
+            bool power = !requiresGridPower || (grid && grid.PowerAvailable);
             bool schedule = !nightOnly || IsNight();
             bool wanted = requestedOn && schedule && power;
 
