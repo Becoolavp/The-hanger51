@@ -22,6 +22,7 @@ namespace Hanger51.NPCs
         [SerializeField] float localWanderRadius = 8f;
         [SerializeField, Range(18f, 23.9f)] float civilianCurfewHour = 21.5f;
         [SerializeField, Range(4f, 8f)] float civilianMorningReleaseHour = 6.5f;
+        [SerializeField, Min(4f)] float curfewStallRecoverySeconds = 12f;
 
         H51CitizenIdentity identity;
         H51CitizenRegistry registry;
@@ -56,6 +57,10 @@ namespace Hanger51.NPCs
         H51CitizenActivitySpot activeActivitySpot;
         float activeActivityUntil;
         float nextActivityGesture;
+
+        float nextCurfewProgressCheck;
+        float curfewStalledSeconds;
+        Vector3 lastCurfewProgressPosition;
 
         public H51CitizenRoutineState State => state;
         public string CurrentActivityDescription => currentActivityDescription;
@@ -101,6 +106,13 @@ namespace Hanger51.NPCs
             {
                 UpdateVehicleRide();
                 return;
+            }
+
+            if (activeActivitySpot &&
+                ShouldInterruptActiveActivityForSchedule())
+            {
+                ClearActiveActivity();
+                nextThink = 0f;
             }
 
             if (activeActivitySpot)
@@ -222,7 +234,53 @@ namespace Hanger51.NPCs
                 job.Contains("firefighter") ||
                 job.Contains("paramedic") ||
                 job.Contains("ambulance") ||
-                job.Contains("emergency");
+                job.Contains("emergency") ||
+                job.Contains("doctor") ||
+                job.Contains("physician") ||
+                job.Contains("surgeon") ||
+                job.Contains("nurse") ||
+                job.Contains("hospital") ||
+                job.Contains("medical");
+        }
+
+        bool IsCivilianCurfew(float hour)
+        {
+            return
+                hour < civilianMorningReleaseHour ||
+                hour >= civilianCurfewHour;
+        }
+
+        bool ShouldInterruptActiveActivityForSchedule()
+        {
+            if (!activeActivitySpot || !identity) return false;
+
+            H51WorldClock worldClock = H51WorldClock.Instance;
+            float hour = worldClock
+                ? worldClock.Hour
+                : Mathf.Repeat(Time.time / 60f + 7f,24f);
+
+            bool scheduledWork =
+                ShouldBeAtWork(hour,worldClock);
+
+            if (scheduledWork)
+            {
+                return
+                    work &&
+                    !activeActivitySpot.transform.IsChildOf(
+                        work.transform);
+            }
+
+            bool mustBeHome =
+                hour < 7f ||
+                hour >= 22.5f ||
+                (!IsEssentialShiftWorker() &&
+                 IsCivilianCurfew(hour));
+
+            return
+                mustBeHome &&
+                home &&
+                !activeActivitySpot.transform.IsChildOf(
+                    home.transform);
         }
 
         bool ShouldBeAtWork(float hour, H51WorldClock clock)
@@ -300,8 +358,7 @@ namespace Hanger51.NPCs
                     : H51CitizenRoutineState.Home;
             }
             else if (!essentialShiftWorker &&
-                     (hour < civilianMorningReleaseHour ||
-                      hour >= civilianCurfewHour))
+                     IsCivilianCurfew(hour))
             {
                 // Non-essential citizens have a hard overnight home period.
                 // This takes priority over leisure, shopping, and appointments
@@ -405,6 +462,22 @@ namespace Hanger51.NPCs
 
             if (TryHandleVehicleCommute(desired, desiredState, distance))
                 return;
+
+            bool overnightHome =
+                desiredState == H51CitizenRoutineState.Home &&
+                (hour < 7f ||
+                 hour >= 22.5f ||
+                 (!essentialShiftWorker &&
+                  IsCivilianCurfew(hour)));
+
+            if (overnightHome &&
+                TryRecoverOvernightHomeIfStalled(
+                    desired,
+                    distance))
+                return;
+
+            if (!overnightHome)
+                ResetCurfewRecoveryTracking();
 
             if (distance > Mathf.Max(2.2f, agent.stoppingDistance + .8f))
             {
@@ -612,6 +685,91 @@ namespace Hanger51.NPCs
 
             vehicle.RepairFully();
             currentActivityDescription = "I'm finishing up a vehicle repair at the shop.";
+        }
+
+        bool TryRecoverOvernightHomeIfStalled(
+            H51CitizenAnchor desiredHome,
+            float distance)
+        {
+            if (!desiredHome ||
+                !agent ||
+                !agent.enabled ||
+                !agent.isOnNavMesh ||
+                distance <= Mathf.Max(
+                    2.2f,
+                    agent.stoppingDistance + .8f))
+            {
+                ResetCurfewRecoveryTracking();
+                return false;
+            }
+
+            if (nextCurfewProgressCheck <= 0f)
+            {
+                lastCurfewProgressPosition = transform.position;
+                nextCurfewProgressCheck = Time.time + 1f;
+                curfewStalledSeconds = 0f;
+                return false;
+            }
+
+            if (Time.time < nextCurfewProgressCheck)
+                return false;
+
+            float moved =
+                Planar(
+                    transform.position,
+                    lastCurfewProgressPosition);
+
+            bool pathBad =
+                !agent.pathPending &&
+                ((agent.hasPath &&
+                  agent.pathStatus != NavMeshPathStatus.PathComplete) ||
+                 (!agent.hasPath &&
+                  agent.velocity.sqrMagnitude < .04f));
+
+            bool stalled =
+                moved < .30f &&
+                agent.velocity.sqrMagnitude < .05f &&
+                pathBad;
+
+            curfewStalledSeconds =
+                stalled
+                    ? curfewStalledSeconds + 1f
+                    : 0f;
+
+            lastCurfewProgressPosition = transform.position;
+            nextCurfewProgressCheck = Time.time + 1f;
+
+            if (curfewStalledSeconds <
+                Mathf.Max(4f,curfewStallRecoverySeconds))
+                return false;
+
+            if (!NavMesh.SamplePosition(
+                    desiredHome.transform.position,
+                    out NavMeshHit homeHit,
+                    12f,
+                    NavMesh.AllAreas))
+                return false;
+
+            ClearActiveActivity();
+            agent.isStopped = false;
+            agent.ResetPath();
+            agent.Warp(homeHit.position);
+
+            state = H51CitizenRoutineState.Home;
+            currentActivityDescription =
+                "I'm home for the night.";
+            pauseUntil = Time.time + 2f;
+            nextThink = Time.time + 1f;
+
+            ResetCurfewRecoveryTracking();
+            return true;
+        }
+
+        void ResetCurfewRecoveryTracking()
+        {
+            nextCurfewProgressCheck = 0f;
+            curfewStalledSeconds = 0f;
+            lastCurfewProgressPosition = transform.position;
         }
 
         void ClearActiveActivity()
