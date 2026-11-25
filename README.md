@@ -217,6 +217,46 @@ Visible-moon runtime bug found after night testing: the moon sphere existed, but
 
 Do not mark this pass verified until the strengthened Step 157 passes and a Development Build confirms: runway edges are clearly visible at night from the P-51, road/house lighting is visible when flying over populated areas, the visible moon crosses the night sky, the runway-control text is readable only from inside the airport wall, and opening either wing armament panel reveals all three installed guns and three adjacent ammo boxes for that wing.
 
+### Night-sky art, visibly lit lamp bulbs, and civilian overnight curfew — IMPLEMENTED / PENDING UNITY VALIDATION
+
+A later 11:10 PM Development Build showed that the exterior point lights were finally casting some illumination onto the ground, but the lamp bulbs themselves still looked like dull brown geometry. The visible moon also still did not appear in the sky.
+
+A new focused setup/validation pass was added:
+
+`Hanger 51 -> World -> Current -> 158 - Install Starry Night Sky Lamp Glow And Citizen Curfew`
+
+`Hanger 51 -> World -> Current -> 159 - Validate Starry Night Sky Lamp Glow And Citizen Curfew`
+
+The internet research for this pass selected **ambientCG Night Sky HDRI 001** as the preferred external night panorama. ambientCG publishes the asset under **CC0**, including commercial use without attribution. Step 158 attempts to download the **2K** package directly from ambientCG into the generated project environment folder. If the download is unavailable, the repository now includes `Assets/_Project/Shaders/H51ProceduralNightSky.shader` as a deterministic procedural star/Milky-Way fallback.
+
+Source/reference:
+
+- Asset page: `https://ambientcg.com/view?id=NightSkyHDRI001`
+- 2K download endpoint: `https://ambientcg.com/get?file=NightSkyHDRI001_2K.zip`
+- License: CC0
+
+Step 158 also:
+
+- Creates/configures a panoramic Unity skybox material when the ambientCG HDRI downloads successfully.
+- Falls back automatically to the repository's procedural starry-night shader when external download/import is unavailable.
+- Configures `H51DayNightCycle` to switch to the dedicated night sky when the night factor is established.
+- Reconfigures the visible moon to a nearer nominal distance and changes moon placement to respect the active camera's far clip plane while preserving apparent angular size. This addresses a likely remaining cause of the moon being absent even after the directional-light sign fix: the former 1800 m moon could be beyond the player camera's far clip distance.
+- Explicitly forces moon renderers enabled / `forceRenderingOff=false`.
+- Replaces town, building, airport, and runway lamp-lens materials with bright **unlit** materials so a powered fixture visibly looks illuminated even when Bloom is unavailable. Real point lights continue to provide actual ground illumination.
+- Adds a hard **9:30 PM civilian curfew** for non-essential citizens and a 6:30 AM morning release. This home rule takes priority over shopping, leisure, and ordinary appointments. Essential rotating-shift workers remain exempt while actually scheduled for work.
+- Serializes the curfew values onto existing citizen brains.
+- Writes a local `SOURCE_LICENSE.txt` next to the downloaded/generated night-sky assets documenting the source and CC0 license.
+
+Runtime files changed:
+
+- `Assets/_Project/Scripts/NPC/H51CitizenBrain.cs`
+- `Assets/_Project/Scripts/World/H51DayNightCycle.cs`
+- `Assets/_Project/Scripts/World/H51NightLight.cs`
+- `Assets/_Project/Shaders/H51ProceduralNightSky.shader`
+- `Assets/_Project/Editor/Hanger51NightImmersionAndCitizenCurfewSetup.cs`
+
+Do not mark this pass verified until Step 159 passes and a Development Build confirms: lamp bulbs themselves visibly glow at night, non-essential citizens route home after 9:30 PM, the sky contains stars instead of a flat black background, and the moon is visibly rendered above the horizon during its nighttime arc.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
@@ -373,7 +413,8 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue improving maintenance animations and physical part visibility.
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
-- Apply and validate World Steps 156/157 for night visibility, visible moon, runway-control readability, and restored wing-armament bay visuals.
+- Apply and validate World Steps 158/159 for the CC0/procedural starry night sky, visibly glowing lamp bulbs, clip-safe visible moon, and civilian overnight curfew.
+- Continue regression testing World Steps 156/157 for runway visibility, runway-control readability, and restored wing-armament bay visuals.
 - Recheck Step 155 after the night/control repair if the runway-control placement is changed again.
 - Continue testing the time system at dawn, daytime, dusk, and full night.
 - Verify ordinary citizens stop following weekday work routines on weekends.
