@@ -15,6 +15,13 @@ namespace Hanger51.World
         float nextRefresh;
 
         public bool GridOnline { get; private set; }
+        public bool PowerAvailable =>
+            GridOnline ||
+            (powerPlant &&
+             powerPlant.IsOnline &&
+             powerPlant.OutputMegawatts > .1f &&
+             (CurrentLoadMegawatts <= .001f ||
+              powerPlant.OutputMegawatts >= CurrentLoadMegawatts));
         public bool WaterNetworkOnline { get; private set; }
         public int ConnectedConsumers => consumers != null ? consumers.Length : 0;
         public float CurrentLoadMegawatts { get; private set; }
