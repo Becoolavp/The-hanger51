@@ -15,7 +15,8 @@ namespace Hanger51.World
         [SerializeField, Min(100f)] float moonVisualDistance = 900f;
         [SerializeField, Min(5f)] float moonVisualDiameter = 48f;
         [SerializeField] Material nightSkybox;
-        [SerializeField, Range(.2f,.95f)] float nightSkySwitchFactor = .58f;
+        [SerializeField, Range(0f,.8f)] float nightSkyBlendStart = .04f;
+        [SerializeField, Range(.2f,1f)] float nightSkyBlendEnd = .96f;
         [SerializeField, Range(.05f,2f)] float dedicatedNightSkyExposure = .72f;
 
         [Header("Solar Timing")]
@@ -221,26 +222,74 @@ namespace Hanger51.World
             ApplyMoonVisual();
 
             Material daySky = runtimeSky ? runtimeSky : sourceSky;
-            bool useNightSky =
-                nightSkybox &&
-                nightFactor >= nightSkySwitchFactor;
 
-            Material sky = useNightSky
-                ? nightSkybox
-                : daySky;
-
-            if (sky && RenderSettings.skybox != sky)
-                RenderSettings.skybox = sky;
-
-            if (sky && sky.HasProperty("_Exposure"))
+            if (nightSkybox && nightSkybox.HasProperty("_NightBlend"))
             {
-                float exposure = useNightSky
-                    ? dedicatedNightSkyExposure
-                    : Mathf.Lerp(
-                        nightSkyExposure,
-                        daySkyExposure,
-                        daylightFactor);
-                sky.SetFloat("_Exposure",exposure);
+                // The blended sky material owns both the daytime gradient and the
+                // night panorama/procedural stars. Keeping one skybox active lets
+                // dusk/dawn fade continuously instead of snapping between two
+                // unrelated materials.
+                if (RenderSettings.skybox != nightSkybox)
+                    RenderSettings.skybox = nightSkybox;
+
+                float blendStart =
+                    Mathf.Min(nightSkyBlendStart,nightSkyBlendEnd - .01f);
+                float blend =
+                    Mathf.SmoothStep(
+                        0f,
+                        1f,
+                        Mathf.InverseLerp(
+                            blendStart,
+                            nightSkyBlendEnd,
+                            nightFactor));
+
+                nightSkybox.SetFloat("_NightBlend",blend);
+
+                if (nightSkybox.HasProperty("_DayExposure"))
+                    nightSkybox.SetFloat("_DayExposure",daySkyExposure);
+                if (nightSkybox.HasProperty("_NightExposure"))
+                    nightSkybox.SetFloat(
+                        "_NightExposure",
+                        dedicatedNightSkyExposure);
+                if (nightSkybox.HasProperty("_SunDirection") && sun)
+                {
+                    Vector3 apparentSunDirection =
+                        -sun.transform.forward.normalized;
+                    nightSkybox.SetVector(
+                        "_SunDirection",
+                        new Vector4(
+                            apparentSunDirection.x,
+                            apparentSunDirection.y,
+                            apparentSunDirection.z,
+                            0f));
+                }
+            }
+            else
+            {
+                // Compatibility fallback for an older panoramic sky material.
+                bool useNightSky =
+                    nightSkybox &&
+                    nightFactor >= .58f;
+
+                Material sky =
+                    useNightSky
+                        ? nightSkybox
+                        : daySky;
+
+                if (sky && RenderSettings.skybox != sky)
+                    RenderSettings.skybox = sky;
+
+                if (sky && sky.HasProperty("_Exposure"))
+                {
+                    float exposure =
+                        useNightSky
+                            ? dedicatedNightSkyExposure
+                            : Mathf.Lerp(
+                                nightSkyExposure,
+                                daySkyExposure,
+                                daylightFactor);
+                    sky.SetFloat("_Exposure",exposure);
+                }
             }
         }
 
@@ -326,7 +375,12 @@ namespace Hanger51.World
             moonIntensity = Mathf.Max(0f,moonIntensity);
             moonVisualDistance = Mathf.Max(100f,moonVisualDistance);
             moonVisualDiameter = Mathf.Max(5f,moonVisualDiameter);
-            nightSkySwitchFactor = Mathf.Clamp(nightSkySwitchFactor,.2f,.95f);
+            nightSkyBlendStart = Mathf.Clamp(nightSkyBlendStart,0f,.8f);
+            nightSkyBlendEnd =
+                Mathf.Clamp(
+                    nightSkyBlendEnd,
+                    nightSkyBlendStart + .01f,
+                    1f);
             dedicatedNightSkyExposure =
                 Mathf.Clamp(dedicatedNightSkyExposure,.05f,2f);
             nightSkyExposure = Mathf.Max(.01f,nightSkyExposure);
