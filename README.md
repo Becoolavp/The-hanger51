@@ -185,6 +185,8 @@ Important files:
 - `Assets/_Project/Scripts/Aircraft/P51WingArmamentSystem.cs`
 - `Assets/_Project/Scripts/Aircraft/P51WingArmamentBayPersistence.cs`
 
+Compile note after the strengthened Step 156/157 pass: the first pull exposed five C# scope errors in `Hanger51NightVisibilityAndArmamentRepair.cs`. The new validation variables `plant` and `grid` had been inserted into the Build method as duplicate locals, while the Validate method referenced them without declarations. Commit `762b36b5` removes the duplicate Build declarations and declares `plant`/`grid` in the correct Validate scope. The surrounding edited block was then rechecked for unmatched string quotes.
+
 Development-build visual retest on 2026-11-24 found that this pass was **not yet visually verified**:
 
 - At about 10:19 PM, the town was dark and the road/house lamps were not visibly illuminating the scene from the P-51.
