@@ -215,11 +215,15 @@ namespace Hanger51.EditorTools
                     so.FindProperty("civilianCurfewHour");
                 SerializedProperty morning =
                     so.FindProperty("civilianMorningReleaseHour");
+                SerializedProperty recovery =
+                    so.FindProperty("curfewStallRecoverySeconds");
 
                 if (curfew != null &&
                     morning != null &&
+                    recovery != null &&
                     curfew.floatValue <= 21.5f + .01f &&
-                    morning.floatValue >= 6.5f - .01f)
+                    morning.floatValue >= 6.5f - .01f &&
+                    recovery.floatValue <= 12f + .01f)
                     curfewReady++;
             }
 
@@ -669,11 +673,15 @@ namespace Hanger51.EditorTools
                     so.FindProperty("civilianCurfewHour");
                 SerializedProperty morning =
                     so.FindProperty("civilianMorningReleaseHour");
+                SerializedProperty recovery =
+                    so.FindProperty("curfewStallRecoverySeconds");
 
                 if (curfew != null)
                     curfew.floatValue = 21.5f;
                 if (morning != null)
                     morning.floatValue = 6.5f;
+                if (recovery != null)
+                    recovery.floatValue = 12f;
 
                 so.ApplyModifiedPropertiesWithoutUndo();
                 EditorUtility.SetDirty(citizen);
