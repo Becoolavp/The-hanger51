@@ -67,6 +67,16 @@ namespace Hanger51.World
             RefreshPresentation(true);
         }
 
+        public void RestoreHealthyOperationalState()
+        {
+            fuelFraction = Mathf.Max(fuelFraction,.82f);
+            generatorHealth = Mathf.Max(generatorHealth,.96f);
+            coolantIntegrity = Mathf.Max(coolantIntegrity,.96f);
+            operatorShutdown = false;
+            lastGameMinute = -1d;
+            RefreshPresentation(true);
+        }
+
         public void SetGridLoad(float megawatts)
         {
             gridLoadMegawatts = Mathf.Max(0f, megawatts);
