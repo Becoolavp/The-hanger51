@@ -39,7 +39,21 @@ namespace Hanger51.World
             nextRefresh = Time.unscaledTime + refreshSeconds;
 
             if (!powerPlant)
-                powerPlant = FindFirstObjectByType<H51PowerPlantController>();
+                powerPlant = FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+
+            RefreshConsumers();
+            RefreshGrid();
+        }
+
+        public void RestoreAndRefreshGrid()
+        {
+            if (!powerPlant)
+                powerPlant = FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+
+            if (powerPlant)
+                powerPlant.RestoreHealthyOperationalState();
 
             RefreshConsumers();
             RefreshGrid();
