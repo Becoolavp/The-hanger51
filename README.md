@@ -263,6 +263,51 @@ Runtime files changed:
 
 Do not mark this pass verified until Step 159 passes and a Development Build confirms: lamp bulbs themselves visibly glow at night, non-essential citizens route home after 9:30 PM, the sky contains stars instead of a flat black background, and the moon is visibly rendered above the horizon during its nighttime arc.
 
+### Smooth twilight sky blending and overnight citizen recovery — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The next Development Build visually confirmed that the ambientCG night sky is working and looks substantially better than the previous black sky. It also exposed two follow-up issues:
+
+- The sky still transitioned too abruptly because `H51DayNightCycle` was swapping between the normal day skybox and the dedicated night sky once a threshold was crossed.
+- At roughly 4:40-5:00 AM on Saturday, two citizens were seen standing inside the regional hospital while one reported an at-home activity. This was traced to citizen update ordering: an already-active activity could keep running before the routine scheduler got a chance to react to curfew/shift changes. A genuinely stalled NavMesh route could also leave a citizen away from home overnight.
+
+The existing Step 158/159 workflow has been strengthened rather than adding another duplicate numbered pass.
+
+Sky changes:
+
+- Added `Assets/_Project/Shaders/H51BlendedDayNightSky.shader`.
+- The preferred ambientCG Night Sky HDRI 001 panorama is now sampled by a **single blended day/night skybox material** rather than being swapped in abruptly.
+- The same shader generates the daytime zenith/horizon gradient, a twilight color band, and a sun disc.
+- `H51DayNightCycle` drives a continuous `_NightBlend` value from the existing daylight/night factors, allowing stars/HDRI detail to fade in through dusk and fade back out through dawn.
+- If an older sky material is encountered, the old threshold-switch behavior remains as a compatibility fallback.
+- Step 159 now verifies that `H51_NightSky.mat` uses `Hanger51/Skybox/Blended Day Night` and exposes the `_NightBlend` control.
+
+Citizen changes:
+
+- `H51CitizenBrain` now treats doctor, physician, surgeon, nurse, hospital, and medical occupations as essential rotating-shift roles in addition to the existing emergency/power roles.
+- A curfew or shift change can interrupt an existing activity immediately when that activity belongs to the wrong destination. A citizen can no longer remain at a hospital/leisure activity solely because the activity timer has not expired yet.
+- Non-essential citizens still use the 9:30 PM-6:30 AM hard home period.
+- Off-shift essential workers still route home under the existing overnight-home rule.
+- Overnight citizens track actual NavMesh movement toward home. If they remain away from home and make essentially no progress for about 12 real seconds, the system samples the home NavMesh and recovers them there rather than leaving them stranded indefinitely.
+- The dialogue state therefore stays aligned with the citizen's actual scheduled destination instead of saying an NPC is "at home" while a stale hospital activity remains active.
+- Step 158 explicitly serializes the 12-second overnight recovery window onto existing citizen brains, and Step 159 validates it.
+
+Important files:
+
+- `Assets/_Project/Shaders/H51BlendedDayNightSky.shader`
+- `Assets/_Project/Scripts/World/H51DayNightCycle.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenBrain.cs`
+- `Assets/_Project/Editor/Hanger51NightImmersionAndCitizenCurfewSetup.cs`
+
+Re-run:
+
+`Hanger 51 -> World -> Current -> 158 - Install Starry Night Sky Lamp Glow And Citizen Curfew`
+
+then:
+
+`Hanger 51 -> World -> Current -> 159 - Validate Starry Night Sky Lamp Glow And Citizen Curfew`
+
+Do not mark this refinement fully verified until a Development Build confirms a gradual star-sky fade across dusk/dawn and verifies that overnight civilians are actually at their homes while legitimate on-shift hospital staff remain at the hospital.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
