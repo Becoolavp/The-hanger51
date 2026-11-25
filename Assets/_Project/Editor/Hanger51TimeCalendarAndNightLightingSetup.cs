@@ -83,6 +83,15 @@ namespace Hanger51.EditorTools
                 UnityEngine.Object.FindFirstObjectByType<H51PowerPlantController>(
                     FindObjectsInactive.Include);
 
+            if (grid && plant)
+            {
+                plant.RestoreHealthyOperationalState();
+                grid.Configure(plant);
+                grid.RestoreAndRefreshGrid();
+                EditorUtility.SetDirty(plant);
+                EditorUtility.SetDirty(grid);
+            }
+
             EnsureFolder(MaterialFolder);
             Material poleMaterial = CreateMaterial(
                 PoleMaterialPath,
@@ -335,12 +344,12 @@ namespace Hanger51.EditorTools
                     "Town Street Lamp " + (count + 1),
                     position,
                     5.4f,
-                    28f,
-                    3.2f,
+                    45f,
+                    12f,
                     new Color(1f,.78f,.43f),
                     grid,
                     .0018f,
-                    520f,
+                    800f,
                     poleMaterial,
                     lampMaterial);
                 selected.Add(node);
@@ -426,12 +435,12 @@ namespace Hanger51.EditorTools
                     "Hanger 51 Apron Mast " + (i + 1),
                     position,
                     8.5f,
-                    42f,
-                    4.5f,
+                    65f,
+                    16f,
                     new Color(.76f,.88f,1f),
                     grid,
                     .006f,
-                    950f,
+                    1200f,
                     poleMaterial,
                     lampMaterial);
             }
@@ -466,7 +475,7 @@ namespace Hanger51.EditorTools
             for (int i=0;i<lenses.Length;i++)
             {
                 Transform lens = lenses[i].transform;
-                lens.localScale = Vector3.one * .28f;
+                lens.localScale = Vector3.one * .42f;
                 Transform existing = lens.Find("H51 Runtime Runway Glow");
                 Light light;
                 if (existing)
@@ -481,8 +490,8 @@ namespace Hanger51.EditorTools
                 }
 
                 light.type = LightType.Point;
-                light.range = 34f;
-                light.intensity = 4.6f;
+                light.range = 48f;
+                light.intensity = 10f;
                 light.color = new Color(.72f,.88f,1f);
                 light.shadows = LightShadows.None;
                 light.enabled = false;
@@ -494,7 +503,7 @@ namespace Hanger51.EditorTools
             if (!controller)
                 controller = Undo.AddComponent<H51RunwayLightingController>(runway);
             controller.Configure(fixtures,realtime.ToArray(),grid,clock);
-            controller.ConfigureFlightVisibility(1800f,18f,34f,4.6f);
+            controller.ConfigureFlightVisibility(2200f,24f,48f,10f);
             controller.SetMode(H51RunwayLightMode.Auto);
 
             fixtureCount = fixtures.Length;
@@ -717,7 +726,7 @@ namespace Hanger51.EditorTools
             lens.transform.SetParent(root,false);
             lens.transform.localPosition = Vector3.up * height;
             lens.transform.localScale =
-                Vector3.one * (height >= 7f ? .58f : .44f);
+                Vector3.one * (height >= 7f ? .80f : .70f);
             Renderer lensRenderer = lens.GetComponent<Renderer>();
             if (lensRenderer) lensRenderer.sharedMaterial = lampMaterial;
             Collider lensCollider = lens.GetComponent<Collider>();
@@ -741,7 +750,7 @@ namespace Hanger51.EditorTools
                 color);
             schedule.ConfigureFlightVisibility(
                 realtimeDistance,
-                height >= 7f ? 13f : 11f,
+                height >= 7f ? 22f : 20f,
                 range,
                 intensity);
         }
@@ -761,7 +770,7 @@ namespace Hanger51.EditorTools
             Undo.RegisterCreatedObjectUndo(lens,"Create building night light");
             lens.name = "Exterior Lamp Lens";
             lens.transform.SetParent(root,false);
-            lens.transform.localScale = Vector3.one * .34f;
+            lens.transform.localScale = Vector3.one * .48f;
             Renderer renderer = lens.GetComponent<Renderer>();
             if (renderer) renderer.sharedMaterial = lampMaterial;
             Collider collider = lens.GetComponent<Collider>();
@@ -769,8 +778,8 @@ namespace Hanger51.EditorTools
 
             Light light = Undo.AddComponent<Light>(lens);
             light.type = LightType.Point;
-            light.range = 16f;
-            light.intensity = 1.8f;
+            light.range = 28f;
+            light.intensity = 7f;
             light.color = new Color(1f,.76f,.40f);
             light.shadows = LightShadows.None;
             light.enabled = false;
@@ -781,13 +790,13 @@ namespace Hanger51.EditorTools
                 renderer ? new[] { renderer } : Array.Empty<Renderer>(),
                 grid,
                 demand,
-                300f,
+                500f,
                 light.color);
             schedule.ConfigureFlightVisibility(
-                300f,
-                10f,
+                500f,
                 16f,
-                1.8f);
+                28f,
+                7f);
         }
 
         static Transform BuildMoonVisual(Transform parent)
