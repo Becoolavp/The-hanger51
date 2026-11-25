@@ -76,6 +76,18 @@ namespace Hanger51.World
                 realtimeLight.shadows = LightShadows.None;
             }
 
+            for (int i=0;i<emissiveRenderers.Length;i++)
+            {
+                Renderer renderer = emissiveRenderers[i];
+                if (!renderer) continue;
+                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
+
+                Material material = renderer.sharedMaterial;
+                if (material && material.HasProperty("_EmissionColor"))
+                    material.EnableKeyword("_EMISSION");
+            }
+
             Refresh(true);
         }
 
