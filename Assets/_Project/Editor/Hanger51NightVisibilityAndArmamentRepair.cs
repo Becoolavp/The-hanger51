@@ -44,6 +44,12 @@ namespace Hanger51.EditorTools
             H51DayNightCycle cycle =
                 UnityEngine.Object.FindFirstObjectByType<H51DayNightCycle>(
                     FindObjectsInactive.Include);
+            H51PowerPlantController plant =
+                UnityEngine.Object.FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+            H51UtilityGridController grid =
+                UnityEngine.Object.FindFirstObjectByType<H51UtilityGridController>(
+                    FindObjectsInactive.Include);
 
             if (!world || !runway || !clock || !grid || !cycle)
             {
@@ -174,6 +180,20 @@ namespace Hanger51.EditorTools
             Renderer moonDisc =
                 moon ? moon.GetComponentInChildren<Renderer>(true) : null;
 
+            if (!plant || !plant.IsOnline)
+            {
+                Debug.LogError(
+                    "Step 157 failed: the saved regional power plant is not in a healthy online state.");
+                passed = false;
+            }
+
+            if (!grid)
+            {
+                Debug.LogError(
+                    "Step 157 failed: the regional utility-grid controller is missing.");
+                passed = false;
+            }
+
             P51WingArmamentSystem[] systems =
                 UnityEngine.Object.FindObjectsByType<P51WingArmamentSystem>(
                     FindObjectsInactive.Include,
@@ -185,9 +205,28 @@ namespace Hanger51.EditorTools
 
             int equippedStations = 0;
             int systemsWithSixVisuals = 0;
+            int systemsWithServiceLift = 0;
             for (int s=0;s<systems.Length;s++)
             {
                 P51WingArmamentSystem system = systems[s];
+
+                SerializedObject serializedSystem =
+                    new SerializedObject(system);
+                SerializedProperty bayLift =
+                    serializedSystem.FindProperty("openBayPresentationLift");
+                SerializedProperty gunLift =
+                    serializedSystem.FindProperty("openGunPresentationLift");
+                SerializedProperty ammoLift =
+                    serializedSystem.FindProperty("openAmmoPresentationLift");
+                if (bayLift != null &&
+                    gunLift != null &&
+                    ammoLift != null &&
+                    bayLift.floatValue >= .12f &&
+                    gunLift.floatValue >= .06f &&
+                    ammoLift.floatValue >= .04f)
+                {
+                    systemsWithServiceLift++;
+                }
 
                 int stationEquipped = 0;
                 for (int i=0;i<6;i++)
@@ -248,12 +287,14 @@ namespace Hanger51.EditorTools
             }
 
             if (systems.Length == 0 ||
-                systemsWithSixVisuals != systems.Length)
+                systemsWithSixVisuals != systems.Length ||
+                systemsWithServiceLift != systems.Length)
             {
                 Debug.LogError(
-                    "Step 157 failed: one or more P-51 armament systems are not fully equipped/bound. Systems=" +
+                    "Step 157 failed: one or more P-51 armament systems are not fully equipped/bound or lack the open-bay visibility lift. Systems=" +
                     systems.Length +
                     ", fully ready=" + systemsWithSixVisuals +
+                    ", service-lift ready=" + systemsWithServiceLift +
                     ", equipped stations=" + equippedStations + ".");
                 passed = false;
             }
@@ -266,8 +307,9 @@ namespace Hanger51.EditorTools
                     ", airport/apron lights=" + airportLights +
                     ", runway lenses=" + runwayLenses.Length +
                     ", runway real lights=" + runwayRealtime.Length +
-                    ", moon visual=ready, runway label orientation=ready, P-51 armament systems=" +
+                    ", moon visual=ready, runway label orientation=ready, power plant=online, P-51 armament systems=" +
                     systems.Length +
+                    ", service-lift ready=" + systemsWithServiceLift +
                     ", fully equipped stations=" + equippedStations + ".");
             }
         }
