@@ -8,6 +8,7 @@ namespace Hanger51.World
     {
         [SerializeField] H51RunwayLightingController controller;
         [SerializeField] TextMesh statusLabel;
+        [SerializeField, Min(2f)] float maxLabelViewDistance = 10f;
 
         Transform viewer;
 
@@ -86,18 +87,73 @@ namespace Hanger51.World
                 return;
             }
 
+            Vector3 labelPosition = statusLabel.transform.position;
+            Vector3 toLabel = labelPosition - viewer.position;
+            float distance = toLabel.magnitude;
+
+            bool closeEnough =
+                distance <= Mathf.Max(2f,maxLabelViewDistance);
+
             Vector3 toViewer = viewer.position - transform.position;
             toViewer.y = 0f;
-
-            // The readable cabinet face is local -Z and is mounted toward the
-            // airport interior. Hide the TextMesh completely when viewed through
-            // the wall from the exterior so it cannot appear mirrored/through-wall.
             bool viewerOnReadableSide =
                 toViewer.sqrMagnitude < .01f ||
-                Vector3.Dot(toViewer.normalized,-transform.forward) > .05f;
+                Vector3.Dot(
+                    toViewer.normalized,
+                    -transform.forward) > .05f;
 
-            if (statusLabel.gameObject.activeSelf != viewerOnReadableSide)
-                statusLabel.gameObject.SetActive(viewerOnReadableSide);
+            bool clearLineOfSight =
+                closeEnough &&
+                HasClearLineOfSight(
+                    viewer.position,
+                    labelPosition,
+                    distance);
+
+            bool visible =
+                closeEnough &&
+                viewerOnReadableSide &&
+                clearLineOfSight;
+
+            if (statusLabel.gameObject.activeSelf != visible)
+                statusLabel.gameObject.SetActive(visible);
+        }
+
+        bool HasClearLineOfSight(
+            Vector3 origin,
+            Vector3 target,
+            float targetDistance)
+        {
+            Vector3 direction = target - origin;
+            if (direction.sqrMagnitude < .0001f)
+                return true;
+
+            direction.Normalize();
+            RaycastHit[] hits = Physics.RaycastAll(
+                origin,
+                direction,
+                targetDistance,
+                ~0,
+                QueryTriggerInteraction.Ignore);
+
+            for (int i=0;i<hits.Length;i++)
+            {
+                Collider hit = hits[i].collider;
+                if (!hit) continue;
+
+                Transform hitTransform = hit.transform;
+                if (hitTransform.IsChildOf(transform))
+                    continue;
+                if (viewer &&
+                    (hitTransform == viewer ||
+                     hitTransform.IsChildOf(viewer)))
+                    continue;
+
+                if (hits[i].distance <
+                    targetDistance - .05f)
+                    return false;
+            }
+
+            return true;
         }
 
         void RefreshLabel()
