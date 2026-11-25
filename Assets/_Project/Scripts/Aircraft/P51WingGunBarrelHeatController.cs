@@ -90,15 +90,44 @@ namespace Hanger51.Aircraft
             for (int stationIndex = 0; stationIndex < GunCount; stationIndex++)
             {
                 int currentAmmo = system.GetAmmoRemaining(stationIndex);
-                int roundsFired = Mathf.Max(0, previousAmmo[stationIndex] - currentAmmo);
+
+                // Ammo removal used to look identical to a giant firing burst:
+                // a full box could jump from ~200 rounds to 0 in one frame, which
+                // this delta-based heat model interpreted as 200 rounds fired.
+                // Only treat a downward ammo delta as firing while the ammunition
+                // box is still installed at that station. Service/removal changes
+                // simply reset the baseline and allow any real barrel heat to cool.
+                if (!system.IsAmmoInstalled(stationIndex))
+                {
+                    previousAmmo[stationIndex] = currentAmmo;
+                    heat[stationIndex] =
+                        Mathf.MoveTowards(
+                            heat[stationIndex],
+                            0f,
+                            cooling);
+                    ApplyHeat(stationIndex);
+                    continue;
+                }
+
+                int roundsFired =
+                    Mathf.Max(
+                        0,
+                        previousAmmo[stationIndex] - currentAmmo);
+
                 if (roundsFired > 0)
                 {
-                    heat[stationIndex] = Mathf.Clamp01(
-                        heat[stationIndex] + roundsFired * Mathf.Max(0.01f, heatPerShot));
+                    heat[stationIndex] =
+                        Mathf.Clamp01(
+                            heat[stationIndex] +
+                            roundsFired * Mathf.Max(0.01f, heatPerShot));
                 }
                 else
                 {
-                    heat[stationIndex] = Mathf.MoveTowards(heat[stationIndex], 0f, cooling);
+                    heat[stationIndex] =
+                        Mathf.MoveTowards(
+                            heat[stationIndex],
+                            0f,
+                            cooling);
                 }
 
                 previousAmmo[stationIndex] = currentAmmo;
