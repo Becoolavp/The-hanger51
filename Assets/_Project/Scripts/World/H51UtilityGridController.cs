@@ -36,6 +36,10 @@ namespace Hanger51.World
 
         void Start()
         {
+            if (!powerPlant)
+                powerPlant = FindFirstObjectByType<H51PowerPlantController>(
+                    FindObjectsInactive.Include);
+
             RefreshConsumers();
             RefreshGrid();
         }
