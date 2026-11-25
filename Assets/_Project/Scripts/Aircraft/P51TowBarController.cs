@@ -66,6 +66,8 @@ namespace Hanger51.Aircraft
         {
             get
             {
+                if (!attachedToTailwheel)
+                    ResolveNearestAircraft();
                 string controlText = playerHolding
                     ? "E: release tow bar"
                     : "E: grab tow bar handle";
@@ -435,6 +437,9 @@ namespace Hanger51.Aircraft
 
         private bool IsTowHeadNearTailwheel()
         {
+            if (!attachedToTailwheel)
+                ResolveNearestAircraft();
+
             return towHead != null
                 && tailwheelAttachPoint != null
                 && Vector3.Distance(towHead.position, tailwheelAttachPoint.position)
@@ -521,23 +526,85 @@ namespace Hanger51.Aircraft
 
         private void ResolveReferences()
         {
-            if (flightController == null)
+            if (!attachedToTailwheel)
             {
-                flightController = FindFirstObjectByType<P51FlightController>();
+                ResolveNearestAircraft();
             }
-            if (landingGear == null && flightController != null)
+            else
             {
-                landingGear = flightController.GetComponent<P51RaycastLandingGear>();
+                if (landingGear == null && flightController != null)
+                    landingGear = flightController.GetComponent<P51RaycastLandingGear>();
+                if (aircraftBody == null && flightController != null)
+                    aircraftBody = flightController.GetComponent<Rigidbody>();
+                if (tailwheelAttachPoint == null && landingGear != null)
+                    tailwheelAttachPoint = landingGear.TailwheelAnchor;
             }
-            if (aircraftBody == null && flightController != null)
-            {
-                aircraftBody = flightController.GetComponent<Rigidbody>();
-            }
-            if (tailwheelAttachPoint == null && landingGear != null)
-            {
-                tailwheelAttachPoint = landingGear.TailwheelAnchor;
-            }
+
             ResolvePlayer();
+        }
+
+        private void ResolveNearestAircraft()
+        {
+            P51FlightController[] aircraft =
+                FindObjectsByType<P51FlightController>(
+                    FindObjectsInactive.Exclude,
+                    FindObjectsSortMode.None);
+
+            Vector3 referencePosition =
+                towHead != null
+                    ? towHead.position
+                    : transform.position;
+
+            P51FlightController bestFlight = null;
+            P51RaycastLandingGear bestGear = null;
+            Rigidbody bestBody = null;
+            Transform bestTailwheel = null;
+            float bestDistanceSqr = float.PositiveInfinity;
+
+            for (int index = 0; index < aircraft.Length; index++)
+            {
+                P51FlightController candidate = aircraft[index];
+                if (candidate == null || !candidate.gameObject.activeInHierarchy)
+                    continue;
+
+                P51RaycastLandingGear candidateGear =
+                    candidate.GetComponent<P51RaycastLandingGear>();
+                Rigidbody candidateBody =
+                    candidate.GetComponent<Rigidbody>();
+                Transform candidateTailwheel =
+                    candidateGear != null
+                        ? candidateGear.TailwheelAnchor
+                        : null;
+
+                if (candidateGear == null ||
+                    candidateBody == null ||
+                    candidateTailwheel == null)
+                    continue;
+
+                float distanceSqr =
+                    (candidateTailwheel.position - referencePosition)
+                        .sqrMagnitude;
+                if (distanceSqr >= bestDistanceSqr)
+                    continue;
+
+                bestDistanceSqr = distanceSqr;
+                bestFlight = candidate;
+                bestGear = candidateGear;
+                bestBody = candidateBody;
+                bestTailwheel = candidateTailwheel;
+            }
+
+            if (bestFlight == null)
+                return;
+
+            bool changed = flightController != bestFlight;
+            flightController = bestFlight;
+            landingGear = bestGear;
+            aircraftBody = bestBody;
+            tailwheelAttachPoint = bestTailwheel;
+
+            if (changed)
+                CacheGeometry();
         }
 
         private void ResolvePlayer()
