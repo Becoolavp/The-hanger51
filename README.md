@@ -185,7 +185,31 @@ Important files:
 - `Assets/_Project/Scripts/Aircraft/P51WingArmamentSystem.cs`
 - `Assets/_Project/Scripts/Aircraft/P51WingArmamentBayPersistence.cs`
 
-Do not mark this pass verified until Step 157 passes and a Development Build confirms: runway edges are clearly visible at night from the P-51, road/house lighting is visible when flying over populated areas, the visible moon crosses the night sky, the runway-control text is readable only from inside the airport wall, and opening either wing armament panel reveals all three installed guns and three adjacent ammo boxes for that wing.
+Development-build visual retest on 2026-11-24 found that this pass was **not yet visually verified**:
+
+- At about 10:19 PM, the town was dark and the road/house lamps were not visibly illuminating the scene from the P-51.
+- Opening the right wing armament panel still showed the intact wing surface even though the interaction prompt reported an installed gun with ammunition. This proved the authoritative armament state/service collider was correct but the installed visual presentation was still occluded.
+- The underlying causes addressed in the next correction were:
+  - exterior lights still depended on a grid state that could remain false/stale if the saved power plant was shut down or the grid had not yet rebound/refreshed;
+  - the point-light output was still too weak for flight-altitude viewing;
+  - the P-51 wing is not physically cut open, so the bay/interior visuals could remain underneath the intact wing skin even while the access panel was raised.
+
+The same Step 156/157 repair path has now been strengthened rather than adding another duplicate setup pass:
+
+- `H51PowerPlantController.RestoreHealthyOperationalState()` restores a healthy saved generating-station state for the current development world.
+- Step 156 rebinds the utility grid to that plant and calls `RestoreAndRefreshGrid()`.
+- `H51UtilityGridController.PowerAvailable` lets exterior/runway lights see healthy generation immediately instead of waiting on a stale `GridOnline` flag, while still going dark for a genuinely offline/insufficient plant.
+- Grid startup now resolves the plant before its first refresh.
+- Street lamps are now tuned to roughly 800 m activation distance, 45 m light range, 12 intensity, larger visible lenses, and much stronger emission.
+- House/building exterior lights are now tuned to roughly 500 m activation distance, 28 m range, 7 intensity, and larger emissive lenses.
+- Airport apron lights and runway lights receive similarly stronger flight-relevant settings; every runway lens retains a real no-shadow light.
+- `P51WingArmamentSystem` now captures the closed bay/gun/ammo poses and, while a wing panel opens, raises the entire armament-bay presentation about 0.14 m above the uncut wing skin, then additionally lifts the gun and ammo visuals slightly for service visibility.
+- Installed gun/ammo child renderers are explicitly re-enabled and `forceRenderingOff` is cleared.
+- When the panel closes, the bay presentation returns to its original contained position, preserving the normal closed-wing appearance.
+- Step 156 explicitly serializes these lift values onto existing P-51 armament systems.
+- Step 157 now verifies the saved power plant is healthy and each P-51 armament system has the new service-visibility lift values in addition to the six installed guns/ammo boxes.
+
+Do not mark this pass verified until the strengthened Step 157 passes and a Development Build confirms: runway edges are clearly visible at night from the P-51, road/house lighting is visible when flying over populated areas, the visible moon crosses the night sky, the runway-control text is readable only from inside the airport wall, and opening either wing armament panel reveals all three installed guns and three adjacent ammo boxes for that wing.
 
 ### Wheel-install diagnostics
 
