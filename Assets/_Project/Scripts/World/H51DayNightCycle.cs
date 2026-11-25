@@ -230,7 +230,10 @@ namespace Hanger51.World
                 ? camera.transform.position
                 : transform.position;
 
-            Vector3 direction = moon.transform.forward.normalized;
+            // A directional light's forward vector is the direction its rays
+            // travel toward the world. The visible celestial body belongs on the
+            // opposite side of the sky, where those rays originate.
+            Vector3 direction = -moon.transform.forward.normalized;
             moonVisual.position =
                 origin + direction * Mathf.Max(250f,moonVisualDistance);
             moonVisual.localScale =
