@@ -696,9 +696,9 @@ namespace Hanger51.EditorTools
         static string ToAssetPath(string absolutePath)
         {
             string normalized =
-                absolutePath.Replace('\','/');
+                absolutePath.Replace('\\','/');
             string assets =
-                Application.dataPath.Replace('\','/');
+                Application.dataPath.Replace('\\','/');
 
             if (!normalized.StartsWith(
                     assets,
