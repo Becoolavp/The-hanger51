@@ -16,7 +16,7 @@ namespace Hanger51.World
         [SerializeField, Min(5f)] float moonVisualDiameter = 48f;
         [SerializeField] Material nightSkybox;
         [SerializeField, Range(.2f,.95f)] float nightSkySwitchFactor = .58f;
-        [SerializeField, Range(.05f,2f)] float nightSkyExposure = .72f;
+        [SerializeField, Range(.05f,2f)] float dedicatedNightSkyExposure = .72f;
 
         [Header("Solar Timing")]
         [SerializeField, Range(0f,12f)] float baseSunriseHour = 6f;
@@ -235,7 +235,7 @@ namespace Hanger51.World
             if (sky && sky.HasProperty("_Exposure"))
             {
                 float exposure = useNightSky
-                    ? nightSkyExposure
+                    ? dedicatedNightSkyExposure
                     : Mathf.Lerp(
                         nightSkyExposure,
                         daySkyExposure,
@@ -327,7 +327,9 @@ namespace Hanger51.World
             moonVisualDistance = Mathf.Max(100f,moonVisualDistance);
             moonVisualDiameter = Mathf.Max(5f,moonVisualDiameter);
             nightSkySwitchFactor = Mathf.Clamp(nightSkySwitchFactor,.2f,.95f);
-            nightSkyExposure = Mathf.Clamp(nightSkyExposure,.05f,2f);
+            dedicatedNightSkyExposure =
+                Mathf.Clamp(dedicatedNightSkyExposure,.05f,2f);
+            nightSkyExposure = Mathf.Max(.01f,nightSkyExposure);
         }
     }
 }
