@@ -599,6 +599,19 @@ namespace Hanger51.EditorTools
             {
                 P51WingArmamentSystem system = systems[s];
 
+                SerializedObject serializedSystem =
+                    new SerializedObject(system);
+                SerializedProperty bayLift =
+                    serializedSystem.FindProperty("openBayPresentationLift");
+                SerializedProperty gunLift =
+                    serializedSystem.FindProperty("openGunPresentationLift");
+                SerializedProperty ammoLift =
+                    serializedSystem.FindProperty("openAmmoPresentationLift");
+                if (bayLift != null) bayLift.floatValue = .14f;
+                if (gunLift != null) gunLift.floatValue = .08f;
+                if (ammoLift != null) ammoLift.floatValue = .06f;
+                serializedSystem.ApplyModifiedPropertiesWithoutUndo();
+
                 visualBindings +=
                     system.RepairVisualBindingsFromHierarchy(true);
 
