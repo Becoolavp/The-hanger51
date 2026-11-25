@@ -12,8 +12,11 @@ namespace Hanger51.World
         [SerializeField] Light sun;
         [SerializeField] Light moon;
         [SerializeField] Transform moonVisual;
-        [SerializeField, Min(250f)] float moonVisualDistance = 1800f;
-        [SerializeField, Min(5f)] float moonVisualDiameter = 95f;
+        [SerializeField, Min(100f)] float moonVisualDistance = 900f;
+        [SerializeField, Min(5f)] float moonVisualDiameter = 48f;
+        [SerializeField] Material nightSkybox;
+        [SerializeField, Range(.2f,.95f)] float nightSkySwitchFactor = .58f;
+        [SerializeField, Range(.05f,2f)] float nightSkyExposure = .72f;
 
         [Header("Solar Timing")]
         [SerializeField, Range(0f,12f)] float baseSunriseHour = 6f;
@@ -56,6 +59,14 @@ namespace Hanger51.World
             Resolve();
             ApplyCycle();
         }
+
+        public void ConfigureNightSky(Material material)
+        {
+            nightSkybox = material;
+            ApplyCycle();
+        }
+
+        public bool HasNightSky => nightSkybox;
 
         public void ConfigureMoonVisual(
             Transform visual,
@@ -209,12 +220,27 @@ namespace Hanger51.World
 
             ApplyMoonVisual();
 
-            Material sky = runtimeSky ? runtimeSky : RenderSettings.skybox;
+            Material daySky = runtimeSky ? runtimeSky : sourceSky;
+            bool useNightSky =
+                nightSkybox &&
+                nightFactor >= nightSkySwitchFactor;
+
+            Material sky = useNightSky
+                ? nightSkybox
+                : daySky;
+
+            if (sky && RenderSettings.skybox != sky)
+                RenderSettings.skybox = sky;
+
             if (sky && sky.HasProperty("_Exposure"))
             {
-                sky.SetFloat(
-                    "_Exposure",
-                    Mathf.Lerp(nightSkyExposure,daySkyExposure,daylightFactor));
+                float exposure = useNightSky
+                    ? nightSkyExposure
+                    : Mathf.Lerp(
+                        nightSkyExposure,
+                        daySkyExposure,
+                        daylightFactor);
+                sky.SetFloat("_Exposure",exposure);
             }
         }
 
@@ -234,10 +260,38 @@ namespace Hanger51.World
             // travel toward the world. The visible celestial body belongs on the
             // opposite side of the sky, where those rays originate.
             Vector3 direction = -moon.transform.forward.normalized;
+
+            float configuredDistance = Mathf.Max(100f,moonVisualDistance);
+            float actualDistance = configuredDistance;
+            if (camera)
+            {
+                // Keep the moon safely inside the active camera far clip plane.
+                // Preserve its apparent angular size when the camera's clip range
+                // forces the visual closer than the configured celestial distance.
+                float clipSafeDistance =
+                    Mathf.Max(75f,camera.farClipPlane * .62f);
+                actualDistance =
+                    Mathf.Min(configuredDistance,clipSafeDistance);
+            }
+
             moonVisual.position =
-                origin + direction * Mathf.Max(250f,moonVisualDistance);
+                origin + direction * actualDistance;
+
+            float apparentScale =
+                Mathf.Max(5f,moonVisualDiameter) *
+                (actualDistance / configuredDistance);
             moonVisual.localScale =
-                Vector3.one * Mathf.Max(5f,moonVisualDiameter);
+                Vector3.one * Mathf.Max(4f,apparentScale);
+
+            Renderer[] moonRenderers =
+                moonVisual.GetComponentsInChildren<Renderer>(true);
+            for (int i=0;i<moonRenderers.Length;i++)
+            {
+                Renderer renderer = moonRenderers[i];
+                if (!renderer) continue;
+                renderer.enabled = true;
+                renderer.forceRenderingOff = false;
+            }
 
             if (camera)
             {
@@ -247,7 +301,7 @@ namespace Hanger51.World
                         Vector3.up);
             }
 
-            bool aboveUsefulHorizon = direction.y > -.08f;
+            bool aboveUsefulHorizon = direction.y > -.05f;
             bool visible =
                 nightFactor > .08f &&
                 aboveUsefulHorizon;
@@ -270,8 +324,10 @@ namespace Hanger51.World
             twilightHours = Mathf.Clamp(twilightHours,.1f,2f);
             daySunIntensity = Mathf.Max(0f,daySunIntensity);
             moonIntensity = Mathf.Max(0f,moonIntensity);
-            moonVisualDistance = Mathf.Max(250f,moonVisualDistance);
+            moonVisualDistance = Mathf.Max(100f,moonVisualDistance);
             moonVisualDiameter = Mathf.Max(5f,moonVisualDiameter);
+            nightSkySwitchFactor = Mathf.Clamp(nightSkySwitchFactor,.2f,.95f);
+            nightSkyExposure = Mathf.Clamp(nightSkyExposure,.05f,2f);
         }
     }
 }
