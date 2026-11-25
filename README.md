@@ -219,6 +219,9 @@ Do not mark this pass verified until the strengthened Step 157 passes and a Deve
 
 ### Night-sky art, visibly lit lamp bulbs, and civilian overnight curfew — IMPLEMENTED / PENDING UNITY VALIDATION
 
+Compile note: the next pull of Step 158 exposed a cascade of parser errors near the path helpers in `Hanger51NightImmersionAndCitizenCurfewSetup.cs`. The root cause was two malformed backslash character literals in `ToAssetPath()`: the source contained `'\'` instead of the valid escaped C# backslash literal `'\\'`. Commit `fb482a80` fixes both lines. The entire Step 158 file was then rescanned for malformed backslash char literals and unmatched string quotes; none remain.
+
+
 Compile note: the first pull of the Step 158/159 night-immersion pass exposed `CS0102` because `H51DayNightCycle` already had the original `nightSkyExposure` field for dimming the normal daytime skybox at night, while the new dedicated HDRI/procedural night-sky path accidentally introduced a second field with the same name. Commit `d1529d2c` separates these concerns into `nightSkyExposure` (legacy/day-sky dimming) and `dedicatedNightSkyExposure` (the star-sky/HDRI material exposure).
 
 
