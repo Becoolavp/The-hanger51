@@ -132,6 +132,26 @@ namespace Hanger51.EditorTools
                     "Step 159 failed: no night sky material is configured on H51DayNightCycle.");
                 passed = false;
             }
+            else
+            {
+                Material configuredSky =
+                    AssetDatabase.LoadAssetAtPath<Material>(
+                        NightSkyMaterialPath);
+
+                bool smoothBlendReady =
+                    configuredSky &&
+                    configuredSky.shader &&
+                    configuredSky.shader.name ==
+                        "Hanger51/Skybox/Blended Day Night" &&
+                    configuredSky.HasProperty("_NightBlend");
+
+                if (!smoothBlendReady)
+                {
+                    Debug.LogError(
+                        "Step 159 failed: the dedicated night sky is not using the smooth blended day/night shader.");
+                    passed = false;
+                }
+            }
 
             if (!moon || !moonRenderer)
             {
@@ -458,11 +478,13 @@ namespace Hanger51.EditorTools
                     AssetDatabase.LoadAssetAtPath<Texture2D>(
                         importedTexturePath);
 
-            Shader shader = imported
-                ? Shader.Find("Skybox/Panoramic")
-                : Shader.Find(
-                    "Hanger51/Skybox/Procedural Night");
+            Shader shader =
+                Shader.Find(
+                    "Hanger51/Skybox/Blended Day Night");
 
+            if (!shader)
+                shader = Shader.Find(
+                    "Hanger51/Skybox/Procedural Night");
             if (!shader)
                 shader = Shader.Find("Skybox/Procedural");
 
@@ -481,26 +503,39 @@ namespace Hanger51.EditorTools
                 material.shader = shader;
             }
 
-            if (imported)
-            {
-                if (material.HasProperty("_MainTex"))
-                    material.SetTexture("_MainTex",imported);
-                if (material.HasProperty("_Tex"))
-                    material.SetTexture("_Tex",imported);
-                if (material.HasProperty("_Exposure"))
-                    material.SetFloat("_Exposure",.72f);
-                if (material.HasProperty("_Rotation"))
-                    material.SetFloat("_Rotation",155f);
-                if (material.HasProperty("_Tint"))
-                    material.SetColor(
-                        "_Tint",
-                        new Color(.70f,.77f,.92f,1f));
-            }
-            else
-            {
-                if (material.HasProperty("_Exposure"))
-                    material.SetFloat("_Exposure",.82f);
-            }
+            if (material.HasProperty("_NightTex"))
+                material.SetTexture("_NightTex",imported);
+
+            if (material.HasProperty("_HasNightTexture"))
+                material.SetFloat(
+                    "_HasNightTexture",
+                    imported ? 1f : 0f);
+
+            if (material.HasProperty("_NightBlend"))
+                material.SetFloat("_NightBlend",0f);
+            if (material.HasProperty("_DayExposure"))
+                material.SetFloat("_DayExposure",1f);
+            if (material.HasProperty("_NightExposure"))
+                material.SetFloat("_NightExposure",.72f);
+            if (material.HasProperty("_Rotation"))
+                material.SetFloat("_Rotation",155f);
+
+            if (material.HasProperty("_DayZenithColor"))
+                material.SetColor(
+                    "_DayZenithColor",
+                    new Color(.24f,.46f,.75f,1f));
+            if (material.HasProperty("_DayHorizonColor"))
+                material.SetColor(
+                    "_DayHorizonColor",
+                    new Color(.68f,.78f,.88f,1f));
+            if (material.HasProperty("_TwilightColor"))
+                material.SetColor(
+                    "_TwilightColor",
+                    new Color(.48f,.22f,.12f,1f));
+            if (material.HasProperty("_NightFallbackColor"))
+                material.SetColor(
+                    "_NightFallbackColor",
+                    new Color(.008f,.015f,.04f,1f));
 
             EditorUtility.SetDirty(material);
             return material;
