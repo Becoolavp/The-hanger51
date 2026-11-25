@@ -95,6 +95,8 @@ namespace Hanger51.Aircraft
 
         private void Awake()
         {
+            DisableLegacyStaticWingGunStubs();
+            DisableLegacyStaticWingGunStubs();
             ResolveReferences();
             EnsureArrays();
             RepairVisualBindingsFromHierarchy(false);
@@ -122,6 +124,37 @@ namespace Hanger51.Aircraft
             AnimatePanels();
             UpdateInstalledVisuals();
             HandlePilotFiring();
+        }
+
+        private void DisableLegacyStaticWingGunStubs()
+        {
+            string[] legacyNames =
+            {
+                "Left Wing Gun 1",
+                "Left Wing Gun 2",
+                "Left Wing Gun 3",
+                "Right Wing Gun 1",
+                "Right Wing Gun 2",
+                "Right Wing Gun 3"
+            };
+
+            Transform[] all =
+                GetComponentsInChildren<Transform>(true);
+            for (int i=0;i<all.Length;i++)
+            {
+                Transform candidate = all[i];
+                if (!candidate || candidate == transform)
+                    continue;
+
+                for (int n=0;n<legacyNames.Length;n++)
+                {
+                    if (candidate.name != legacyNames[n])
+                        continue;
+
+                    candidate.gameObject.SetActive(false);
+                    break;
+                }
+            }
         }
 
         public void Configure(
