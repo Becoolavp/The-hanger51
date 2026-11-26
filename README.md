@@ -365,10 +365,10 @@ Root cause and correction:
 - BoZo then performs a final `MergeTextures()` pass. Because the source outfits are already gone, the atlas is cleared but has nothing left to composite, producing the solid-black character textures seen in the player build.
 - Hanger 51 now forces `cleanAfterMerge = false` both in Step 162 and in `H51BoZoCitizenVisual`, so BoZo retains the modular source data until its full runtime load/texture-bake sequence is complete.
 - The BoZo Anime material's toon outline is disabled for Hanger 51 NPCs, and the runtime adapter also removes `_USEOUTLINE` / sets outline distance to zero after the character finishes loading. The extreme black face/head spikes were consistent with the outline pass exaggerating a malformed/skinned vertex, and Hanger 51 does not need the thick anime outline on world citizens.
-- Step 162 now explicitly adds `Hidden/TextureLayerer`, `Hidden/BoZo_Decal`, and `BoZo/BMAC_Toon` to Unity Graphics Settings -> Always Included Shaders so the runtime texture/decal/toon path cannot be stripped from a Development Build.
+- Step 162 explicitly adds the dynamically discovered runtime-bake shaders `Hidden/TextureLayerer` and `Hidden/BoZo_Decal` to Unity Graphics Settings -> Always Included Shaders. The Anime toon shader is **not** forced into that list because it has many variants; its normal Resources/material-package reference keeps it in the build without needlessly inflating build time/size.
 - The shader-retention code uses Unity 6's Graphics Settings asset through `GraphicsSettings.GetGraphicsSettings()` / serialized `m_AlwaysIncludedShaders`, rather than relying on older API assumptions.
 - `H51BoZoCitizenVisual` subscribes to BoZo's `OnCharacterLoaded` event and performs a post-load material repair: outline off, zero outline distance, sane brightness, and ambient lighting enabled.
-- Step 163 now fails if any citizen still has premature `cleanAfterMerge`, if the required runtime shaders are not retained, or if the source Anime outline is still enabled.
+- Step 163 now fails if any citizen still has premature `cleanAfterMerge`, if the hidden runtime-bake shaders are not retained / the Anime material no longer references `BoZo/BMAC_Toon`, or if the source Anime outline is still enabled.
 
 Re-run the same migration after pulling this fix:
 
