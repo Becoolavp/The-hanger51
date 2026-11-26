@@ -72,6 +72,8 @@ namespace Hanger51.NPCs
 
         void ConfigureBoZoRuntime()
         {
+            NormalizeV4OutfitAlpha();
+
             if (outfitSystem)
             {
                 outfitSystem.characterData = characterPreset;
@@ -95,6 +97,47 @@ namespace Hanger51.NPCs
                     AnimatorCullingMode.CullUpdateTransforms;
                 visualAnimator.updateMode =
                     AnimatorUpdateMode.Normal;
+            }
+        }
+
+        void NormalizeV4OutfitAlpha()
+        {
+            CharacterObject preset =
+                characterPreset
+                    ? characterPreset
+                    : (outfitSystem ? outfitSystem.characterData : null);
+
+            CharacterData data =
+                preset ? preset.GetCharacterData() : null;
+
+            if (data == null ||
+                data.versionID < 4 ||
+                data.outfitDatas == null)
+                return;
+
+            int repaired = 0;
+
+            for (int i=0;i<data.outfitDatas.Count;i++)
+            {
+                OutfitData item =
+                    data.outfitDatas[i];
+
+                if (item.alpha >= .999f)
+                    continue;
+
+                item.alpha = 1f;
+                data.outfitDatas[i] = item;
+                repaired++;
+            }
+
+            if (repaired > 0)
+            {
+                Debug.LogWarning(
+                    "Hanger 51 repaired " + repaired +
+                    " invalid BoZo v4 outfit alpha layer(s) on preset " +
+                    (preset ? preset.name : presetName) +
+                    ". This prevents the floating-black-head/body-loss regression from older Step 164 generated presets.",
+                    this);
             }
         }
 
