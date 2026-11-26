@@ -187,6 +187,8 @@ namespace Hanger51.NPCs
                 if (changed)
                     renderer.materials = materials;
             }
+        }
+
         void SanitizeVisualPhysics()
         {
             Collider[] colliders =
@@ -217,8 +219,6 @@ namespace Hanger51.NPCs
                 body.detectCollisions = false;
                 body.useGravity = false;
             }
-        }
-
         }
     }
 }
