@@ -356,6 +356,31 @@ Do not mark this pass verified until Step 161 passes and a Development Build con
 
 ### BoZo citizen visual migration — IMPLEMENTED / PENDING UNITY VALIDATION
 
+Development Build follow-up: the first BoZo migration rendered the new citizens as solid black silhouettes, and some citizens produced a huge black spike/wedge extending from the face/head.
+
+Root cause and correction:
+
+- Hanger 51 had configured BoZo with `cleanAfterMerge = true`.
+- In BoZo's own load sequence, `MergeCharacter()` runs before the final material/texture pass. With `cleanAfterMerge` enabled, the modular outfit sources are removed during that merge.
+- BoZo then performs a final `MergeTextures()` pass. Because the source outfits are already gone, the atlas is cleared but has nothing left to composite, producing the solid-black character textures seen in the player build.
+- Hanger 51 now forces `cleanAfterMerge = false` both in Step 162 and in `H51BoZoCitizenVisual`, so BoZo retains the modular source data until its full runtime load/texture-bake sequence is complete.
+- The BoZo Anime material's toon outline is disabled for Hanger 51 NPCs, and the runtime adapter also removes `_USEOUTLINE` / sets outline distance to zero after the character finishes loading. The extreme black face/head spikes were consistent with the outline pass exaggerating a malformed/skinned vertex, and Hanger 51 does not need the thick anime outline on world citizens.
+- Step 162 now explicitly adds `Hidden/TextureLayerer`, `Hidden/BoZo_Decal`, and `BoZo/BMAC_Toon` to Unity Graphics Settings -> Always Included Shaders so the runtime texture/decal/toon path cannot be stripped from a Development Build.
+- The shader-retention code uses Unity 6's Graphics Settings asset through `GraphicsSettings.GetGraphicsSettings()` / serialized `m_AlwaysIncludedShaders`, rather than relying on older API assumptions.
+- `H51BoZoCitizenVisual` subscribes to BoZo's `OnCharacterLoaded` event and performs a post-load material repair: outline off, zero outline distance, sane brightness, and ambient lighting enabled.
+- Step 163 now fails if any citizen still has premature `cleanAfterMerge`, if the required runtime shaders are not retained, or if the source Anime outline is still enabled.
+
+Re-run the same migration after pulling this fix:
+
+`Hanger 51 -> World -> Current -> 162 - Replace Citizen Bodies With BoZo Characters`
+
+then:
+
+`Hanger 51 -> World -> Current -> 163 - Validate BoZo Citizen Migration`
+
+A new Development Build must confirm that citizens render with their intended skin/hair/clothing colors and that no long black outline/spike geometry remains.
+
+
 The purchased **BoZo Stylized Modular Characters - Anime Pack** has been imported under:
 
 `Assets/BoZo_StylizedModularCharacters/`
