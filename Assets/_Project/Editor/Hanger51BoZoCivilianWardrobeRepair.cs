@@ -557,23 +557,20 @@ namespace Hanger51.EditorTools
                     seed);
 
             retained.Add(
-                MakeOutfit(
+                MakeWardrobeOutfit(
                     recipe.top,
                     recipe.topPrimary,
-                    recipe.topSecondary,
-                    Lighten(recipe.topPrimary,.16f)));
+                    recipe.topSecondary));
             retained.Add(
-                MakeOutfit(
+                MakeWardrobeOutfit(
                     recipe.bottom,
                     recipe.bottomPrimary,
-                    recipe.bottomSecondary,
-                    Darken(recipe.bottomPrimary,.18f)));
+                    recipe.bottomSecondary));
             retained.Add(
-                MakeOutfit(
+                MakeWardrobeOutfit(
                     recipe.feet,
                     recipe.feetPrimary,
-                    recipe.feetSecondary,
-                    Darken(recipe.feetPrimary,.22f)));
+                    recipe.feetSecondary));
 
             data.outfitDatas = retained;
 
@@ -911,25 +908,158 @@ namespace Hanger51.EditorTools
             };
         }
 
-        static OutfitData MakeOutfit(
+        static OutfitData MakeWardrobeOutfit(
             string path,
             Color primary,
-            Color secondary,
-            Color tertiary)
+            Color secondary)
+        {
+            Color metal = C(.42f,.44f,.46f);
+            Color dark = Darken(primary,.38f);
+            Color darker = Darken(primary,.58f);
+            Color light = Lighten(primary,.28f);
+            Color warmBrown = C(.22f,.12f,.07f);
+            Color white = C(.88f,.88f,.84f);
+            Color accent = secondary;
+
+            Color[] channels =
+                Enumerable.Repeat(Color.black,9).ToArray();
+
+            switch (path)
+            {
+                case "Top/Top_Overall":
+                    channels[0] = secondary;
+                    channels[1] = primary;
+                    channels[2] = metal;
+                    channels[3] = secondary;
+                    channels[4] = primary;
+                    break;
+
+                case "Top/Top_HardJacket":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = metal;
+                    channels[3] = secondary;
+                    channels[4] = Lighten(secondary,.12f);
+                    break;
+
+                case "Top/Top_ThickHenslay":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = secondary;
+                    break;
+
+                case "Top/Top_ShortSleeveDressShirt":
+                case "Top/Top_DressShirt":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    channels[2] = light;
+                    break;
+
+                case "Top/Top_ComfyCartagan":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    channels[2] = Lighten(primary,.20f);
+                    break;
+
+                case "Top/Top_FullSuit":
+                    channels[0] = primary;
+                    channels[1] = primary;
+                    channels[2] = metal;
+                    channels[3] = dark;
+                    channels[4] = white;
+                    channels[5] = accent;
+                    break;
+
+                case "Top/Top_SimpleSweater":
+                case "Top/Top_SimpleHoodie":
+                case "Top/Top_Tshirt":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    break;
+
+                case "Bottom/Bottom_SimpleKhakies":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = metal;
+                    break;
+
+                case "Bottom/Bottom_BeltedPants":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = metal;
+                    channels[3] = warmBrown;
+                    break;
+
+                case "Bottom/Bottom_TightDressPants":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = dark;
+                    channels[3] = primary;
+                    channels[4] = darker;
+                    channels[5] = metal;
+                    break;
+
+                case "Bottom/Bottom_LongSimpleSkirt":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    break;
+
+                case "Bottom/Bottom_SkinnyJeans":
+                    channels[0] = primary;
+                    channels[1] = dark;
+                    channels[2] = metal;
+                    break;
+
+                case "Feet/Feet_WorkBoots":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    channels[2] = darker;
+                    channels[3] = darker;
+                    break;
+
+                case "Feet/Feet_OfficeLoafer":
+                case "Feet/Feet_ClassyLoafers":
+                    channels[0] = primary;
+                    channels[1] = darker;
+                    channels[2] = secondary;
+                    break;
+
+                case "Feet/Feet_SimpleSneakers":
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    channels[2] = light;
+                    break;
+
+                case "Feet/Feet_BalletFlats":
+                    channels[0] = primary;
+                    channels[1] = darker;
+                    channels[2] = metal;
+                    break;
+
+                default:
+                    channels[0] = primary;
+                    channels[1] = secondary;
+                    channels[2] = light;
+                    break;
+            }
+
+            return MakeOutfit(
+                path,
+                channels);
+        }
+
+        static OutfitData MakeOutfit(
+            string path,
+            params Color[] suppliedColors)
         {
             List<Color> colors =
-                new List<Color>(9)
-                {
-                    primary,
-                    secondary,
-                    tertiary,
-                    Color.black,
-                    Color.black,
-                    Color.black,
-                    Color.white,
-                    Color.gray,
-                    Color.black
-                };
+                Enumerable.Repeat(Color.black,9).ToList();
+
+            if (suppliedColors != null)
+            {
+                for (int i=0;i<suppliedColors.Length && i<9;i++)
+                    colors[i] = suppliedColors[i];
+            }
 
             return new OutfitData
             {
@@ -943,7 +1073,7 @@ namespace Hanger51.EditorTools
                 patternColors = new List<Color>(),
                 patternScale = Vector4.zero,
                 partVisibility = Array.Empty<bool>(),
-                color = primary,
+                color = colors[0],
                 swatch = 0,
                 decalDatas = new List<DecalData>()
             };
