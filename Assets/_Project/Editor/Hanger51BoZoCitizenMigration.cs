@@ -498,10 +498,26 @@ namespace Hanger51.EditorTools
                 "BoZo/BMAC_Toon"
             };
 
-            List<Shader> retained =
-                GraphicsSettings.alwaysIncludedShaders
-                    .Where(s => s)
-                    .ToList();
+            UnityEngine.Object graphicsSettings =
+                GraphicsSettings.GetGraphicsSettings();
+            if (!graphicsSettings)
+            {
+                Debug.LogWarning(
+                    "Step 162 could not access Unity Graphics Settings to retain BoZo runtime shaders.");
+                return;
+            }
+
+            SerializedObject serialized =
+                new SerializedObject(graphicsSettings);
+            SerializedProperty alwaysIncluded =
+                serialized.FindProperty("m_AlwaysIncludedShaders");
+
+            if (alwaysIncluded == null || !alwaysIncluded.isArray)
+            {
+                Debug.LogWarning(
+                    "Step 162 could not find Unity's Always Included Shaders list.");
+                return;
+            }
 
             for (int i=0;i<requiredNames.Length;i++)
             {
@@ -515,22 +531,57 @@ namespace Hanger51.EditorTools
                     continue;
                 }
 
-                if (!retained.Contains(shader))
-                    retained.Add(shader);
+                bool found = false;
+                for (int index=0;index<alwaysIncluded.arraySize;index++)
+                {
+                    SerializedProperty element =
+                        alwaysIncluded.GetArrayElementAtIndex(index);
+                    if (element.objectReferenceValue == shader)
+                    {
+                        found = true;
+                        break;
+                    }
+                }
+
+                if (found)
+                    continue;
+
+                int newIndex = alwaysIncluded.arraySize;
+                alwaysIncluded.InsertArrayElementAtIndex(newIndex);
+                alwaysIncluded.GetArrayElementAtIndex(newIndex)
+                    .objectReferenceValue = shader;
             }
 
-            GraphicsSettings.alwaysIncludedShaders =
-                retained.ToArray();
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+            AssetDatabase.SaveAssets();
         }
 
         static bool BoZoShadersRetained()
         {
+            UnityEngine.Object graphicsSettings =
+                GraphicsSettings.GetGraphicsSettings();
+            if (!graphicsSettings)
+                return false;
+
+            SerializedObject serialized =
+                new SerializedObject(graphicsSettings);
+            SerializedProperty alwaysIncluded =
+                serialized.FindProperty("m_AlwaysIncludedShaders");
+
+            if (alwaysIncluded == null || !alwaysIncluded.isArray)
+                return false;
+
             HashSet<string> retained =
-                new HashSet<string>(
-                    GraphicsSettings.alwaysIncludedShaders
-                        .Where(s => s)
-                        .Select(s => s.name),
-                    StringComparer.Ordinal);
+                new HashSet<string>(StringComparer.Ordinal);
+
+            for (int index=0;index<alwaysIncluded.arraySize;index++)
+            {
+                Shader shader =
+                    alwaysIncluded.GetArrayElementAtIndex(index)
+                        .objectReferenceValue as Shader;
+                if (shader)
+                    retained.Add(shader.name);
+            }
 
             return
                 retained.Contains("Hidden/TextureLayerer") &&
