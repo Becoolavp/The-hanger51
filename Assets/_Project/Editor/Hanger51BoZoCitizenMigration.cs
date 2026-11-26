@@ -421,6 +421,7 @@ namespace Hanger51.EditorTools
                 {
                     Renderer renderer = renderers[r];
                     if (!renderer ||
+                        renderer.transform == visual ||
                         renderer.transform.IsChildOf(visual))
                         continue;
 
