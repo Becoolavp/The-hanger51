@@ -320,6 +320,9 @@ namespace Hanger51.EditorTools
             int missingFeet = 0;
             int fantasyParts = 0;
             int unsafePupil = 0;
+            int staleSaveVersion = 0;
+            int invalidOutfitAlpha = 0;
+            int missingOutfitResource = 0;
             int prematureClean = 0;
             int visualPhysics = 0;
 
@@ -362,6 +365,26 @@ namespace Hanger51.EditorTools
 
                 CharacterData data =
                     adapter.CharacterPreset.GetCharacterData();
+
+                if (data == null || data.versionID < 4)
+                    staleSaveVersion++;
+
+                if (data != null && data.outfitDatas != null)
+                {
+                    for (int d=0;d<data.outfitDatas.Count;d++)
+                    {
+                        OutfitData item =
+                            data.outfitDatas[d];
+
+                        if (item.alpha < .999f)
+                            invalidOutfitAlpha++;
+
+                        if (!string.IsNullOrWhiteSpace(item.outfit) &&
+                            !Resources.Load<Outfit>(item.outfit))
+                            missingOutfitResource++;
+                    }
+                }
+
                 List<string> paths =
                     data != null && data.outfitDatas != null
                         ? data.outfitDatas
@@ -415,13 +438,16 @@ namespace Hanger51.EditorTools
                 missingFeet == 0 &&
                 fantasyParts == 0 &&
                 unsafePupil == 0 &&
+                staleSaveVersion == 0 &&
+                invalidOutfitAlpha == 0 &&
+                missingOutfitResource == 0 &&
                 prematureClean == 0;
 
             if (ok)
             {
                 Debug.Log(
                     "Step 165 passed. Citizens=" + citizens.Length +
-                    ". All use generated Hanger 51 civilian presets with correct male/female bases, mandatory Top/Bottom/Feet clothing, human-only accessories/pupils, and safe BoZo texture-bake settings. Scene-time visual physics needing runtime neutralization=" +
+                    ". All use generated Hanger 51 civilian presets with correct male/female bases, mandatory Top/Bottom/Feet clothing, human-only accessories/pupils, BoZo v4 alpha=1 on every outfit layer, valid Resources paths, and safe texture-bake settings. Scene-time visual physics needing runtime neutralization=" +
                     visualPhysics + ".");
             }
             else
@@ -436,6 +462,9 @@ namespace Hanger51.EditorTools
                     ", missing Feet=" + missingFeet +
                     ", fantasy/demo parts=" + fantasyParts +
                     ", unsafe pupils=" + unsafePupil +
+                    ", stale save versions=" + staleSaveVersion +
+                    ", invalid outfit alpha layers=" + invalidOutfitAlpha +
+                    ", missing outfit Resources=" + missingOutfitResource +
                     ", premature cleanAfterMerge=" + prematureClean +
                     ", scene-time visual physics=" + visualPhysics + ".");
             }
@@ -496,6 +525,14 @@ namespace Hanger51.EditorTools
                 {
                     OutfitData item =
                         CloneOutfitData(data.outfitDatas[i]);
+
+                    // BoZo version 4 changed outfit alpha semantics. Its own
+                    // Update4 patch upgrades every legacy outfit to alpha=1.
+                    // Because Hanger 51 writes version 4 presets directly, we
+                    // must perform that normalization ourselves or the merged
+                    // body/clothing texture layers render black/invisible.
+                    item.alpha = 1f;
+
                     string category =
                         Category(item.outfit);
 
@@ -1065,7 +1102,7 @@ namespace Hanger51.EditorTools
             {
                 outfit = path,
                 colors = colors,
-                alpha = 0f,
+                alpha = 1f,
                 decal = string.Empty,
                 decalColors = new List<Color>(),
                 decalScale = Vector4.zero,
