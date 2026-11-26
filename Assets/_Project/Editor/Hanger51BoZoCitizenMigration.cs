@@ -508,8 +508,7 @@ namespace Hanger51.EditorTools
             string[] requiredNames =
             {
                 "Hidden/TextureLayerer",
-                "Hidden/BoZo_Decal",
-                "BoZo/BMAC_Toon"
+                "Hidden/BoZo_Decal"
             };
 
             UnityEngine.Object graphicsSettings =
@@ -597,10 +596,19 @@ namespace Hanger51.EditorTools
                     retained.Add(shader.name);
             }
 
+            Material animeMaterial =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    "Assets/BoZo_StylizedModularCharacters/Materials/BSMC_AnimeShader.mat");
+
+            bool animeShaderReferenced =
+                animeMaterial &&
+                animeMaterial.shader &&
+                animeMaterial.shader.name == "BoZo/BMAC_Toon";
+
             return
                 retained.Contains("Hidden/TextureLayerer") &&
                 retained.Contains("Hidden/BoZo_Decal") &&
-                retained.Contains("BoZo/BMAC_Toon");
+                animeShaderReferenced;
         }
 
         static void DisableBoZoNpcOutlineOnSourceMaterial()
