@@ -354,6 +354,81 @@ Important files:
 
 Do not mark this pass verified until Step 161 passes and a Development Build confirms that the runway-light sign cannot be seen through the wall, no old fixed gun cylinders remain outside the real serviceable M2 system, the obsolete radiator transition fairing is absent, and the tow bar can connect to a newly spawned P-51 rather than only the master aircraft.
 
+### BoZo citizen visual migration — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The purchased **BoZo Stylized Modular Characters - Anime Pack** has been imported under:
+
+`Assets/BoZo_StylizedModularCharacters/`
+
+The existing Hanger 51 NPC simulation is retained. This migration replaces only the visible citizen body/Animator presentation while preserving each citizen's existing:
+
+- `H51CitizenIdentity` / persistent citizen ID
+- display name and age
+- home/work assignments and occupation
+- `H51CitizenBrain` schedule/curfew/navigation behavior
+- NavMeshAgent and collision root
+- dialogue, memories, relationships, medical visits, vehicles, and emergency/civic logic
+
+A new migration/validation path was added:
+
+`Hanger 51 -> World -> Current -> 162 - Replace Citizen Bodies With BoZo Characters`
+
+`Hanger 51 -> World -> Current -> 163 - Validate BoZo Citizen Migration`
+
+Gender/presentation rules are intentionally strict:
+
+- Hanger 51 already has `H51CitizenPresentation.Unknown / Male / Female` on `H51CitizenIdentity`.
+- Existing citizens created before that field was populated are assigned a presentation once during Step 162 using the existing first-name set plus a deterministic persistent-seed fallback for uncommon names. The chosen value is then stored on the identity.
+- **Male identities only use the vetted male BoZo preset pool:** `Default_Boy`, `Jackal`, `Kenji`, `Zell`.
+- **Female identities only use the vetted female BoZo preset pool:** `Default_Girl`, `Glover`, `Hana`, `Jayda`.
+- These pools were classified from the imported preset data itself (body-shape values and sex-specific undergarment/body configuration), not merely from the preset names.
+- `H51BoZoCitizenVisual` includes a runtime presentation guard: if a stored identity presentation and configured visual ever disagree, the mismatched BoZo visual is disabled and an error is logged rather than silently cross-mixing the models.
+
+Animation integration:
+
+- BoZo's `BodyRig.fbx` is imported as a valid Unity Humanoid Avatar.
+- Hanger 51 generates separate male/female AnimatorControllers using BoZo's own looping `BMAC_M_Idle` / `BMAC_M_Walk` and `BMAC_F_Idle` / `BMAC_F_Walk` clips.
+- Both generated controllers retain the `Speed`, `Wave`, and `Interact` parameters expected by `H51CitizenBrain`; idle/walk movement is driven by the existing citizen NavMesh velocity.
+- Root motion remains disabled because Hanger 51 navigation remains authoritative.
+
+Step 162 performs the migration in-place:
+
+- removes an earlier `H51 BoZo Citizen Visual` child if the pass is rerun;
+- hides all legacy citizen body renderers and sets `forceRenderingOff` on them;
+- removes the legacy citizen Animator components so `H51CitizenBrain` finds the new BoZo Animator instead;
+- disables `H51CitizenVisualVariation` so the old material-property randomizer does not overwrite BoZo's authored skin/hair/outfit look;
+- instantiates `BSMC_CharacterBase.prefab` underneath the existing citizen simulation root;
+- deterministically selects one of four same-presentation presets using the persistent appearance seed;
+- configures BoZo `OutfitSystem` for OnStart loading, synchronous resource lookup, 512 texture size, and cleanup-after-merge for NPC memory/performance;
+- adds a Humanoid Animator using the imported BoZo body Avatar and the correct male/female Hanger 51 controller;
+- adds/configures `H51BoZoCitizenVisual` as the bridge/guard component.
+
+Generated controller location:
+
+`Assets/_Project/Characters/H51Citizens/BoZoGenerated/`
+
+Important files:
+
+- `Assets/_Project/Scripts/NPC/H51BoZoCitizenVisual.cs`
+- `Assets/_Project/Editor/Hanger51BoZoCitizenMigration.cs`
+- `Assets/BoZo_StylizedModularCharacters/Prefabs/BSMC_CharacterBase.prefab`
+- `Assets/BoZo_StylizedModularCharacters/Outfits/Common/Body/BodyRig.fbx`
+- `Assets/BoZo_StylizedModularCharacters/CustomCharacters/Resources/Anime/`
+
+Step 163 verifies that every scene citizen:
+
+- has a persisted Male or Female presentation (zero Unknown);
+- has exactly the Hanger 51 BoZo visual bridge/root;
+- has a BoZo `OutfitSystem`;
+- has a valid Human Avatar and generated runtime AnimatorController;
+- uses a preset from the correct male/female whitelist;
+- has no still-visible legacy body renderer outside the BoZo visual;
+- has the old `H51CitizenVisualVariation` disabled.
+
+Do not mark this migration verified until Step 163 passes and a Development Build confirms that male/female citizens load as the intended sex-specific BoZo characters, walk/idle correctly, remain grounded on the NavMesh, still talk/respond normally, and retain their previous names/jobs/homes/schedules.
+
+The first verified pass intentionally uses vetted preset appearances rather than occupation-specific BoZo wardrobes. After migration stability is confirmed, the next visual-quality pass can map BoZo clothing to occupations (farmer, nurse/doctor, mechanic, airport worker, utility worker, resident, etc.) without changing identity or simulation state.
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
@@ -511,6 +586,7 @@ Continue expanding the P-51 as a deeply serviceable aircraft while protecting cu
 - Continue the Car Mechanic Simulator-style replaceable-part/wear/condition architecture.
 - Keep live-spawn inheritance synchronized with the master aircraft.
 - Apply and validate World Steps 158/159 for the CC0/procedural starry night sky, visibly glowing lamp bulbs, clip-safe visible moon, and civilian overnight curfew.
+- Apply and validate World Steps 162/163 for the BoZo citizen body migration and strict male/female visual separation.
 - Apply and validate World Steps 160/161 for runway-sign occlusion, obsolete fixed-gun/radiator cleanup, and spawned-aircraft tow-bar targeting.
 - Continue regression testing World Steps 156/157 for runway visibility, runway-control readability, and restored wing-armament bay visuals.
 - Recheck Step 155 after the night/control repair if the runway-control placement is changed again.
