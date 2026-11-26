@@ -449,6 +449,18 @@ namespace Hanger51.EditorTools
                 AssetDatabase.LoadAssetAtPath<AnimatorController>(
                     FemaleControllerPath);
 
+            Material animeSourceMaterial =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    "Assets/BoZo_StylizedModularCharacters/Materials/BSMC_AnimeShader.mat");
+            bool npcOutlineDisabled =
+                animeSourceMaterial &&
+                (!animeSourceMaterial.HasProperty("_UseOutline") ||
+                 animeSourceMaterial.GetFloat("_UseOutline") < .5f) &&
+                !animeSourceMaterial.IsKeywordEnabled("_USEOUTLINE");
+
+            bool shadersRetained =
+                BoZoShadersRetained();
+
             bool ok =
                 citizens.Length > 0 &&
                 unknown == 0 &&
@@ -460,7 +472,8 @@ namespace Hanger51.EditorTools
                 legacyVariationEnabled == 0 &&
                 prematureCleanAfterMerge == 0 &&
                 controllersReady &&
-                BoZoShadersRetained();
+                shadersRetained &&
+                npcOutlineDisabled;
 
             if (ok)
             {
@@ -468,7 +481,7 @@ namespace Hanger51.EditorTools
                     "Step 163 passed. Citizens=" + citizens.Length +
                     ", male=" + male +
                     ", female=" + female +
-                    ", Unknown=0, BoZo visuals ready, Humanoid animators ready, legacy renderers hidden, and male/female preset separation verified.");
+                    ", Unknown=0, BoZo visuals ready, Humanoid animators ready, texture-bake timing safe, runtime shaders retained, NPC outline disabled, legacy renderers hidden, and male/female preset separation verified.");
             }
             else
             {
@@ -485,7 +498,8 @@ namespace Hanger51.EditorTools
                     ", legacy variation still enabled=" + legacyVariationEnabled +
                     ", premature cleanAfterMerge=" + prematureCleanAfterMerge +
                     ", controllers ready=" + controllersReady +
-                    ", runtime shaders retained=" + BoZoShadersRetained() + ".");
+                    ", runtime shaders retained=" + shadersRetained +
+                    ", NPC outline disabled=" + npcOutlineDisabled + ".");
             }
         }
 
