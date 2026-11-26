@@ -1,0 +1,11 @@
+Hanger 51 Night Sky Source
+==========================
+
+Preferred external sky: ambientCG Night Sky HDRI 001 (2K)
+Asset page: https://ambientcg.com/view?id=NightSkyHDRI001
+Download endpoint: https://ambientcg.com/get?file=NightSkyHDRI001_2K.zip
+License: CC0 / public-domain dedication. ambientCG states its assets are free for commercial use without attribution.
+
+Installed external asset this project: True
+
+If the external download is unavailable, Hanger 51 uses the repository's procedural starry-night skybox fallback shader.

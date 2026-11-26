@@ -1,0 +1,79 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f26a0e966aa64da3b5dd12dc9779ca73, type: 3}
+  m_Name: H51CitizenVisualCatalog
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.NPCs.H51CitizenVisualCatalog
+  entries:
+  - packId: A
+    archetype: Worker
+    description: Pack A Worker
+    prefab: {fileID: 1343715800944338577, guid: 4b858c31df1b8eb4ca2d0fff9d1839ba, type: 3}
+  - packId: A
+    archetype: Suit
+    description: Pack A Suit
+    prefab: {fileID: 4837861245882198162, guid: dcee4eae348d5f847bf89c817c210a67, type: 3}
+  - packId: A
+    archetype: Adventurer
+    description: Pack A Adventurer
+    prefab: {fileID: 8243690418926063352, guid: 08d511de38c7bbc4e8e03810c4b81d44, type: 3}
+  - packId: A
+    archetype: Punk
+    description: Pack A Punk
+    prefab: {fileID: 88618961598558950, guid: f3248cb4ed82f3048a9ec11eab9d083c, type: 3}
+  - packId: A
+    archetype: Formal
+    description: Pack A Formal
+    prefab: {fileID: 1346121232358326410, guid: 58238ac7b1b22dd4b8a0d5ba9e8daae9, type: 3}
+  - packId: A
+    archetype: Casual
+    description: Pack A Casual
+    prefab: {fileID: 1871240956013027451, guid: f269128c13cedc34186885051a533185, type: 3}
+  - packId: A
+    archetype: Soldier
+    description: Pack A Soldier
+    prefab: {fileID: 825434145966896604, guid: 6528562da30bfcc4c91cde5c193119cb, type: 3}
+  - packId: B
+    archetype: Farmer
+    description: Pack B Farmer
+    prefab: {fileID: 5055992447790238599, guid: c47fc387c04035e4fb36f082360edf0d, type: 3}
+  - packId: B
+    archetype: Worker
+    description: Pack B Worker
+    prefab: {fileID: 1904371840739554576, guid: c36e0c38839eb2e4d835a25646954ff5, type: 3}
+  - packId: B
+    archetype: Punk
+    description: Pack B Punk
+    prefab: {fileID: 5065224001504775747, guid: 5436d99e7b763af44879e90d615ad679, type: 3}
+  - packId: B
+    archetype: Beach
+    description: Pack B Beach
+    prefab: {fileID: 4638282344964654780, guid: 1c846f4203ac7594c96096b4fd56c91b, type: 3}
+  - packId: B
+    archetype: Casual2
+    description: Pack B Casual2
+    prefab: {fileID: 2026798469774629246, guid: 941b249acca3ae3459196be9430c3314, type: 3}
+  - packId: B
+    archetype: Casual
+    description: Pack B Casual
+    prefab: {fileID: 1330548038747982393, guid: 83f1a9dc9da7cb7448ab391ac1b84f8b, type: 3}
+  - packId: B
+    archetype: Suit
+    description: Pack B Suit
+    prefab: {fileID: 5013389458575774690, guid: 42c0c355921afcd4b8d9aea9d9d0e140, type: 3}
+  - packId: B
+    archetype: Adventurer
+    description: Pack B Adventurer
+    prefab: {fileID: 8692202648959916015, guid: 5e689106ccaef44499a21defb372b72a, type: 3}
+  - packId: B
+    archetype: Swat
+    description: Pack B Swat
+    prefab: {fileID: 5602282865471528186, guid: 47e69af5867121747b4226ae35020041, type: 3}
