@@ -457,6 +457,8 @@ The occupation-specific wardrobe pass is now implemented under Steps 164/165. Do
 
 After the texture-bake fix, the first Development Build proved that BoZo meshes/materials were loading, but several citizens still looked wrong for Hanger 51: some were in underwear only, one inherited a fantasy red-skin/devil-horn showcase preset, and another male identity visually inherited a more feminine showcase character. A small black prop/cube was also seen near one citizen and may have contributed to movement obstruction.
 
+The next Development Build exposed a second regression after Step 164: citizens could collapse to a floating black head with the body/clothing apparently gone. Root cause was BoZo save-version handling. `Default_Boy` and `Default_Girl` are version-3 saves; BoZo's `Update4` patch converts every outfit layer to `alpha=1`. Hanger 51 was cloning those saves, stamping the generated preset directly to version 4, but retaining `alpha=0`, so BoZo correctly skipped its updater and loaded invalid v4 outfit layers. Step 164 now writes `alpha=1` for every retained and generated outfit layer. `H51BoZoCitizenVisual` also repairs stale bad v4 presets before BoZo's Start-time load so already-serialized scenes recover safely.
+
 The population pipeline no longer uses BoZo's showcase character saves as final citizen appearances.
 
 Run:
@@ -501,6 +503,9 @@ Step 165 validates:
 - every citizen has a Top, Bottom, and Feet item;
 - no fantasy/demo-only part remains;
 - no non-round fantasy pupil remains;
+- every generated preset is BoZo save version 4 or newer;
+- every outfit layer has the version-4-required `alpha=1`;
+- every outfit path resolves through BoZo's Resources folders;
 - `cleanAfterMerge` is still disabled for the BoZo texture pipeline.
 
 Important files:
