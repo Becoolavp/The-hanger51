@@ -38,18 +38,12 @@ namespace Hanger51.EditorTools
 
         static readonly string[] MalePresetNames =
         {
-            "Default_Boy",
-            "Jackal",
-            "Kenji",
-            "Zell"
+            "Default_Boy"
         };
 
         static readonly string[] FemalePresetNames =
         {
-            "Default_Girl",
-            "Glover",
-            "Hana",
-            "Jayda"
+            "Default_Girl"
         };
 
         static readonly HashSet<string> MaleFirstNames =
@@ -327,7 +321,7 @@ namespace Hanger51.EditorTools
                 ", previously Unknown presentations assigned=" + inferred +
                 ", legacy renderers disabled=" + oldRenderersDisabled +
                 ", legacy animators removed=" + oldAnimatorsRemoved +
-                ". Male citizens use only Default_Boy/Jackal/Kenji/Zell; female citizens use only Default_Girl/Glover/Hana/Jayda. Run Step 163.");
+                ". Male citizens now start only from Default_Boy and female citizens only from Default_Girl; showcase/fantasy presets are excluded. Run Step 163, then Steps 164/165 for the Hanger 51 civilian wardrobe pass.");
         }
 
         [MenuItem("Hanger 51/World/Current/163 - Validate BoZo Citizen Migration")]
