@@ -124,6 +124,8 @@ namespace Hanger51.NPCs
             if (!outfitSystem)
                 return;
 
+            SanitizeVisualPhysics();
+
             Renderer[] renderers =
                 outfitSystem.GetComponentsInChildren<Renderer>(true);
 
@@ -185,6 +187,38 @@ namespace Hanger51.NPCs
                 if (changed)
                     renderer.materials = materials;
             }
+        void SanitizeVisualPhysics()
+        {
+            Collider[] colliders =
+                outfitSystem.GetComponentsInChildren<Collider>(true);
+            for (int i=0;i<colliders.Length;i++)
+            {
+                if (colliders[i])
+                    colliders[i].enabled = false;
+            }
+
+            CharacterController[] controllers =
+                outfitSystem.GetComponentsInChildren<CharacterController>(true);
+            for (int i=0;i<controllers.Length;i++)
+            {
+                if (controllers[i])
+                    controllers[i].enabled = false;
+            }
+
+            Rigidbody[] bodies =
+                outfitSystem.GetComponentsInChildren<Rigidbody>(true);
+            for (int i=0;i<bodies.Length;i++)
+            {
+                Rigidbody body = bodies[i];
+                if (!body)
+                    continue;
+
+                body.isKinematic = true;
+                body.detectCollisions = false;
+                body.useGravity = false;
+            }
+        }
+
         }
     }
 }
