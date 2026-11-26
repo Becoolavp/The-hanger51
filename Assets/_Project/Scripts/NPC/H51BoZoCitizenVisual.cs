@@ -1,3 +1,4 @@
+using System.Collections;
 using Bozo.ModularCharacters;
 using UnityEngine;
 
@@ -30,11 +31,13 @@ namespace Hanger51.NPCs
             visualAnimator = animator;
 
             ConfigureBoZoRuntime();
+            SubscribeToLoad();
         }
 
         void Awake()
         {
             ConfigureBoZoRuntime();
+            SubscribeToLoad();
 
             H51CitizenIdentity identity =
                 GetComponent<H51CitizenIdentity>();
@@ -56,6 +59,17 @@ namespace Hanger51.NPCs
             }
         }
 
+        void Start()
+        {
+            StartCoroutine(DeferredMaterialRepair());
+        }
+
+        void OnDestroy()
+        {
+            if (outfitSystem)
+                outfitSystem.OnCharacterLoaded -= HandleCharacterLoaded;
+        }
+
         void ConfigureBoZoRuntime()
         {
             if (outfitSystem)
@@ -63,7 +77,13 @@ namespace Hanger51.NPCs
                 outfitSystem.characterData = characterPreset;
                 outfitSystem.loadMode = OutfitSystem.LoadMode.OnStart;
                 outfitSystem.async = false;
-                outfitSystem.cleanAfterMerge = true;
+
+                // BoZo performs a final texture bake AFTER its character merge.
+                // cleanAfterMerge removes the outfit sources during the merge,
+                // leaving that final bake with nothing to paint and producing
+                // solid-black atlases in a player build. Keep the modular sources
+                // until the package has completed its full load/bake sequence.
+                outfitSystem.cleanAfterMerge = false;
                 outfitSystem._textureSize =
                     OutfitSystem.TextureSize._512;
             }
@@ -75,6 +95,95 @@ namespace Hanger51.NPCs
                     AnimatorCullingMode.CullUpdateTransforms;
                 visualAnimator.updateMode =
                     AnimatorUpdateMode.Normal;
+            }
+        }
+
+        void SubscribeToLoad()
+        {
+            if (!outfitSystem)
+                return;
+
+            outfitSystem.OnCharacterLoaded -= HandleCharacterLoaded;
+            outfitSystem.OnCharacterLoaded += HandleCharacterLoaded;
+        }
+
+        void HandleCharacterLoaded()
+        {
+            RepairLoadedMaterials();
+        }
+
+        IEnumerator DeferredMaterialRepair()
+        {
+            yield return null;
+            yield return null;
+            RepairLoadedMaterials();
+        }
+
+        void RepairLoadedMaterials()
+        {
+            if (!outfitSystem)
+                return;
+
+            Renderer[] renderers =
+                outfitSystem.GetComponentsInChildren<Renderer>(true);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Renderer renderer = renderers[i];
+                if (!renderer)
+                    continue;
+
+                Material[] materials = renderer.materials;
+                bool changed = false;
+
+                for (int m=0;m<materials.Length;m++)
+                {
+                    Material material = materials[m];
+                    if (!material)
+                        continue;
+
+                    if (material.HasProperty("_UseOutline"))
+                    {
+                        material.SetFloat("_UseOutline",0f);
+                        material.DisableKeyword("_USEOUTLINE");
+                        changed = true;
+                    }
+
+                    if (material.HasProperty("_OutlineDistance"))
+                    {
+                        material.SetFloat("_OutlineDistance",0f);
+                        changed = true;
+                    }
+
+                    if (material.HasProperty("_Brightness"))
+                    {
+                        material.SetFloat(
+                            "_Brightness",
+                            Mathf.Max(
+                                1f,
+                                material.GetFloat("_Brightness")));
+                        changed = true;
+                    }
+
+                    if (material.HasProperty("_UseAmbiant"))
+                    {
+                        material.SetFloat("_UseAmbiant",1f);
+                        changed = true;
+                    }
+
+                    if (material.HasProperty("_AmbiantStrength"))
+                    {
+                        material.SetFloat(
+                            "_AmbiantStrength",
+                            Mathf.Max(
+                                .65f,
+                                material.GetFloat("_AmbiantStrength")));
+                        changed = true;
+                    }
+                }
+
+                if (changed)
+                    renderer.materials = materials;
             }
         }
     }
