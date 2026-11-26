@@ -404,9 +404,8 @@ Gender/presentation rules are intentionally strict:
 
 - Hanger 51 already has `H51CitizenPresentation.Unknown / Male / Female` on `H51CitizenIdentity`.
 - Existing citizens created before that field was populated are assigned a presentation once during Step 162 using the existing first-name set plus a deterministic persistent-seed fallback for uncommon names. The chosen value is then stored on the identity.
-- **Male identities only use the vetted male BoZo preset pool:** `Default_Boy`, `Jackal`, `Kenji`, `Zell`.
-- **Female identities only use the vetted female BoZo preset pool:** `Default_Girl`, `Glover`, `Hana`, `Jayda`.
-- These pools were classified from the imported preset data itself (body-shape values and sex-specific undergarment/body configuration), not merely from the preset names.
+- Step 162 now uses **only `Default_Boy` for male identities and `Default_Girl` for female identities** as the body/face starting point. BoZo showcase presets such as Jackal, Kenji, Zell, Glover, Hana, and Jayda are no longer used by the population migration because several include fantasy styling, incomplete clothing, or presentation choices that do not fit Hanger 51's civilian world.
+- Step 164 then creates a dedicated Hanger 51 civilian preset per citizen from that correct male/female base and applies a human-only wardrobe, natural skin/hair/eye palette, and occupation-aware clothing.
 - `H51BoZoCitizenVisual` includes a runtime presentation guard: if a stored identity presentation and configured visual ever disagree, the mismatched BoZo visual is disabled and an error is logged rather than silently cross-mixing the models.
 
 Animation integration:
@@ -423,8 +422,8 @@ Step 162 performs the migration in-place:
 - removes the legacy citizen Animator components so `H51CitizenBrain` finds the new BoZo Animator instead;
 - disables `H51CitizenVisualVariation` so the old material-property randomizer does not overwrite BoZo's authored skin/hair/outfit look;
 - instantiates `BSMC_CharacterBase.prefab` underneath the existing citizen simulation root;
-- deterministically selects one of four same-presentation presets using the persistent appearance seed;
-- configures BoZo `OutfitSystem` for OnStart loading, synchronous resource lookup, 512 texture size, and cleanup-after-merge for NPC memory/performance;
+- assigns the correct sex-specific human base preset (`Default_Boy` or `Default_Girl`) before the civilian wardrobe pass;
+- configures BoZo `OutfitSystem` for OnStart loading, synchronous resource lookup, 512 texture size, and `cleanAfterMerge = false` so BoZo's final runtime texture bake remains valid;
 - adds a Humanoid Animator using the imported BoZo body Avatar and the correct male/female Hanger 51 controller;
 - adds/configures `H51BoZoCitizenVisual` as the bridge/guard component.
 
@@ -452,7 +451,69 @@ Step 163 verifies that every scene citizen:
 
 Do not mark this migration verified until Step 163 passes and a Development Build confirms that male/female citizens load as the intended sex-specific BoZo characters, walk/idle correctly, remain grounded on the NavMesh, still talk/respond normally, and retain their previous names/jobs/homes/schedules.
 
-The first verified pass intentionally uses vetted preset appearances rather than occupation-specific BoZo wardrobes. After migration stability is confirmed, the next visual-quality pass can map BoZo clothing to occupations (farmer, nurse/doctor, mechanic, airport worker, utility worker, resident, etc.) without changing identity or simulation state.
+The occupation-specific wardrobe pass is now implemented under Steps 164/165. Do not leave citizens on the raw Step-162 base appearance for a player build.
+
+### Human-only BoZo civilian wardrobe pass — IMPLEMENTED / PENDING DEVELOPMENT BUILD VALIDATION
+
+After the texture-bake fix, the first Development Build proved that BoZo meshes/materials were loading, but several citizens still looked wrong for Hanger 51: some were in underwear only, one inherited a fantasy red-skin/devil-horn showcase preset, and another male identity visually inherited a more feminine showcase character. A small black prop/cube was also seen near one citizen and may have contributed to movement obstruction.
+
+The population pipeline no longer uses BoZo's showcase character saves as final citizen appearances.
+
+Run:
+
+`Hanger 51 -> World -> Current -> 164 - Apply Human Civilian BoZo Wardrobes`
+
+then:
+
+`Hanger 51 -> World -> Current -> 165 - Validate Human Civilian BoZo Wardrobes`
+
+Step 164 creates one generated `CharacterObject` per scene citizen under:
+
+`Assets/_Project/Characters/H51Citizens/BoZoGenerated/CivilianPresets/`
+
+Rules:
+
+- Male citizens are built from `Default_Boy`; female citizens are built from `Default_Girl`. No cross-presentation demo preset pool is used.
+- The generated data strips showcase/fantasy/accessory categories before rebuilding the final appearance: no `HeadAcc`, no devil horns, alien antennae, kitty ears, fantasy pupils, demo gloves, eyepatches, or other inherited showcase accessories.
+- Pupils are forced to `Pupil/Pupil_Round`.
+- Hair is selected from separate conservative male/female hairstyle pools.
+- Hair colors are restricted to natural black/brown/blond/auburn/gray palettes.
+- Skin is rebuilt from a human skin-tone palette rather than inheriting fantasy/demo skin colors.
+- Eye colors are restricted to natural brown/blue/green/hazel/gray values.
+- Every generated citizen is required to have **Top + Bottom + Feet**. Underwear may remain underneath as the base-layer system expects, but no citizen should appear publicly in underwear-only state.
+- Clothing is occupation-aware. Current wardrobe roles are Casual, Farmer, Worker, Medical, Business, PublicSafety, and Professional.
+- Farmer examples use overalls/khakis/work boots.
+- Mechanic, utility, power-plant, airport, construction, and other worker roles use hard jackets or heavy shirts, belted work pants, and work boots.
+- Hospital/medical roles use restrained blue/teal professional clothing and proper shoes.
+- Business/office roles use suits, dress shirts/cardigans, dress pants/skirts, and office shoes.
+- Police/security/fire roles use dark workwear and boots.
+- Teachers/instructors use professional civilian clothing.
+- Ordinary residents get varied but grounded T-shirts, hoodies, sweaters, jeans, khakis, skirts, sneakers, flats, or loafers depending on presentation and persistent appearance seed.
+- All visual choices remain deterministic from the existing citizen appearance seed, so the same citizen should keep the same look across reruns.
+
+The runtime bridge also treats BoZo as **visual-only**. `H51BoZoCitizenVisual` disables child Colliders and CharacterControllers and makes child Rigidbodies kinematic/non-colliding after load. The existing Hanger 51 citizen root/NavMeshAgent remains authoritative for movement. This is intended to prevent imported clothing/accessory physics or stray modular props from pinning a citizen against walls or blocking pathing.
+
+Step 165 validates:
+
+- every citizen has a generated Hanger 51 civilian preset rather than a BoZo demo preset;
+- the generated preset name matches the stored male/female presentation;
+- every citizen has a Top, Bottom, and Feet item;
+- no fantasy/demo-only part remains;
+- no non-round fantasy pupil remains;
+- `cleanAfterMerge` is still disabled for the BoZo texture pipeline.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51BoZoCivilianWardrobeRepair.cs`
+- `Assets/_Project/Scripts/NPC/H51BoZoCitizenVisual.cs`
+
+For a fresh scene migration, the intended order is now:
+
+1. Step 162 - Replace Citizen Bodies With BoZo Characters
+2. Step 163 - Validate BoZo Citizen Migration
+3. Step 164 - Apply Human Civilian BoZo Wardrobes
+4. Step 165 - Validate Human Civilian BoZo Wardrobes
+5. Development Build and visually inspect citizens, clothing, movement, and occupation fit.
 
 ### Wheel-install diagnostics
 
