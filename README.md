@@ -482,6 +482,7 @@ Rules:
 - Eye colors are restricted to natural brown/blue/green/hazel/gray values.
 - Every generated citizen is required to have **Top + Bottom + Feet**. Underwear may remain underneath as the base-layer system expects, but no citizen should appear publicly in underwear-only state.
 - Clothing is occupation-aware. Current wardrobe roles are Casual, Farmer, Worker, Medical, Business, PublicSafety, and Professional.
+- Clothing colors are mapped to each prefab's actual channel semantics rather than applied generically. For example, overalls get separate shirt/denim/buckle/cuff colors; suits get separate suit/button/shirt/tie colors; boots get leather/lace/sole colors; and dress pants get separate belt/buckle channels.
 - Farmer examples use overalls/khakis/work boots.
 - Mechanic, utility, power-plant, airport, construction, and other worker roles use hard jackets or heavy shirts, belted work pants, and work boots.
 - Hospital/medical roles use restrained blue/teal professional clothing and proper shoes.
