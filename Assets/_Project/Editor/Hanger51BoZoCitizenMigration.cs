@@ -7,6 +7,7 @@ using UnityEditor;
 using UnityEditor.Animations;
 using UnityEditor.SceneManagement;
 using UnityEngine;
+using UnityEngine.Rendering;
 using UnityEngine.SceneManagement;
 
 namespace Hanger51.EditorTools
@@ -118,6 +119,9 @@ namespace Hanger51.EditorTools
                     "Step 162 failed. Required BoZo base prefab, humanoid Avatar, animation clips, or vetted male/female preset assets are missing. Reimport the purchased BoZo package first.");
                 return;
             }
+
+            ConfigureBoZoBuildShaders();
+            DisableBoZoNpcOutlineOnSourceMaterial();
 
             EnsureFolder(GeneratedFolder);
             AnimatorController maleController =
@@ -272,7 +276,7 @@ namespace Hanger51.EditorTools
                 outfit.characterData = preset;
                 outfit.loadMode = OutfitSystem.LoadMode.OnStart;
                 outfit.async = false;
-                outfit.cleanAfterMerge = true;
+                outfit.cleanAfterMerge = false;
                 outfit._textureSize =
                     OutfitSystem.TextureSize._512;
                 EditorUtility.SetDirty(outfit);
@@ -343,6 +347,7 @@ namespace Hanger51.EditorTools
             int badPresetSex = 0;
             int legacyRendererStillVisible = 0;
             int legacyVariationEnabled = 0;
+            int prematureCleanAfterMerge = 0;
             int male = 0;
             int female = 0;
 
@@ -392,6 +397,8 @@ namespace Hanger51.EditorTools
                     visual.GetComponent<Animator>();
 
                 if (!outfit) missingOutfitSystem++;
+                else if (outfit.cleanAfterMerge)
+                    prematureCleanAfterMerge++;
                 if (!animator ||
                     !animator.avatar ||
                     !animator.avatar.isValid ||
@@ -451,7 +458,9 @@ namespace Hanger51.EditorTools
                 badPresetSex == 0 &&
                 legacyRendererStillVisible == 0 &&
                 legacyVariationEnabled == 0 &&
-                controllersReady;
+                prematureCleanAfterMerge == 0 &&
+                controllersReady &&
+                BoZoShadersRetained();
 
             if (ok)
             {
@@ -474,8 +483,79 @@ namespace Hanger51.EditorTools
                     ", male/female preset violations=" + badPresetSex +
                     ", visible legacy renderers=" + legacyRendererStillVisible +
                     ", legacy variation still enabled=" + legacyVariationEnabled +
-                    ", controllers ready=" + controllersReady + ".");
+                    ", premature cleanAfterMerge=" + prematureCleanAfterMerge +
+                    ", controllers ready=" + controllersReady +
+                    ", runtime shaders retained=" + BoZoShadersRetained() + ".");
             }
+        }
+
+        static void ConfigureBoZoBuildShaders()
+        {
+            string[] requiredNames =
+            {
+                "Hidden/TextureLayerer",
+                "Hidden/BoZo_Decal",
+                "BoZo/BMAC_Toon"
+            };
+
+            List<Shader> retained =
+                GraphicsSettings.alwaysIncludedShaders
+                    .Where(s => s)
+                    .ToList();
+
+            for (int i=0;i<requiredNames.Length;i++)
+            {
+                Shader shader = Shader.Find(requiredNames[i]);
+                if (!shader)
+                {
+                    Debug.LogWarning(
+                        "Step 162 could not resolve BoZo runtime shader '" +
+                        requiredNames[i] +
+                        "'.");
+                    continue;
+                }
+
+                if (!retained.Contains(shader))
+                    retained.Add(shader);
+            }
+
+            GraphicsSettings.alwaysIncludedShaders =
+                retained.ToArray();
+        }
+
+        static bool BoZoShadersRetained()
+        {
+            HashSet<string> retained =
+                new HashSet<string>(
+                    GraphicsSettings.alwaysIncludedShaders
+                        .Where(s => s)
+                        .Select(s => s.name),
+                    StringComparer.Ordinal);
+
+            return
+                retained.Contains("Hidden/TextureLayerer") &&
+                retained.Contains("Hidden/BoZo_Decal") &&
+                retained.Contains("BoZo/BMAC_Toon");
+        }
+
+        static void DisableBoZoNpcOutlineOnSourceMaterial()
+        {
+            const string animeMaterialPath =
+                "Assets/BoZo_StylizedModularCharacters/Materials/BSMC_AnimeShader.mat";
+
+            Material material =
+                AssetDatabase.LoadAssetAtPath<Material>(
+                    animeMaterialPath);
+            if (!material)
+                return;
+
+            if (material.HasProperty("_UseOutline"))
+                material.SetFloat("_UseOutline",0f);
+            if (material.HasProperty("_OutlineDistance"))
+                material.SetFloat("_OutlineDistance",0f);
+
+            material.DisableKeyword("_USEOUTLINE");
+            EditorUtility.SetDirty(material);
         }
 
         static CharacterObject[] LoadPresets(
