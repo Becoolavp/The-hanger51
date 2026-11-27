@@ -9,12 +9,18 @@ namespace Hanger51.NPCs
         [SerializeField] H51CitizenPresentation configuredPresentation;
         [SerializeField] string presetName;
         [SerializeField] CharacterObject characterPreset;
+        [SerializeField] CharacterObject workPreset;
+        [SerializeField] CharacterObject[] casualPresets = System.Array.Empty<CharacterObject>();
         [SerializeField] OutfitSystem outfitSystem;
         [SerializeField] Animator visualAnimator;
+
+        bool vehicleVisualSuppressed;
 
         public H51CitizenPresentation ConfiguredPresentation => configuredPresentation;
         public string PresetName => presetName;
         public CharacterObject CharacterPreset => characterPreset;
+        public CharacterObject WorkPreset => workPreset ? workPreset : characterPreset;
+        public CharacterObject[] CasualPresets => casualPresets;
         public OutfitSystem OutfitSystem => outfitSystem;
         public Animator VisualAnimator => visualAnimator;
 
@@ -26,12 +32,83 @@ namespace Hanger51.NPCs
         {
             configuredPresentation = presentation;
             characterPreset = preset;
+            workPreset = preset;
+            casualPresets = System.Array.Empty<CharacterObject>();
             presetName = preset ? preset.name : string.Empty;
             outfitSystem = system;
             visualAnimator = animator;
 
             ConfigureBoZoRuntime();
             SubscribeToLoad();
+        }
+
+        public void ConfigureWardrobes(
+            H51CitizenPresentation presentation,
+            CharacterObject work,
+            CharacterObject[] casual,
+            OutfitSystem system,
+            Animator animator)
+        {
+            configuredPresentation = presentation;
+            workPreset = work;
+            casualPresets = casual ?? System.Array.Empty<CharacterObject>();
+            characterPreset = work ? work :
+                (casualPresets.Length > 0 ? casualPresets[0] : null);
+            presetName = characterPreset ? characterPreset.name : string.Empty;
+            outfitSystem = system;
+            visualAnimator = animator;
+
+            ConfigureBoZoRuntime();
+            SubscribeToLoad();
+        }
+
+        public void SetWardrobeContext(bool goingToOrAtWork, int dayIndex)
+        {
+            CharacterObject target = goingToOrAtWork
+                ? WorkPreset
+                : PickCasualPreset(dayIndex);
+
+            if (!target || target == characterPreset)
+                return;
+
+            characterPreset = target;
+            presetName = target.name;
+            NormalizeV4OutfitAlpha();
+
+            if (!outfitSystem)
+                return;
+
+            outfitSystem.characterData = target;
+
+            // Routine changes happen after Start, so ask BoZo to rebuild only
+            // when its runtime system is ready. Otherwise OnStart will load it.
+            if (Application.isPlaying && outfitSystem.initalized)
+                outfitSystem.LoadFromObject(target);
+        }
+
+        public void SetVehicleVisualSuppressed(bool suppressed)
+        {
+            vehicleVisualSuppressed = suppressed;
+            ApplyVehicleVisualSuppression();
+        }
+
+        CharacterObject PickCasualPreset(int dayIndex)
+        {
+            if (casualPresets == null || casualPresets.Length == 0)
+                return WorkPreset;
+
+            int index = dayIndex % casualPresets.Length;
+            if (index < 0)
+                index += casualPresets.Length;
+
+            CharacterObject selected = casualPresets[index];
+            return selected ? selected : WorkPreset;
+        }
+
+        void LateUpdate()
+        {
+            if (vehicleVisualSuppressed)
+                ApplyVehicleVisualSuppression();
         }
 
         void Awake()
@@ -229,6 +306,26 @@ namespace Hanger51.NPCs
 
                 if (changed)
                     renderer.materials = materials;
+            }
+
+            ApplyVehicleVisualSuppression();
+        }
+
+        void ApplyVehicleVisualSuppression()
+        {
+            if (!outfitSystem)
+                return;
+
+            Renderer[] renderers =
+                outfitSystem.GetComponentsInChildren<Renderer>(true);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Renderer renderer = renderers[i];
+                if (!renderer)
+                    continue;
+
+                renderer.forceRenderingOff = vehicleVisualSuppressed;
             }
         }
 
