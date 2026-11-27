@@ -63,9 +63,13 @@ namespace Hanger51.Commerce
             "SMGs",
             "Machine Guns",
             "Shotguns",
+            "Heavy Weapons",
+            "Melee",
             "Explosives",
+            "Attachments",
             "Ammunition",
-            "Gear"
+            "Medical",
+            "Equipment"
         };
 
         RawImage previewImage;
@@ -430,7 +434,7 @@ namespace Hanger51.Commerce
             rootRect.anchoredPosition =
                 new Vector2(12f,-56f);
             rootRect.sizeDelta =
-                new Vector2(396f,68f);
+                new Vector2(396f,102f);
 
             for (int i=0;i<WeaponCategories.Length;i++)
             {
@@ -507,7 +511,7 @@ namespace Hanger51.Commerce
                 new Vector2(
                     -12f,
                     activeDepartment == ShopDepartment.Weapons
-                        ? -132f
+                        ? -166f
                         : -62f);
         }
 
@@ -520,13 +524,6 @@ namespace Hanger51.Commerce
 
             string category =
                 product.Category ?? string.Empty;
-
-            if (activeWeaponCategory == "Gear")
-            {
-                return
-                    category.Contains("Accessories") ||
-                    category.Contains("Medical");
-            }
 
             return category.Contains(activeWeaponCategory);
         }
