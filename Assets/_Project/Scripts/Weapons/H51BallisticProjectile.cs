@@ -138,8 +138,13 @@ namespace Hanger51.Weapons
                     ForceMode.Impulse);
             }
 
+            H51AnatomicalHitbox anatomicalHitbox =
+                hit.collider.GetComponent<H51AnatomicalHitbox>();
+
             H51AnatomicalHealth health =
-                hit.collider.GetComponentInParent<H51AnatomicalHealth>();
+                anatomicalHitbox && anatomicalHitbox.Health
+                    ? anatomicalHitbox.Health
+                    : hit.collider.GetComponentInParent<H51AnatomicalHealth>();
 
             if (health)
             {
@@ -154,12 +159,25 @@ namespace Hanger51.Weapons
                     Mathf.Clamp01(
                         (energyJoules - 220f) / 2500f);
 
-                health.ApplyDamage(
-                    hit.point,
-                    trauma,
-                    H51DamageType.Ballistic,
-                    velocity.normalized,
-                    penetration);
+                if (anatomicalHitbox && anatomicalHitbox.Health == health)
+                {
+                    health.ApplyDamage(
+                        anatomicalHitbox.Region,
+                        hit.point,
+                        trauma,
+                        H51DamageType.Ballistic,
+                        velocity.normalized,
+                        penetration);
+                }
+                else
+                {
+                    health.ApplyDamage(
+                        hit.point,
+                        trauma,
+                        H51DamageType.Ballistic,
+                        velocity.normalized,
+                        penetration);
+                }
 
                 H51BallisticImpactReaction reaction =
                     health.GetComponent<H51BallisticImpactReaction>();
