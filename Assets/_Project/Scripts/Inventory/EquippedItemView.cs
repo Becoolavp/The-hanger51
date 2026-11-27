@@ -14,6 +14,9 @@ namespace Hanger51.Inventory
         private GameObject displayedPrefabModel;
         private string displayedConditionSignature = string.Empty;
 
+        public InventoryItemDefinition DisplayedItem => displayedItem;
+        public GameObject DisplayedPrefabModel => displayedPrefabModel;
+
         private void Awake()
         {
             if (inventory == null)
