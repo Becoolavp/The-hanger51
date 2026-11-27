@@ -253,6 +253,56 @@ namespace Hanger51.Inventory
             return null;
         }
 
+        public int CountItem(InventoryItemDefinition item)
+        {
+            if (item == null)
+                return 0;
+
+            EnsureSlotCount();
+            int total = 0;
+            for (int i=0;i<slots.Count;i++)
+            {
+                InventorySlotData slot = slots[i];
+                if (slot != null && !slot.IsEmpty && slot.Item == item)
+                    total += slot.Quantity;
+            }
+            return total;
+        }
+
+        public int RemoveItemQuantity(
+            InventoryItemDefinition item,
+            int requestedQuantity)
+        {
+            if (item == null || requestedQuantity <= 0)
+                return 0;
+
+            EnsureSlotCount();
+            int remaining = requestedQuantity;
+            int removedTotal = 0;
+
+            for (int i=0;i<slots.Count && remaining>0;i++)
+            {
+                InventorySlotData slot = slots[i];
+                if (slot == null || slot.IsEmpty || slot.Item != item)
+                    continue;
+
+                int take = Mathf.Min(remaining,slot.Quantity);
+                if (TryRemoveFromSlot(
+                        i,
+                        take,
+                        out InventoryItemDefinition removedItem,
+                        out int removed,
+                        out _)
+                    && removedItem == item)
+                {
+                    remaining -= removed;
+                    removedTotal += removed;
+                }
+            }
+
+            return removedTotal;
+        }
+
         public InventorySlotData GetSlot(int slotIndex)
         {
             EnsureSlotCount();
