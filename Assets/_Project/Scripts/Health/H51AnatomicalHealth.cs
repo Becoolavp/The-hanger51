@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using Hanger51.NPCs;
+using Rng.Blood;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -51,6 +52,7 @@ namespace Hanger51.Health
         public string displayName;
         [Range(0f,100f)] public float condition = 100f;
         [Min(0f)] public float externalBleedMlPerMinute;
+        public bool arterialBleed;
         public bool fractured;
         public bool disabled;
     }
@@ -66,7 +68,7 @@ namespace Hanger51.Health
     }
 
     [DisallowMultipleComponent]
-    public sealed class H51AnatomicalHealth : MonoBehaviour
+    public sealed class H51AnatomicalHealth : MonoBehaviour, IBloodReservoir
     {
         [Header("Circulation")]
         [SerializeField, Min(.1f)] float normalBloodVolumeLiters = 5.2f;
@@ -107,6 +109,7 @@ namespace Hanger51.Health
         public float BloodFraction => normalBloodVolumeLiters <= .01f
             ? 0f
             : Mathf.Clamp01(bloodVolumeLiters / normalBloodVolumeLiters);
+        public float BloodLeft => BloodFraction;
         public float OxygenSaturation => oxygenSaturation;
         public float PulseBpm => pulseBpm;
         public float SystolicPressure => systolicPressure;
@@ -331,6 +334,9 @@ namespace Hanger51.Health
             state.externalBleedMlPerMinute *=
                 1f - Mathf.Clamp01(effectiveness);
 
+            if (state.externalBleedMlPerMinute < 35f)
+                state.arterialBleed = false;
+
             OnChanged?.Invoke(this);
         }
 
@@ -341,7 +347,11 @@ namespace Hanger51.Health
                 1f - Mathf.Clamp01(effectiveness);
 
             for (int i=0;i<regions.Count;i++)
+            {
                 regions[i].externalBleedMlPerMinute *= remain;
+                if (regions[i].externalBleedMlPerMinute < 35f)
+                    regions[i].arterialBleed = false;
+            }
 
             for (int i=0;i<organs.Count;i++)
                 organs[i].internalBleedMlPerMinute *=
@@ -398,6 +408,8 @@ namespace Hanger51.Health
                     continue;
 
                 state.externalBleedMlPerMinute *= .24f;
+                if (state.externalBleedMlPerMinute < 35f)
+                    state.arterialBleed = false;
             }
 
             pain = Mathf.Max(0f,pain-4f);
@@ -413,6 +425,7 @@ namespace Hanger51.Health
                 return;
 
             state.externalBleedMlPerMinute *= .025f;
+            state.arterialBleed = false;
             pain = Mathf.Clamp(pain+6f,0f,100f);
             OnChanged?.Invoke(this);
         }
@@ -490,6 +503,7 @@ namespace Hanger51.Health
             {
                 regions[i].condition = 100f;
                 regions[i].externalBleedMlPerMinute = 0f;
+                regions[i].arterialBleed = false;
                 regions[i].fractured = false;
                 regions[i].disabled = false;
             }
@@ -542,11 +556,32 @@ namespace Hanger51.Health
             float vascularity =
                 RegionVascularity(region);
 
-            body.externalBleedMlPerMinute +=
+            float newExternalBleed =
                 amount *
                 woundFactor *
                 vascularity *
                 Mathf.Lerp(.55f,1.45f,penetration);
+
+            bool arterialHit =
+                IsArterialHit(
+                    region,
+                    localPoint,
+                    amount,
+                    type,
+                    penetration);
+
+            if (arterialHit)
+            {
+                body.arterialBleed = true;
+                newExternalBleed *=
+                    region == H51BodyRegion.Neck ||
+                    region == H51BodyRegion.Pelvis
+                        ? 2.8f
+                        : 3.6f;
+            }
+
+            body.externalBleedMlPerMinute +=
+                newExternalBleed;
 
             if (type == H51DamageType.Blunt ||
                 type == H51DamageType.Crush ||
@@ -1234,6 +1269,68 @@ namespace Hanger51.Health
                 default:
                     return .2f;
             }
+        }
+
+        static bool IsArterialHit(
+            H51BodyRegion region,
+            Vector3 local,
+            float amount,
+            H51DamageType type,
+            float penetration)
+        {
+            bool penetrating =
+                type == H51DamageType.Ballistic ||
+                type == H51DamageType.Penetrating;
+
+            if (!penetrating ||
+                penetration < .32f ||
+                amount < 8f)
+                return false;
+
+            switch (region)
+            {
+                case H51BodyRegion.Neck:
+                    return true;
+
+                case H51BodyRegion.Pelvis:
+                    return penetration >= .48f && amount >= 14f;
+
+                case H51BodyRegion.LeftArm:
+                    // Brachial artery: upper/medial arm, toward the torso.
+                    return local.y > .90f &&
+                           local.x > -.47f;
+
+                case H51BodyRegion.RightArm:
+                    return local.y > .90f &&
+                           local.x < .47f;
+
+                case H51BodyRegion.LeftLeg:
+                    // Femoral region: upper and medial thigh.
+                    return local.y > .30f &&
+                           local.x > -.22f;
+
+                case H51BodyRegion.RightLeg:
+                    return local.y > .30f &&
+                           local.x < .22f;
+
+                default:
+                    return false;
+            }
+        }
+
+        public void DrainBlood(float litres)
+        {
+            if (litres <= 0f || dead)
+                return;
+
+            bloodVolumeLiters =
+                Mathf.Max(
+                    0f,
+                    bloodVolumeLiters-litres);
+
+            OnChanged?.Invoke(this);
+            EvaluateCriticalState();
+            ReportNpcEmergencyIfNeeded();
         }
 
         static float RegionVascularity(
