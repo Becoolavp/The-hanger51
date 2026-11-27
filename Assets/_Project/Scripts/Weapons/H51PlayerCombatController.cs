@@ -45,6 +45,7 @@ namespace Hanger51.Weapons
         string statusMessage = string.Empty;
         float statusUntil;
         int presentationSignature;
+        Texture2D scopeMaskTexture;
 
         void Awake()
         {
@@ -58,6 +59,12 @@ namespace Hanger51.Weapons
             CloseCustomization();
             if (playerCamera)
                 playerCamera.fieldOfView = baseCameraFov;
+        }
+
+        void OnDestroy()
+        {
+            if (scopeMaskTexture)
+                Destroy(scopeMaskTexture);
         }
 
         void Update()
@@ -919,7 +926,7 @@ namespace Hanger51.Weapons
             if (opticFov <= 26f)
             {
                 float opening =
-                    Mathf.Min(Screen.width,Screen.height)*.62f;
+                    Mathf.Min(Screen.width,Screen.height)*.68f;
                 float left =
                     (Screen.width-opening)*.5f;
                 float top =
@@ -939,6 +946,18 @@ namespace Hanger51.Weapons
                 GUI.DrawTexture(
                     new Rect(left+opening,top,Screen.width-(left+opening),opening),
                     Texture2D.whiteTexture);
+                GUI.color = Color.white;
+
+                EnsureScopeMask();
+                if (scopeMaskTexture)
+                {
+                    GUI.DrawTexture(
+                        new Rect(left,top,opening,opening),
+                        scopeMaskTexture,
+                        ScaleMode.StretchToFill,
+                        true);
+                }
+
                 GUI.color = old;
             }
 
@@ -951,6 +970,62 @@ namespace Hanger51.Weapons
                 new Rect(Screen.width*.5f-34f,Screen.height*.5f-.7f,68f,1.4f),
                 Texture2D.whiteTexture);
             GUI.color = previous;
+        }
+
+        void EnsureScopeMask()
+        {
+            if (scopeMaskTexture)
+                return;
+
+            const int size = 256;
+            scopeMaskTexture =
+                new Texture2D(
+                    size,
+                    size,
+                    TextureFormat.RGBA32,
+                    false,
+                    true)
+                {
+                    name = "H51 Runtime Scope Mask",
+                    wrapMode = TextureWrapMode.Clamp,
+                    filterMode = FilterMode.Bilinear
+                };
+
+            Color32[] pixels =
+                new Color32[size*size];
+
+            float center =
+                (size-1)*.5f;
+            float outer =
+                size*.495f;
+            float ring =
+                size*.455f;
+
+            for (int y=0;y<size;y++)
+            for (int x=0;x<size;x++)
+            {
+                float dx = x-center;
+                float dy = y-center;
+                float distance =
+                    Mathf.Sqrt(dx*dx+dy*dy);
+
+                byte alpha =
+                    distance >= outer
+                        ? (byte)255
+                        : distance >= ring
+                            ? (byte)Mathf.RoundToInt(
+                                Mathf.InverseLerp(
+                                    ring,
+                                    outer,
+                                    distance)*255f)
+                            : (byte)0;
+
+                pixels[y*size+x] =
+                    new Color32(0,0,0,alpha);
+            }
+
+            scopeMaskTexture.SetPixels32(pixels);
+            scopeMaskTexture.Apply(false,true);
         }
 
         void DrawCustomization()
