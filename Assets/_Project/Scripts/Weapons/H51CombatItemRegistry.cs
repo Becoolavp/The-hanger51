@@ -48,5 +48,30 @@ namespace Hanger51.Weapons
 
             return null;
         }
+
+        public List<H51CombatItemDefinition> FindAllAmmo(H51Cartridge cartridge)
+        {
+            List<H51CombatItemDefinition> matches =
+                new List<H51CombatItemDefinition>();
+
+            if (definitions == null)
+                return matches;
+
+            for (int i=0;i<definitions.Count;i++)
+            {
+                H51CombatItemDefinition definition = definitions[i];
+
+                if (definition &&
+                    definition.Kind == H51CombatItemKind.Ammunition &&
+                    definition.Cartridge == cartridge &&
+                    definition.InventoryItem &&
+                    !matches.Contains(definition))
+                {
+                    matches.Add(definition);
+                }
+            }
+
+            return matches;
+        }
     }
 }
