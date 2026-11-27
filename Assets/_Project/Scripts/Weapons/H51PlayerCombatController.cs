@@ -240,14 +240,101 @@ namespace Hanger51.Weapons
                     1.03f);
             }
 
-            if (Random.value <= .42f)
+        }
+
+        void EjectSpentCasing()
+        {
+            if (!activeDefinition ||
+                !activeDefinition.CasingPrefab ||
+                !playerCamera)
+                return;
+
+            GameObject casing =
+                Instantiate(activeDefinition.CasingPrefab);
+
+            casing.name =
+                "Spent Casing - " +
+                activeDefinition.name;
+
+            // The LowPolyWeapons Bullet_* prefabs contain a case plus a
+            // projectile child. A fired case keeps only the root case mesh.
+            for (int i=casing.transform.childCount-1;i>=0;i--)
+                Destroy(casing.transform.GetChild(i).gameObject);
+
+            Collider[] originalColliders =
+                casing.GetComponentsInChildren<Collider>(true);
+            for (int i=0;i<originalColliders.Length;i++)
+                Destroy(originalColliders[i]);
+
+            Renderer[] renderers =
+                casing.GetComponentsInChildren<Renderer>(true);
+
+            float targetLength =
+                activeDefinition.WeaponClass == H51WeaponClass.Handgun
+                    ? .021f
+                    : activeDefinition.WeaponClass == H51WeaponClass.Shotgun
+                        ? .052f
+                        : .044f;
+
+            if (renderers.Length > 0)
             {
-                PlayRandom(
-                    activeDefinition.ShellClips,
-                    .18f,
-                    .94f,
-                    1.07f);
+                Bounds bounds = renderers[0].bounds;
+                for (int i=1;i<renderers.Length;i++)
+                    bounds.Encapsulate(renderers[i].bounds);
+
+                float largest =
+                    Mathf.Max(
+                        bounds.size.x,
+                        bounds.size.y,
+                        bounds.size.z);
+
+                if (largest > .0001f)
+                    casing.transform.localScale *=
+                        targetLength/largest;
             }
+
+            casing.transform.position =
+                playerCamera.transform.position +
+                playerCamera.transform.forward*.42f +
+                playerCamera.transform.right*.18f -
+                playerCamera.transform.up*.10f;
+
+            casing.transform.rotation =
+                Random.rotation;
+
+            CapsuleCollider capsule =
+                casing.AddComponent<CapsuleCollider>();
+            capsule.direction = 0;
+            capsule.radius = targetLength*.17f;
+            capsule.height = targetLength;
+
+            Rigidbody body =
+                casing.AddComponent<Rigidbody>();
+            body.mass =
+                activeDefinition.WeaponClass == H51WeaponClass.Shotgun
+                    ? .011f
+                    : activeDefinition.WeaponClass == H51WeaponClass.Handgun
+                        ? .004f
+                        : .006f;
+            body.collisionDetectionMode =
+                CollisionDetectionMode.ContinuousDynamic;
+            body.interpolation =
+                RigidbodyInterpolation.Interpolate;
+            body.linearVelocity =
+                playerCamera.transform.right*
+                    Random.Range(1.5f,2.6f) +
+                playerCamera.transform.up*
+                    Random.Range(.65f,1.35f) +
+                playerCamera.transform.forward*
+                    Random.Range(-.25f,.35f);
+            body.angularVelocity =
+                Random.onUnitSphere*
+                Random.Range(8f,20f);
+
+            H51SpentCasing spent =
+                casing.AddComponent<H51SpentCasing>();
+            spent.Initialize(
+                activeDefinition.ShellClips);
         }
 
         void PlayRandom(
@@ -418,6 +505,7 @@ namespace Hanger51.Weapons
             }
 
             PlayFireAudio();
+            EjectSpentCasing();
 
             recoilVisual =
                 Mathf.Clamp(
