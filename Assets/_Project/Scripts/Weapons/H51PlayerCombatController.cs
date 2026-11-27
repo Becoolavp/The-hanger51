@@ -275,12 +275,19 @@ namespace Hanger51.Weapons
             // The LowPolyWeapons Bullet_* prefabs contain a case plus a
             // projectile child. A fired case keeps only the root case mesh.
             for (int i=casing.transform.childCount-1;i>=0;i--)
-                Destroy(casing.transform.GetChild(i).gameObject);
+            {
+                GameObject child = casing.transform.GetChild(i).gameObject;
+                child.SetActive(false);
+                Destroy(child);
+            }
 
             Collider[] originalColliders =
                 casing.GetComponentsInChildren<Collider>(true);
             for (int i=0;i<originalColliders.Length;i++)
+            {
+                originalColliders[i].enabled = false;
                 Destroy(originalColliders[i]);
+            }
 
             Renderer[] renderers =
                 casing.GetComponentsInChildren<Renderer>(true);
