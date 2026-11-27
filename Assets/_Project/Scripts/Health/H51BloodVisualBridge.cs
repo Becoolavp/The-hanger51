@@ -251,12 +251,15 @@ namespace Hanger51.Health
 
             deathVisualSpawned = true;
 
+            // BloodSupply reads the same H51AnatomicalHealth reservoir,
+            // so let RNG Blood scale the death pool from the real remaining
+            // blood once rather than multiplying the fraction a second time.
             Blood.Death(
                 transform.position,
                 lastImpactDirection,
                 transform,
                 lastHitKind,
-                Mathf.Clamp(health.BloodFraction,.15f,1f));
+                1f);
         }
 
         Transform ResolveVisualBone(
