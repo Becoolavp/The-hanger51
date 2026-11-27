@@ -19,9 +19,7 @@ namespace Hanger51.Weapons
         NavMeshAgent agent;
         H51BoZoCitizenVisual citizenVisual;
         Animator animator;
-
-        Quaternion deathTargetRotation;
-        bool deathPoseRequested;
+        H51CitizenRagdoll ragdoll;
 
         void Awake()
         {
@@ -31,6 +29,7 @@ namespace Hanger51.Weapons
             animator = citizenVisual
                 ? citizenVisual.VisualAnimator
                 : GetComponentInChildren<Animator>(true);
+            ragdoll = GetComponent<H51CitizenRagdoll>();
         }
 
         public void ApplyProjectileImpact(
@@ -59,27 +58,27 @@ namespace Hanger51.Weapons
 
             float velocityChange =
                 Mathf.Clamp(
-                    projectileMomentumKgMps * .11f * regionMotion,
-                    .025f,
-                    .62f);
+                    projectileMomentumKgMps * .19f * regionMotion,
+                    .045f,
+                    .88f);
 
             reactionVelocity +=
                 planar * velocityChange +
                 Vector3.up *
                 Mathf.Clamp(
-                    trauma/650f,
+                    trauma/430f,
                     0f,
-                    .09f);
+                    .15f);
 
             reactionYaw +=
                 Random.Range(-1f,1f) *
                 Mathf.Clamp(
-                    trauma*.16f,
-                    1.5f,
-                    12f);
+                    trauma*.28f,
+                    2.5f,
+                    20f);
 
-            H51CitizenRagdoll ragdoll =
-                GetComponent<H51CitizenRagdoll>();
+            if (!ragdoll)
+                ragdoll = GetComponent<H51CitizenRagdoll>();
             if (!ragdoll)
                 ragdoll = gameObject.AddComponent<H51CitizenRagdoll>();
 
@@ -93,7 +92,7 @@ namespace Hanger51.Weapons
             flinch =
                 Mathf.Max(
                     flinch,
-                    Mathf.Clamp01(trauma/42f));
+                    Mathf.Clamp01(trauma/26f));
 
             localImpactDirection =
                 transform.InverseTransformDirection(direction.normalized);
@@ -109,8 +108,6 @@ namespace Hanger51.Weapons
                             ? Mathf.Lerp(.20f,.72f,flinch)
                             : Mathf.Lerp(.08f,.35f,flinch));
 
-            if (health && health.IsDead)
-                RequestDeathPose(planar);
         }
 
         public void ApplyProjectileImpact(
@@ -136,16 +133,14 @@ namespace Hanger51.Weapons
             planar.Normalize();
 
             reactionVelocity +=
-                planar * Mathf.Clamp(severity*.012f,.08f,1.6f) +
-                Vector3.up * Mathf.Clamp(severity*.006f,.02f,.55f);
+                planar * Mathf.Clamp(severity*.018f,.12f,2.0f) +
+                Vector3.up * Mathf.Clamp(severity*.008f,.03f,.68f);
 
             reactionYaw += Random.Range(-18f,18f);
             flinchRegion = H51BodyRegion.Chest;
-            flinch = Mathf.Max(flinch,Mathf.Clamp01(severity/60f));
+            flinch = Mathf.Max(flinch,Mathf.Clamp01(severity/42f));
             staggerSeconds = Mathf.Max(staggerSeconds,.55f);
 
-            if (health && health.IsDead)
-                RequestDeathPose(planar);
         }
 
         void Update()
@@ -154,6 +149,8 @@ namespace Hanger51.Weapons
                 health = GetComponent<H51AnatomicalHealth>();
             if (!agent)
                 agent = GetComponent<NavMeshAgent>();
+            if (!ragdoll)
+                ragdoll = GetComponent<H51CitizenRagdoll>();
             if (!animator)
             {
                 if (!citizenVisual)
@@ -166,6 +163,15 @@ namespace Hanger51.Weapons
             float dt = Time.deltaTime;
             if (dt <= 0f)
                 return;
+
+            if (ragdoll && ragdoll.IsRagdolled)
+            {
+                reactionVelocity = Vector3.zero;
+                reactionYaw = 0f;
+                flinch = 0f;
+                staggerSeconds = 0f;
+                return;
+            }
 
             staggerSeconds = Mathf.Max(0f,staggerSeconds-dt);
 
@@ -210,17 +216,6 @@ namespace Hanger51.Weapons
                     0f,
                     dt*1.55f);
 
-            if (health && health.IsDead)
-            {
-                if (!deathPoseRequested)
-                    RequestDeathPose(transform.forward);
-
-                transform.rotation =
-                    Quaternion.Slerp(
-                        transform.rotation,
-                        deathTargetRotation,
-                        1f-Mathf.Exp(-dt*3.6f));
-            }
         }
 
         void LateUpdate()
@@ -243,60 +238,60 @@ namespace Hanger51.Weapons
                     ApplyBone(
                         HumanBodyBones.LeftUpperArm,
                         new Vector3(
-                            -18f*flinch,
-                            7f*flinch,
-                            -32f*flinch));
+                            -30f*flinch,
+                            12f*flinch,
+                            -414f*flinch));
                     ApplyBone(
                         HumanBodyBones.LeftLowerArm,
                         new Vector3(
                             0f,
                             0f,
-                            -28f*flinch));
+                            -42f*flinch));
                     ApplyBone(
                         HumanBodyBones.RightUpperArm,
                         new Vector3(
-                            -8f*flinch,
+                            -24f*flinch,
                             0f,
-                            10f*flinch));
+                            30f*flinch));
                     break;
 
                 case H51BodyRegion.RightArm:
                     ApplyBone(
                         HumanBodyBones.RightUpperArm,
                         new Vector3(
-                            -18f*flinch,
-                            -7f*flinch,
-                            32f*flinch));
+                            -30f*flinch,
+                            -20f*flinch,
+                            414f*flinch));
                     ApplyBone(
                         HumanBodyBones.RightLowerArm,
                         new Vector3(
                             0f,
                             0f,
-                            28f*flinch));
+                            42f*flinch));
                     ApplyBone(
                         HumanBodyBones.LeftUpperArm,
                         new Vector3(
-                            -8f*flinch,
+                            -24f*flinch,
                             0f,
-                            -10f*flinch));
+                            -30f*flinch));
                     break;
 
                 case H51BodyRegion.LeftLeg:
                     ApplyBone(
                         HumanBodyBones.LeftUpperLeg,
-                        new Vector3(18f*flinch,0f,-8f*flinch));
+                        new Vector3(30f*flinch,0f,-24f*flinch));
                     ApplyBone(
                         HumanBodyBones.Spine,
-                        new Vector3(0f,0f,14f*flinch));
+                        new Vector3(0f,0f,24f*flinch));
                     break;
 
                 case H51BodyRegion.RightLeg:
                     ApplyBone(
                         HumanBodyBones.RightUpperLeg,
-                        new Vector3(18f*flinch,0f,8f*flinch));
+                        new Vector3(30f*flinch,0f,14f*flinch));
                     ApplyBone(
                         HumanBodyBones.Spine,
-                        new Vector3(0f,0f,-14f*flinch));
+                        new Vector3(0f,0f,-24f*flinch));
                     break;
 
                 case H51BodyRegion.Head:
@@ -304,24 +299,24 @@ namespace Hanger51.Weapons
                     ApplyBone(
                         HumanBodyBones.Neck,
                         new Vector3(
-                            -12f*flinch,
-                            side*12f*flinch,
-                            side*16f*flinch));
+                            -20f*flinch,
+                            side*20f*flinch,
+                            side*28f*flinch));
                     break;
 
                 default:
                     ApplyBone(
                         HumanBodyBones.Spine,
                         new Vector3(
-                            -10f*flinch,
-                            side*5f*flinch,
-                            side*14f*flinch));
+                            -30f*flinch,
+                            side*9f*flinch,
+                            side*24f*flinch));
                     ApplyBone(
                         HumanBodyBones.Chest,
                         new Vector3(
-                            -8f*flinch,
-                            side*4f*flinch,
-                            side*10f*flinch));
+                            -24f*flinch,
+                            side*8f*flinch,
+                            side*30f*flinch));
                     break;
             }
         }
@@ -341,24 +336,5 @@ namespace Hanger51.Weapons
                 Quaternion.Euler(euler);
         }
 
-        void RequestDeathPose(
-            Vector3 impactDirection)
-        {
-            deathPoseRequested = true;
-
-            Vector3 side =
-                Vector3.Cross(
-                    Vector3.up,
-                    impactDirection.normalized);
-
-            float roll =
-                side.x >= 0f ? 72f : -72f;
-
-            deathTargetRotation =
-                Quaternion.Euler(
-                    transform.eulerAngles.x,
-                    transform.eulerAngles.y,
-                    roll);
-        }
     }
 }
