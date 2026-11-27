@@ -198,7 +198,7 @@ namespace Hanger51.Weapons
                 return;
 
             float width = Mathf.Min(760f,Screen.width-60f);
-            float height = Mathf.Min(610f,Screen.height-60f);
+            float height = Mathf.Min(690f,Screen.height-40f);
             Rect panel = new Rect(
                 (Screen.width-width)*.5f,
                 (Screen.height-height)*.5f,
