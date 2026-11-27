@@ -12,6 +12,7 @@ namespace Hanger51.Weapons
         H51AnatomicalHealth target;
         PlayerInventory inventory;
         FirstPersonController controller;
+        H51BodyInspectorUI bodyInspector;
         H51CombatItemRegistry registry;
         InventoryItemDefinition treatmentKit;
         bool traumaKitOpened;
@@ -25,6 +26,7 @@ namespace Hanger51.Weapons
         {
             inventory = GetComponent<PlayerInventory>();
             controller = GetComponent<FirstPersonController>();
+            bodyInspector = GetComponent<H51BodyInspectorUI>();
             registry = GetComponent<H51CombatItemRegistry>();
         }
 
@@ -93,9 +95,12 @@ namespace Hanger51.Weapons
                   (hasMedical ? "available" : "not available") +
                   ". Trauma kits control major bleeding/chest trauma; medical kits provide airway and shock support.";
 
-            if (!controller)
-                controller = GetComponent<FirstPersonController>();
-            controller?.SetExternalInputBlocked(true);
+            if (!bodyInspector)
+                bodyInspector = GetComponent<H51BodyInspectorUI>();
+            if (!bodyInspector)
+                bodyInspector = gameObject.AddComponent<H51BodyInspectorUI>();
+
+            bodyInspector.OpenExternal(newTarget);
 
             return true;
         }
@@ -178,12 +183,24 @@ namespace Hanger51.Weapons
         public void Close()
         {
             open = false;
+
+            if (!bodyInspector)
+                bodyInspector = GetComponent<H51BodyInspectorUI>();
+
+            if (bodyInspector && bodyInspector.ExternalSession)
+                bodyInspector.CloseExternal();
+            else
+            {
+                if (!controller)
+                    controller = GetComponent<FirstPersonController>();
+                controller?.ResumeGameplayInputAfterUiClose();
+            }
+
             target = null;
             treatmentKit = null;
             traumaKitOpened = false;
             medicalKitOpened = false;
             status = string.Empty;
-            controller?.SetExternalInputBlocked(false);
         }
 
         void OnDisable()
@@ -197,182 +214,213 @@ namespace Hanger51.Weapons
             if (!open || !target)
                 return;
 
-            float width = Mathf.Min(760f,Screen.width-60f);
-            float height = Mathf.Min(690f,Screen.height-40f);
-            Rect panel = new Rect(
-                (Screen.width-width)*.5f,
-                (Screen.height-height)*.5f,
-                width,
-                height);
+            float inspectorWidth =
+                Mathf.Min(
+                    1180f,
+                    Screen.width-60f);
 
-            Color old = GUI.color;
-            GUI.color = new Color(.025f,.03f,.035f,.97f);
-            GUI.DrawTexture(panel,Texture2D.whiteTexture);
+            float panelWidth =
+                Mathf.Min(
+                    860f,
+                    inspectorWidth-280f);
+
+            float panelHeight = 132f;
+
+            Rect panel =
+                new Rect(
+                    (Screen.width-panelWidth)*.5f + 135f,
+                    Screen.height-panelHeight-34f,
+                    panelWidth,
+                    panelHeight);
+
+            Color old =
+                GUI.color;
+
+            GUI.color =
+                new Color(.025f,.03f,.035f,.98f);
+
+            GUI.DrawTexture(
+                panel,
+                Texture2D.whiteTexture);
+
             GUI.color = old;
 
-            GUIStyle title = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 22,
-                fontStyle = FontStyle.Bold
-            };
-            title.normal.textColor = Color.white;
+            GUIStyle label =
+                new GUIStyle(GUI.skin.label)
+                {
+                    fontSize = 12,
+                    wordWrap = true
+                };
+            label.normal.textColor =
+                new Color(.90f,.92f,.94f);
 
-            GUIStyle label = new GUIStyle(GUI.skin.label)
-            {
-                fontSize = 14,
-                wordWrap = true
-            };
-            label.normal.textColor = new Color(.90f,.92f,.94f);
+            GUIStyle warning =
+                new GUIStyle(label)
+                {
+                    fontStyle = FontStyle.Bold
+                };
+            warning.normal.textColor =
+                new Color(1f,.55f,.42f);
 
-            GUIStyle warning = new GUIStyle(label)
-            {
-                fontStyle = FontStyle.Bold
-            };
-            warning.normal.textColor = new Color(1f,.43f,.36f);
+            GUIStyle button =
+                new GUIStyle(GUI.skin.button)
+                {
+                    fontSize = 11,
+                    fontStyle = FontStyle.Bold
+                };
 
-            GUIStyle button = new GUIStyle(GUI.skin.button)
-            {
-                fontSize = 14,
-                fontStyle = FontStyle.Bold
-            };
-
-            float x = panel.x+28f;
-            float y = panel.y+24f;
-            float innerW = panel.width-56f;
-
-            GUI.Label(
-                new Rect(x,y,innerW,32f),
-                "TRAUMA ASSESSMENT — " + target.gameObject.name,
-                title);
-            y += 42f;
+            float x = panel.x+12f;
+            float y = panel.y+8f;
+            float innerW = panel.width-24f;
 
             GUI.Label(
                 new Rect(x,y,innerW,28f),
-                "Status: " + target.OverallStatus +
-                "    Blood: " + target.BloodVolumeLiters.ToString("0.00") +
-                "/" + target.NormalBloodVolumeLiters.ToString("0.00") +
-                " L    O₂: " + (target.OxygenSaturation*100f).ToString("0") + "%",
-                label);
-            y += 34f;
+                target.IsDead
+                    ? "CASUALTY IS DECEASED — anatomy remains inspectable; treatment is disabled."
+                    : "TRAUMA KIT: bleeding/tourniquet/chest trauma.    MEDICAL KIT: airway/breathing/shock support.",
+                target.IsDead ? warning : label);
 
-            GUI.Label(
-                new Rect(x,y,innerW,28f),
-                "External bleeding: " + target.ExternalBleedMlPerMinute.ToString("0") +
-                " mL/min    Internal bleeding: " + target.InternalBleedMlPerMinute.ToString("0") +
-                " mL/min    Shock: " + target.Shock.ToString("0") + "%",
-                label);
-            y += 40f;
+            y += 30f;
 
-            string priorities = BuildPriorityText(target);
-            GUI.Label(
-                new Rect(x,y,innerW,70f),
-                priorities,
-                priorities.Contains("URGENT") ? warning : label);
-            y += 82f;
+            float gap = 6f;
+            float buttonW =
+                (innerW-gap*4f)/5f;
+            float buttonH = 34f;
 
-            GUI.Label(
-                new Rect(x,y,innerW,44f),
-                "TRAUMA KIT: dressings, tourniquet, chest trauma.    MEDICAL KIT: airway/breathing and shock support.",
-                label);
-            y += 48f;
-
-            float buttonH = 42f;
-            float gap = 9f;
+            GUI.enabled = !target.IsDead;
 
             if (GUI.Button(
-                    new Rect(x,y,innerW,buttonH),
-                    "CONTROL EXTERNAL BLEEDING — trauma dressing",
+                    new Rect(x,y,buttonW,buttonH),
+                    "TRAUMA
+DRESSING",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
                 {
                     target.ApplyTraumaDressing();
-                    status = "Trauma dressing applied. External bleeding has been reduced.";
+                    status =
+                        "Trauma dressing applied. External bleeding reduced.";
                 }
             }
-            y += buttonH+gap;
 
-            GUI.enabled = target.WorstLimbBleedMlPerMinute > 20f;
+            x += buttonW+gap;
+
+            GUI.enabled =
+                !target.IsDead &&
+                target.WorstLimbBleedMlPerMinute > 20f;
+
             if (GUI.Button(
-                    new Rect(x,y,innerW,buttonH),
-                    "TOURNIQUET — worst severely bleeding limb",
+                    new Rect(x,y,buttonW,buttonH),
+                    "TOURNIQUET
+WORST LIMB",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
                 {
-                    H51BodyRegion limb = target.FindWorstBleedingLimb();
+                    H51BodyRegion limb =
+                        target.FindWorstBleedingLimb();
+
                     target.ApplyTourniquetToWorstLimb();
-                    status = "Tourniquet applied to " + Friendly(limb.ToString()) + ".";
+
+                    status =
+                        "Tourniquet applied to " +
+                        Friendly(limb.ToString()) +
+                        ".";
                 }
             }
-            GUI.enabled = true;
-            y += buttonH+gap;
+
+            x += buttonW+gap;
 
             H51BodyRegionState chest =
                 target.GetRegion(H51BodyRegion.Chest);
+
             H51OrganState leftLung =
                 target.GetOrgan(H51OrganType.LeftLung);
+
             H51OrganState rightLung =
                 target.GetOrgan(H51OrganType.RightLung);
 
             bool chestNeed =
-                (chest != null && chest.externalBleedMlPerMinute > 10f) ||
-                (leftLung != null && leftLung.condition < 85f) ||
-                (rightLung != null && rightLung.condition < 85f);
+                (chest != null &&
+                 chest.externalBleedMlPerMinute > 10f) ||
+                (leftLung != null &&
+                 leftLung.condition < 85f) ||
+                (rightLung != null &&
+                 rightLung.condition < 85f);
 
-            GUI.enabled = chestNeed;
+            GUI.enabled =
+                !target.IsDead &&
+                chestNeed;
+
             if (GUI.Button(
-                    new Rect(x,y,innerW,buttonH),
-                    "CHEST WOUND / BREATHING SUPPORT",
+                    new Rect(x,y,buttonW,buttonH),
+                    "CHEST
+TRAUMA",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
                 {
                     target.ApplyChestSealAndBreathingSupport();
-                    status = "Chest wound stabilization and breathing support applied.";
+
+                    status =
+                        "Chest-wound stabilization and breathing support applied.";
                 }
             }
-            GUI.enabled = true;
-            y += buttonH+gap;
 
-            GUI.enabled = target.OxygenSaturation < .94f || target.Consciousness < 80f;
+            x += buttonW+gap;
+
+            GUI.enabled =
+                !target.IsDead &&
+                (target.OxygenSaturation < .94f ||
+                 target.Consciousness < 80f);
+
             if (GUI.Button(
-                    new Rect(x,y,innerW,buttonH),
-                    "AIRWAY / BREATHING SUPPORT",
+                    new Rect(x,y,buttonW,buttonH),
+                    "AIRWAY /
+BREATHING",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Medical))
                 {
                     target.ProvideAirwaySupport();
-                    status = "Airway and breathing support provided.";
+
+                    status =
+                        "Airway and breathing support provided.";
                 }
             }
-            GUI.enabled = true;
-            y += buttonH+gap;
 
-            GUI.enabled = target.Shock > 18f;
+            x += buttonW+gap;
+
+            GUI.enabled =
+                !target.IsDead &&
+                target.Shock > 18f;
+
             if (GUI.Button(
-                    new Rect(x,y,innerW,buttonH),
-                    "SHOCK SUPPORT / PREPARE FOR TRANSPORT",
+                    new Rect(x,y,buttonW,buttonH),
+                    "SHOCK /
+TRANSPORT",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Medical))
                 {
                     target.ProvideShockSupport();
-                    status = "Shock-support measures applied. Continue monitoring and arrange transport if needed.";
+
+                    status =
+                        "Shock-support measures applied. Continue monitoring and arrange transport.";
                 }
             }
+
             GUI.enabled = true;
-            y += buttonH+12f;
 
             GUI.Label(
-                new Rect(x,y,innerW,52f),
-                status,
-                label);
-
-            GUI.Label(
-                new Rect(x,panel.yMax-36f,innerW,24f),
-                "ESC — close treatment panel",
+                new Rect(
+                    panel.x+12f,
+                    panel.y+76f,
+                    panel.width-24f,
+                    48f),
+                string.IsNullOrWhiteSpace(status)
+                    ? BuildPriorityText(target)
+                    : status,
                 label);
         }
 
