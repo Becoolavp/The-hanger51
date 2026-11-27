@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hanger51.Aircraft;
 using Hanger51.Commerce;
 using Hanger51.Health;
 using Hanger51.Inventory;
@@ -27,6 +28,7 @@ namespace Hanger51.Weapons
         [SerializeField] H51CombatItemRegistry registry;
         [SerializeField] H51MedicalTreatmentUI medicalUI;
         [SerializeField] FirstPersonController firstPersonController;
+        [SerializeField] P51PilotPlayerInteractor pilotInteractor;
         [SerializeField] AudioSource weaponAudioSource;
         [SerializeField, Min(1f)] float medicalInteractionDistance = 4f;
 
@@ -75,6 +77,18 @@ namespace Hanger51.Weapons
         {
             ResolveReferences();
             RefreshActiveDefinition();
+
+            if (pilotInteractor && pilotInteractor.IsPiloting)
+            {
+                customizationOpen = false;
+                wasAiming = false;
+                aimBlend = 0f;
+
+                if (equippedView && equippedView.DisplayedPrefabModel)
+                    equippedView.DisplayedPrefabModel.SetActive(false);
+
+                return;
+            }
 
             if (statusUntil > 0f &&
                 Time.unscaledTime >= statusUntil)
@@ -190,6 +204,8 @@ namespace Hanger51.Weapons
                 medicalUI = GetComponent<H51MedicalTreatmentUI>();
             if (!firstPersonController)
                 firstPersonController = GetComponent<FirstPersonController>();
+            if (!pilotInteractor)
+                pilotInteractor = GetComponent<P51PilotPlayerInteractor>();
             EnsureAudioSource();
         }
 
