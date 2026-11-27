@@ -166,6 +166,8 @@ namespace Hanger51.Weapons
 
                 bool wantsShot =
                     mouse != null &&
+                    !(firstPersonController &&
+                      firstPersonController.PrimaryActionSuppressed) &&
                     (activeDefinition.Automatic
                         ? mouse.leftButton.isPressed
                         : mouse.leftButton.wasPressedThisFrame);
