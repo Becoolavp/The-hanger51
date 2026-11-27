@@ -33,7 +33,8 @@ namespace Hanger51.NPCs
 
             if (!playerCamera || !dialogueUI) return;
 
-            if (dialogueUI.IsOpen)
+            if (dialogueUI.IsOpen ||
+                (medicalUI != null && medicalUI.IsOpen))
             {
                 ClearOwnedPrompt();
                 return;
