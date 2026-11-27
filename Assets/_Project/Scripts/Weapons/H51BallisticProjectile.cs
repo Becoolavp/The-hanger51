@@ -162,11 +162,17 @@ namespace Hanger51.Weapons
                         95f);
 
                 if (definition.WeaponClass == H51WeaponClass.Shotgun)
-                    trauma *= .34f;
+                    trauma *= .70f;
 
                 float penetration =
                     Mathf.Clamp01(
                         (energyJoules - 220f) / 2500f);
+
+                if (definition.WeaponClass == H51WeaponClass.Shotgun)
+                    penetration =
+                        Mathf.Max(
+                            penetration,
+                            .55f);
 
                 H51BodyRegion region =
                     anatomicalHitbox &&
