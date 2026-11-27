@@ -43,12 +43,16 @@ namespace Hanger51.Player
         private float cameraPitch;
         private bool jumpWasHeld;
         private bool externalInputBlocked;
+        private int suppressEscapeUntilFrame = -1;
+        private int suppressPrimaryActionUntilFrame = -1;
         private float crouchBlend;
 
         public float CameraPitch => cameraPitch;
         public Camera PlayerCamera => playerCamera;
         public float CrouchCameraOffset => -crouchEyeDrop * crouchBlend;
         public bool IsCrouching => crouchBlend > 0.5f;
+        public bool PrimaryActionSuppressed =>
+            Time.frameCount <= suppressPrimaryActionUntilFrame;
         public float StandingHeight
         {
             get
@@ -140,6 +144,29 @@ namespace Hanger51.Player
             externalInputBlocked = isBlocked;
             jumpWasHeld = false;
             SetCursorLocked(!isBlocked);
+        }
+
+        public void ResumeGameplayInputAfterUiClose()
+        {
+            externalInputBlocked = false;
+            jumpWasHeld = false;
+
+            // ESC is still "pressed this frame" when a UI closes from ESC.
+            // Ignore that same event so HandleCursorState cannot immediately
+            // unlock the cursor again. Also swallow the first primary click
+            // for two frames so closing/re-entering gameplay can never fire
+            // an equipped weapon.
+            suppressEscapeUntilFrame =
+                Mathf.Max(
+                    suppressEscapeUntilFrame,
+                    Time.frameCount + 1);
+
+            suppressPrimaryActionUntilFrame =
+                Mathf.Max(
+                    suppressPrimaryActionUntilFrame,
+                    Time.frameCount + 2);
+
+            SetCursorLocked(true);
         }
 
         private void CaptureStandingCapsuleIfNeeded()
@@ -404,14 +431,17 @@ namespace Hanger51.Player
             Keyboard keyboard = Keyboard.current;
             Mouse mouse = Mouse.current;
 
-            if (keyboard != null && keyboard.escapeKey.wasPressedThisFrame)
+            if (keyboard != null &&
+                keyboard.escapeKey.wasPressedThisFrame &&
+                Time.frameCount > suppressEscapeUntilFrame)
             {
                 SetCursorLocked(false);
             }
 
-            if (mouse != null
-                && mouse.leftButton.wasPressedThisFrame
-                && Cursor.lockState != CursorLockMode.Locked)
+            if (mouse != null &&
+                mouse.leftButton.wasPressedThisFrame &&
+                Cursor.lockState != CursorLockMode.Locked &&
+                Time.frameCount > suppressPrimaryActionUntilFrame)
             {
                 SetCursorLocked(true);
             }
