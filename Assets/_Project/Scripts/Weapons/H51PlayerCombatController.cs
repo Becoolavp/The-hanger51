@@ -1805,15 +1805,25 @@ namespace Hanger51.Weapons
             if (activeDefinition.Kind == H51CombatItemKind.Firearm &&
                 activeState != null)
             {
-                H51CombatItemDefinition ammo =
-                    registry
-                        ? registry.FindAmmo(activeDefinition.Cartridge)
-                        : null;
+                int reserve = 0;
 
-                int reserve =
-                    ammo && ammo.InventoryItem && inventory
-                        ? inventory.CountItem(ammo.InventoryItem)
-                        : 0;
+                if (registry && inventory)
+                {
+                    List<H51CombatItemDefinition> ammoDefinitions =
+                        registry.FindAllAmmo(
+                            activeDefinition.Cartridge);
+
+                    for (int i=0;i<ammoDefinitions.Count;i++)
+                    {
+                        H51CombatItemDefinition ammo =
+                            ammoDefinitions[i];
+
+                        if (ammo && ammo.InventoryItem)
+                            reserve +=
+                                inventory.CountItem(
+                                    ammo.InventoryItem);
+                    }
+                }
 
                 GUIStyle hud =
                     new GUIStyle(GUI.skin.label)
