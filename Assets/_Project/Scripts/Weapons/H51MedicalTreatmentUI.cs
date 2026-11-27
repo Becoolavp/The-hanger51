@@ -291,8 +291,7 @@ namespace Hanger51.Weapons
 
             if (GUI.Button(
                     new Rect(x,y,buttonW,buttonH),
-                    "TRAUMA
-DRESSING",
+                    "TRAUMA\\nDRESSING",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
@@ -311,8 +310,7 @@ DRESSING",
 
             if (GUI.Button(
                     new Rect(x,y,buttonW,buttonH),
-                    "TOURNIQUET
-WORST LIMB",
+                    "TOURNIQUET\\nWORST LIMB",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
@@ -354,8 +352,7 @@ WORST LIMB",
 
             if (GUI.Button(
                     new Rect(x,y,buttonW,buttonH),
-                    "CHEST
-TRAUMA",
+                    "CHEST\\nTRAUMA",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Trauma))
@@ -376,8 +373,7 @@ TRAUMA",
 
             if (GUI.Button(
                     new Rect(x,y,buttonW,buttonH),
-                    "AIRWAY /
-BREATHING",
+                    "AIRWAY /\\nBREATHING",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Medical))
@@ -397,8 +393,7 @@ BREATHING",
 
             if (GUI.Button(
                     new Rect(x,y,buttonW,buttonH),
-                    "SHOCK /
-TRANSPORT",
+                    "SHOCK /\\nTRANSPORT",
                     button))
             {
                 if (EnsureTreatmentKit(H51MedicalKitRole.Medical))
