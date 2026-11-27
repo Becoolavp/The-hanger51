@@ -632,6 +632,22 @@ Important first-pass limitations:
 - magnified optics currently use FOV zoom + scope mask/reticle rather than a separate render-to-texture scope camera;
 - attachment state is currently stored per weapon definition during the runtime session rather than as fully serialized per-instance gun condition.
 
+### Weapon first-person ADS and attachment-stability refinement — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The first-person combat controller was refined after in-build testing showed the firearm sitting too far from the camera and mounted optics appearing to jump. The main cause of the attachment instability was a presentation-signature reset after every shot, which caused runtime attachments to be destroyed and rebuilt during firing.
+
+Current behavior:
+
+- firearm presentation depth is clamped much closer to the camera for a shoulder-held first-person view;
+- ADS position is solved from the actual installed optic renderer center when an optic is present, with a calculated iron-sight reference fallback when it is not;
+- weapon position and camera FOV now use the same smoothed ADS blend so the scope/zoom transition stays synchronized;
+- the magnified-scope overlay waits until the weapon is nearly fully shouldered, then the physical weapon renderer is hidden at full magnified aim so it cannot obstruct the simulated scope picture;
+- firing no longer rebuilds runtime attachments;
+- attachment visuals are self-checked and rebuilt only if their installed state actually changes or a visual goes missing;
+- optic and under-barrel mount placement follows the corrected LowPolyWeapons local-axis direction.
+
+No editor setup step is required for this refinement; pull the branch, let Unity compile, and build/test normally.
+
 ### LowPolyWeapons visual, orientation and procurement-store upgrade — IMPLEMENTED / PENDING UNITY VALIDATION
 
 After the first combat build, magenta weapon models were traced to the imported pack's shared material/shader setup rather than missing meshes or missing art. The pack's `Texture_01.png` color atlas is present and referenced by the shared weapon material, but the imported material is not valid for Hanger 51's URP rendering path.
