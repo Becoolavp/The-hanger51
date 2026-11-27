@@ -1,5 +1,6 @@
 using System.Collections;
 using Bozo.ModularCharacters;
+using Hanger51.Health;
 using UnityEngine;
 
 namespace Hanger51.NPCs
@@ -355,7 +356,7 @@ namespace Hanger51.NPCs
                 outfitSystem.GetComponentsInChildren<Collider>(true);
             for (int i=0;i<colliders.Length;i++)
             {
-                if (colliders[i])
+                if (colliders[i] && !colliders[i].GetComponent<H51RagdollBone>())
                     colliders[i].enabled = false;
             }
 
@@ -373,6 +374,9 @@ namespace Hanger51.NPCs
             {
                 Rigidbody body = bodies[i];
                 if (!body)
+                    continue;
+
+                if (body.GetComponent<H51RagdollBone>())
                     continue;
 
                 body.isKinematic = true;
