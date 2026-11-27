@@ -1,6 +1,7 @@
 using UnityEngine;
 using UnityEngine.AI;
 using Hanger51.World;
+using Hanger51.Health;
 
 namespace Hanger51.NPCs
 {
@@ -70,6 +71,9 @@ namespace Hanger51.NPCs
         {
             identity = GetComponent<H51CitizenIdentity>();
             agent = GetComponent<NavMeshAgent>();
+
+            if (!GetComponent<H51AnatomicalHealth>())
+                gameObject.AddComponent<H51AnatomicalHealth>();
             if (!GetComponent<H51CitizenGrounding>())
                 gameObject.AddComponent<H51CitizenGrounding>();
             animator = GetComponentInChildren<Animator>(true);
@@ -897,6 +901,12 @@ namespace Hanger51.NPCs
                 bozoVisual = GetComponent<H51BoZoCitizenVisual>();
             if (bozoVisual)
                 bozoVisual.SetVehicleVisualSuppressed(true);
+
+            H51CitizenEmergencyState emergency =
+                GetComponent<H51CitizenEmergencyState>();
+            if (emergency)
+                emergency.SetTravelVisualSuppressed(true);
+
             parentBeforeVehicle = transform.parent;
 
             for (int i = 0; i < citizenRenderers.Length; i++)
@@ -1003,6 +1013,11 @@ namespace Hanger51.NPCs
                 bozoVisual = GetComponent<H51BoZoCitizenVisual>();
             if (bozoVisual)
                 bozoVisual.SetVehicleVisualSuppressed(false);
+
+            H51CitizenEmergencyState emergency =
+                GetComponent<H51CitizenEmergencyState>();
+            if (emergency)
+                emergency.SetTravelVisualSuppressed(false);
 
             nextThink = Time.time + .25f;
         }
