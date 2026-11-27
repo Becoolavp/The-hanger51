@@ -22,6 +22,7 @@ namespace Hanger51.Health
             if (existing)
             {
                 hitboxRoot = existing;
+                SetHitboxLayer(existing);
                 return;
             }
 
@@ -55,6 +56,19 @@ namespace Hanger51.Health
             H51AnatomicalHitbox hitbox =
                 child.AddComponent<H51AnatomicalHitbox>();
             hitbox.Configure(GetComponent<H51AnatomicalHealth>(),region);
+        }
+
+        static void SetHitboxLayer(Transform root)
+        {
+            if (!root)
+                return;
+
+            Transform[] all =
+                root.GetComponentsInChildren<Transform>(true);
+
+            for (int i=0;i<all.Length;i++)
+                if (all[i])
+                    all[i].gameObject.layer = 2;
         }
     }
 }
