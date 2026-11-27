@@ -240,7 +240,7 @@ namespace Hanger51.Weapons
                         new Vector3(
                             -30f*flinch,
                             12f*flinch,
-                            -414f*flinch));
+                            -48f*flinch));
                     ApplyBone(
                         HumanBodyBones.LeftLowerArm,
                         new Vector3(
@@ -250,9 +250,9 @@ namespace Hanger51.Weapons
                     ApplyBone(
                         HumanBodyBones.RightUpperArm,
                         new Vector3(
-                            -24f*flinch,
+                            -14f*flinch,
                             0f,
-                            30f*flinch));
+                            18f*flinch));
                     break;
 
                 case H51BodyRegion.RightArm:
@@ -260,8 +260,8 @@ namespace Hanger51.Weapons
                         HumanBodyBones.RightUpperArm,
                         new Vector3(
                             -30f*flinch,
-                            -20f*flinch,
-                            414f*flinch));
+                            -12f*flinch,
+                            48f*flinch));
                     ApplyBone(
                         HumanBodyBones.RightLowerArm,
                         new Vector3(
@@ -271,15 +271,15 @@ namespace Hanger51.Weapons
                     ApplyBone(
                         HumanBodyBones.LeftUpperArm,
                         new Vector3(
-                            -24f*flinch,
+                            -14f*flinch,
                             0f,
-                            -30f*flinch));
+                            -18f*flinch));
                     break;
 
                 case H51BodyRegion.LeftLeg:
                     ApplyBone(
                         HumanBodyBones.LeftUpperLeg,
-                        new Vector3(30f*flinch,0f,-24f*flinch));
+                        new Vector3(30f*flinch,0f,-14f*flinch));
                     ApplyBone(
                         HumanBodyBones.Spine,
                         new Vector3(0f,0f,24f*flinch));
@@ -308,15 +308,15 @@ namespace Hanger51.Weapons
                     ApplyBone(
                         HumanBodyBones.Spine,
                         new Vector3(
-                            -30f*flinch,
+                            -16f*flinch,
                             side*9f*flinch,
                             side*24f*flinch));
                     ApplyBone(
                         HumanBodyBones.Chest,
                         new Vector3(
-                            -24f*flinch,
+                            -14f*flinch,
                             side*8f*flinch,
-                            side*30f*flinch));
+                            side*18f*flinch));
                     break;
             }
         }
