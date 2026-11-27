@@ -114,12 +114,77 @@ namespace Hanger51.Weapons
                         hit.collider.transform.IsChildOf(owner.transform))
                         continue;
 
-                    Impact(hit);
-                    return;
+                    H51AnatomicalHealth victim =
+                        ResolveHealth(hit.collider);
+
+                    if (victim)
+                    {
+                        RaycastHit resolvedHit = hit;
+
+                        // Region hitboxes form the outer body shell. Look a short
+                        // distance farther along the same ballistic segment for
+                        // a nested organ volume belonging to this same victim.
+                        // That lets a bullet enter through the head/chest/abdomen
+                        // and then register the actual organ it crossed.
+                        float organSearchLimit =
+                            hit.distance + .75f;
+
+                        for (int j=i;j<hits.Length;j++)
+                        {
+                            RaycastHit candidate =
+                                hits[j];
+
+                            if (!candidate.collider ||
+                                candidate.distance > organSearchLimit)
+                                break;
+
+                            H51OrganHitbox organ =
+                                candidate.collider
+                                    .GetComponent<H51OrganHitbox>();
+
+                            if (organ &&
+                                organ.Health == victim)
+                            {
+                                resolvedHit = candidate;
+                                break;
+                            }
+                        }
+
+                        Impact(resolvedHit);
+                        return;
+                    }
+
+                    if (!hit.collider.isTrigger)
+                    {
+                        Impact(hit);
+                        return;
+                    }
                 }
             }
 
             transform.position = start + travel;
+        }
+
+        static H51AnatomicalHealth ResolveHealth(
+            Collider collider)
+        {
+            if (!collider)
+                return null;
+
+            H51OrganHitbox organ =
+                collider.GetComponent<H51OrganHitbox>();
+
+            if (organ && organ.Health)
+                return organ.Health;
+
+            H51AnatomicalHitbox anatomical =
+                collider.GetComponent<H51AnatomicalHitbox>();
+
+            if (anatomical && anatomical.Health)
+                return anatomical.Health;
+
+            return
+                collider.GetComponentInParent<H51AnatomicalHealth>();
         }
 
         void Impact(RaycastHit hit)
@@ -144,13 +209,18 @@ namespace Hanger51.Weapons
                     ForceMode.Impulse);
             }
 
+            H51OrganHitbox organHitbox =
+                hit.collider.GetComponent<H51OrganHitbox>();
+
             H51AnatomicalHitbox anatomicalHitbox =
                 hit.collider.GetComponent<H51AnatomicalHitbox>();
 
             H51AnatomicalHealth health =
-                anatomicalHitbox && anatomicalHitbox.Health
-                    ? anatomicalHitbox.Health
-                    : hit.collider.GetComponentInParent<H51AnatomicalHealth>();
+                organHitbox && organHitbox.Health
+                    ? organHitbox.Health
+                    : anatomicalHitbox && anatomicalHitbox.Health
+                        ? anatomicalHitbox.Health
+                        : hit.collider.GetComponentInParent<H51AnatomicalHealth>();
 
             if (health)
             {
@@ -178,14 +248,30 @@ namespace Hanger51.Weapons
                     hit.collider.GetComponentInParent<H51RagdollBone>();
 
                 H51BodyRegion region =
-                    anatomicalHitbox &&
-                    anatomicalHitbox.Health == health
-                        ? anatomicalHitbox.Region
-                        : ragdollBone
-                            ? ragdollBone.Region
-                            : H51BodyRegion.Chest;
+                    organHitbox &&
+                    organHitbox.Health == health
+                        ? organHitbox.ContainingRegion
+                        : anatomicalHitbox &&
+                          anatomicalHitbox.Health == health
+                            ? anatomicalHitbox.Region
+                            : ragdollBone
+                                ? ragdollBone.Region
+                                : H51BodyRegion.Chest;
 
-                if (anatomicalHitbox && anatomicalHitbox.Health == health)
+                if (organHitbox &&
+                    organHitbox.Health == health)
+                {
+                    health.ApplyDamage(
+                        region,
+                        organHitbox.Organ,
+                        hit.point,
+                        trauma,
+                        H51DamageType.Ballistic,
+                        velocity.normalized,
+                        penetration);
+                }
+                else if (anatomicalHitbox &&
+                         anatomicalHitbox.Health == health)
                 {
                     health.ApplyDamage(
                         region,
