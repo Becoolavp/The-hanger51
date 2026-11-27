@@ -772,8 +772,12 @@ namespace Hanger51.Weapons
                         localBounds.center.z);
 
                 case H51AttachmentSlot.Muzzle:
+                    // The LowPolyWeapons firearm bodies present their muzzle
+                    // on the negative local-X end in our corrected first-person
+                    // orientation. Using min.x keeps suppressors on the barrel
+                    // rather than the stock.
                     return new Vector3(
-                        localBounds.max.x,
+                        localBounds.min.x,
                         localBounds.center.y,
                         localBounds.center.z);
 
