@@ -90,8 +90,9 @@ namespace Hanger51.NPCs
             {
                 Resolve();
 
+                string reason = string.Empty;
                 if (medicalUI &&
-                    medicalUI.TryInspect(aimedHealth,out string reason))
+                    medicalUI.TryInspect(aimedHealth,out reason))
                 {
                     ClearOwnedPrompt();
                     return;
