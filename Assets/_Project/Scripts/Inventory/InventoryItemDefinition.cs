@@ -28,6 +28,33 @@ namespace Hanger51.Inventory
             Mathf.Max(0.01f, worldScale.y),
             Mathf.Max(0.01f, worldScale.z));
 
+        public void Configure(
+            string configuredItemId,
+            string configuredDisplayName,
+            string configuredDescription,
+            int configuredMaxStackSize,
+            Color configuredPlaceholderColor,
+            bool configuredCanEquip,
+            GameObject configuredWorldPrefab,
+            Vector3 configuredWorldScale)
+        {
+            itemId = string.IsNullOrWhiteSpace(configuredItemId)
+                ? name.ToLowerInvariant()
+                : configuredItemId.Trim();
+            displayName = string.IsNullOrWhiteSpace(configuredDisplayName)
+                ? name
+                : configuredDisplayName.Trim();
+            description = configuredDescription ?? string.Empty;
+            maxStackSize = Mathf.Max(1, configuredMaxStackSize);
+            placeholderColor = configuredPlaceholderColor;
+            canEquip = configuredCanEquip;
+            worldPrefab = configuredWorldPrefab;
+            worldScale = new Vector3(
+                Mathf.Max(.01f, configuredWorldScale.x),
+                Mathf.Max(.01f, configuredWorldScale.y),
+                Mathf.Max(.01f, configuredWorldScale.z));
+        }
+
         private void OnValidate()
         {
             itemId = string.IsNullOrWhiteSpace(itemId) ? name.ToLowerInvariant() : itemId.Trim();
