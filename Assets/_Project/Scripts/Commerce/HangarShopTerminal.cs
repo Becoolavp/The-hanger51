@@ -108,6 +108,11 @@ namespace Hanger51.Commerce
                     : null;
         }
 
+        public void ReplaceCatalog(List<ShopCatalogEntry> configuredCatalog)
+        {
+            catalog = configuredCatalog ?? new List<ShopCatalogEntry>();
+        }
+
         private void ResolveReferences()
         {
             if (wallet == null)
