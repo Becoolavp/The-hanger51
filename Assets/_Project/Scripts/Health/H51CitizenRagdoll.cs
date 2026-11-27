@@ -56,7 +56,22 @@ namespace Hanger51.Health
             if (!built)
                 EnsureRig();
 
-            if (!health || !ragdolled)
+            if (!health)
+                return;
+
+            // BoZo can finish constructing its Humanoid visual after Awake.
+            // If a citizen died before the ragdoll rig was ready, activate it
+            // as soon as EnsureRig succeeds instead of leaving a deceased NPC
+            // frozen upright forever.
+            if (built &&
+                health.IsDead &&
+                !ragdolled)
+            {
+                permanent = true;
+                ActivateRagdoll(true);
+            }
+
+            if (!ragdolled)
                 return;
 
             // Development reset/respawn support: ResetHealthy can revive a
