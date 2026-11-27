@@ -1,3 +1,4 @@
+using Hanger51.Health;
 using UnityEngine;
 using UnityEngine.AI;
 
@@ -16,6 +17,7 @@ namespace Hanger51.NPCs
 
         H51CitizenBrain brain;
         H51CitizenIdentity identity;
+        H51AnatomicalHealth anatomicalHealth;
         NavMeshAgent agent;
         GameObject phoneVisual;
         bool phoneRequestedVisible;
@@ -65,6 +67,7 @@ namespace Hanger51.NPCs
         {
             brain = GetComponent<H51CitizenBrain>();
             identity = GetComponent<H51CitizenIdentity>();
+            anatomicalHealth = GetComponent<H51AnatomicalHealth>();
             agent = GetComponent<NavMeshAgent>();
         }
 
@@ -215,6 +218,12 @@ namespace Hanger51.NPCs
 
         public void CompleteOnSceneMedicalTreatment()
         {
+            if (!anatomicalHealth)
+                anatomicalHealth = GetComponent<H51AnatomicalHealth>();
+
+            if (anatomicalHealth)
+                anatomicalHealth.StabilizeAllBleeding(.92f);
+
             injurySeverity = 0f;
             requiresAmbulance = false;
             ResolveIfComplete();
@@ -281,6 +290,13 @@ namespace Hanger51.NPCs
             }
 
             beingTransported = false;
+
+            if (!anatomicalHealth)
+                anatomicalHealth = GetComponent<H51AnatomicalHealth>();
+
+            if (anatomicalHealth)
+                anatomicalHealth.StabilizeAllBleeding(1f);
+
             injurySeverity = 0f;
             requiresAmbulance = false;
             ResolveIfComplete();
