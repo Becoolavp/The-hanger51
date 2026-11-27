@@ -224,7 +224,7 @@ namespace Hanger51.Weapons
         void Fire()
         {
             if (!activeDefinition ||
-                !activeState ||
+                activeState == null ||
                 activeState.magazine <= 0 ||
                 !playerCamera)
             {
@@ -277,7 +277,7 @@ namespace Hanger51.Weapons
         void Reload()
         {
             if (!activeDefinition ||
-                !activeState ||
+                activeState == null ||
                 activeDefinition.Kind != H51CombatItemKind.Firearm ||
                 !inventory ||
                 !registry)
@@ -674,12 +674,15 @@ namespace Hanger51.Weapons
             bool haveBounds = false;
             Bounds localBounds = new Bounds(Vector3.zero,Vector3.zero);
 
+            Transform attachmentRoot =
+                model.transform.Find("H51 Runtime Attachments");
+
             for (int i=0;i<renderers.Length;i++)
             {
                 Renderer renderer = renderers[i];
                 if (!renderer ||
-                    renderer.transform.IsChildOf(
-                        model.transform.Find("H51 Runtime Attachments")))
+                    (attachmentRoot &&
+                     renderer.transform.IsChildOf(attachmentRoot)))
                     continue;
 
                 Bounds world = renderer.bounds;
@@ -748,7 +751,7 @@ namespace Hanger51.Weapons
             H51AttachmentSlot slot,
             H51CombatItemDefinition selected)
         {
-            if (!activeState || !inventory)
+            if (activeState == null || !inventory)
                 return;
 
             H51CombatItemDefinition current =
