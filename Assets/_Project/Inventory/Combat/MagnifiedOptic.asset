@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
+  m_Name: MagnifiedOptic
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
+  itemId: h51-optic-magnified
+  displayName: Magnified Rifle Optic
+  description: Magnified optic with a narrower field of view for precision shooting.
+  maxStackSize: 2
+  placeholderColor: {r: 0.18, g: 0.18, b: 0.18, a: 1}
+  canEquip: 0
+  worldPrefab: {fileID: 313249400331479229, guid: 527e1db2b05013c4fa9a027a6fb3185e, type: 3}
+  worldScale: {x: 1, y: 1, z: 1}

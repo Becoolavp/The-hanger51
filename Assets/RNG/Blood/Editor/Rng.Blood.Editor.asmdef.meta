@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 06e9f3c1b40f67d46b0947582cc50d08
+AssemblyDefinitionImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Editor/Rng.Blood.Editor.asmdef
+  uploadId: 1057736

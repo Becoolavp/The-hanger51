@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1d7f0c223b64f64975c710a3401c211, type: 3}
+  m_Name: ServiceRifle556_V4
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Weapons.H51CombatItemDefinition
+  inventoryItem: {fileID: 11400000, guid: b74e378ad37ce7b41862dc456e023744, type: 2}
+  kind: 0
+  cartridge: 2
+  projectileMassGrams: 4
+  muzzleVelocityMps: 900
+  projectileDiameterMm: 5.56
+  ballisticDrag: 0.25
+  damageScale: 1
+  magazineCapacity: 30
+  roundsPerMinute: 752
+  automatic: 1
+  ironSightFov: 48
+  viewLocalPosition: {x: 0.18, y: -0.26, z: 0.68}
+  viewLocalEuler: {x: 0, y: 90, z: 0}
+  viewScaleMultiplier: 1.28
+  opticMount: {x: 0, y: 0, z: 0}
+  muzzleMount: {x: 0, y: 0, z: 0}
+  underbarrelMount: {x: 0, y: 0, z: 0}
+  attachmentSlot: 0
+  attachmentPrefab: {fileID: 0}
+  attachmentEuler: {x: 0, y: 0, z: 0}
+  attachmentScale: {x: 1, y: 1, z: 1}
+  opticFov: 40
+  muzzleVelocityMultiplier: 1
+  recoilMultiplier: 1
+  grenadeFuseSeconds: 3.5
+  grenadeBlastRadius: 7
+  grenadeTrauma: 75

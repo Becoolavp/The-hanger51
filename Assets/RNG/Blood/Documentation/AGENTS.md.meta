@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 8f3c2d71a94e4b6c9d0e15a7b2c4f863
+TextScriptImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Documentation/AGENTS.md
+  uploadId: 1057736

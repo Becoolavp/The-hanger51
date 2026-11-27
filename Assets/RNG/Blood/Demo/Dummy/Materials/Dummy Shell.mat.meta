@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 3022e73cca443864f8daa874ee67851c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/Dummy/Materials/Dummy Shell.mat
+  uploadId: 1057736

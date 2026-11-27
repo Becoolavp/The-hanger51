@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 914c6ef124454489816c70a68a69b3bf
+ShaderIncludeImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Shaders/BloodShapes.hlsl
+  uploadId: 1057736

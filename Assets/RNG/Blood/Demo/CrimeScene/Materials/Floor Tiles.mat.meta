@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 76fd49ce04616c045866e474283b1a21
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/CrimeScene/Materials/Floor Tiles.mat
+  uploadId: 1057736

@@ -1,0 +1,16 @@
+fileFormatVersion: 2
+guid: 4572716578974dd39724bb8b3bbb067d
+ShaderImporter:
+  externalObjects: {}
+  defaultTextures: []
+  nonModifiableTextures: []
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Shaders/BloodCoat.shader
+  uploadId: 1057736

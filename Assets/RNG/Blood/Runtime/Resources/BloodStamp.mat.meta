@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 4a8216dce5b94822873ba442332cee6c
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Runtime/Resources/BloodStamp.mat
+  uploadId: 1057736

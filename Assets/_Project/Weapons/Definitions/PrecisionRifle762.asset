@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b1d7f0c223b64f64975c710a3401c211, type: 3}
+  m_Name: PrecisionRifle762
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Weapons.H51CombatItemDefinition
+  inventoryItem: {fileID: 11400000, guid: 01df08a42fd37fa42aa318bffee7eae4, type: 2}
+  kind: 0
+  cartridge: 3
+  projectileMassGrams: 9.5
+  muzzleVelocityMps: 800
+  projectileDiameterMm: 7.62
+  ballisticDrag: 0.23
+  damageScale: 1.05
+  magazineCapacity: 10
+  roundsPerMinute: 90
+  automatic: 0
+  ironSightFov: 42
+  viewLocalPosition: {x: 0.17, y: -0.24, z: 0.72}
+  viewLocalEuler: {x: 0, y: 90, z: 0}
+  viewScaleMultiplier: 1.35
+  opticMount: {x: 0, y: 0, z: 0}
+  muzzleMount: {x: 0, y: 0, z: 0}
+  underbarrelMount: {x: 0, y: 0, z: 0}
+  attachmentSlot: 0
+  attachmentPrefab: {fileID: 0}
+  attachmentEuler: {x: 0, y: 0, z: 0}
+  attachmentScale: {x: 1, y: 1, z: 1}
+  opticFov: 40
+  muzzleVelocityMultiplier: 1
+  recoilMultiplier: 1
+  grenadeFuseSeconds: 3.5
+  grenadeBlastRadius: 7
+  grenadeTrauma: 75

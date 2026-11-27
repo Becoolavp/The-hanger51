@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: b0c70b1648d482a48b5c9f8569293776
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/Showcase/Showcase Slab.mat
+  uploadId: 1057736

@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: d006046bbe5cdd24fb81ad82d9025b69
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/CrimeScene/CrimeSceneDirector.cs
+  uploadId: 1057736

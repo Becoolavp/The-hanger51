@@ -1,0 +1,22 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
+  m_Name: FragmentationGrenade
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
+  itemId: h51-frag-grenade
+  displayName: Fragmentation Grenade
+  description: Throwable fragmentation grenade for combat-system testing.
+  maxStackSize: 6
+  placeholderColor: {r: 0.25, g: 0.32, b: 0.2, a: 1}
+  canEquip: 1
+  worldPrefab: {fileID: 2747403706215491521, guid: 34406c98cac586747ac7b9b91f76f9ad, type: 3}
+  worldScale: {x: 1, y: 1, z: 1}
