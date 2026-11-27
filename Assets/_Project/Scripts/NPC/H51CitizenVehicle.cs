@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using Hanger51.Health;
 using UnityEngine;
 
 namespace Hanger51.NPCs
@@ -169,6 +170,26 @@ namespace Hanger51.NPCs
                     vehicleId,
                     15f,
                     0f);
+
+                if (amount >= 12f)
+                {
+                    H51AnatomicalHealth health =
+                        currentDriver.GetComponent<H51AnatomicalHealth>();
+
+                    if (health)
+                    {
+                        H51BodyRegion region =
+                            Random.value < .62f
+                                ? H51BodyRegion.Chest
+                                : H51BodyRegion.Abdomen;
+
+                        health.ApplyDamage(
+                            region,
+                            Mathf.Clamp(amount * .72f, 6f, 34f),
+                            H51DamageType.Blunt,
+                            .08f);
+                    }
+                }
 
                 if (amount >= 22f)
                 {
