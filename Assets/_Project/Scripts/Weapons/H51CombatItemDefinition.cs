@@ -77,6 +77,7 @@ namespace Hanger51.Weapons
         [SerializeField] AudioClip[] aimClips = System.Array.Empty<AudioClip>();
         [SerializeField] AudioClip[] equipClips = System.Array.Empty<AudioClip>();
         [SerializeField] AudioClip[] shellClips = System.Array.Empty<AudioClip>();
+        [SerializeField] GameObject casingPrefab;
 
         [Header("Attachment mounts")]
         [SerializeField] Vector3 opticMount = new Vector3(0f,.04f,0f);
@@ -121,6 +122,7 @@ namespace Hanger51.Weapons
         public AudioClip[] AimClips => aimClips;
         public AudioClip[] EquipClips => equipClips;
         public AudioClip[] ShellClips => shellClips;
+        public GameObject CasingPrefab => casingPrefab;
         public Vector3 OpticMount => opticMount;
         public Vector3 MuzzleMount => muzzleMount;
         public Vector3 UnderbarrelMount => underbarrelMount;
@@ -208,6 +210,11 @@ namespace Hanger51.Weapons
             aimClips = configuredAim ?? System.Array.Empty<AudioClip>();
             equipClips = configuredEquip ?? System.Array.Empty<AudioClip>();
             shellClips = configuredShells ?? System.Array.Empty<AudioClip>();
+        }
+
+        public void ConfigureCasing(GameObject configuredCasingPrefab)
+        {
+            casingPrefab = configuredCasingPrefab;
         }
 
         public void ConfigureAmmo(
