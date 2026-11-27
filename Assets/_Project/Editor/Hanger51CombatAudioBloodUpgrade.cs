@@ -10,7 +10,6 @@ using Hanger51.NPCs;
 using Hanger51.Player;
 using Hanger51.Weapons;
 using Rng.Blood;
-using Rng.Blood.EditorTools;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEngine;
@@ -329,11 +328,10 @@ namespace Hanger51.EditorTools
                 bloodCitizens++;
             }
 
+            int remainingBloodIssues;
             int bloodSetupFixes =
-                BloodSetup.FixAll();
-
-            List<BloodSetup.Issue> remainingBloodIssues =
-                BloodSetup.Check();
+                RunBloodSetupFixAll(
+                    out remainingBloodIssues);
 
             EditorSceneManager.MarkSceneDirty(
                 SceneManager.GetActiveScene());
@@ -355,7 +353,7 @@ namespace Hanger51.EditorTools
                 ", RNG Blood project fixes applied=" +
                 bloodSetupFixes +
                 ", remaining RNG Blood setup issues=" +
-                remainingBloodIssues.Count +
+                remainingBloodIssues +
                 ". Weapons are now subdivided by handgun, assault rifle, sniper rifle, SMG, machine gun, shotgun, explosives, ammunition and gear. Run Step 175.");
         }
 
@@ -475,14 +473,19 @@ namespace Hanger51.EditorTools
                 }
             }
 
-            List<BloodSetup.Issue> bloodIssues =
-                BloodSetup.Check();
+            int bloodIssueCount =
+                GetBloodSetupIssueCount();
+
+            int expectedFirearms =
+                BuildFamilies()
+                    .Sum(family =>
+                        FindPrefabs(family.prefabFolder).Count);
 
             bool ok =
                 player &&
                 registry &&
                 terminal &&
-                firearmCount > 100 &&
+                firearmCount >= expectedFirearms &&
                 missingGunshots == 0 &&
                 handgunCount > 0 &&
                 assaultCount > 0 &&
@@ -495,7 +498,7 @@ namespace Hanger51.EditorTools
                 missingSupply == 0 &&
                 categorizedProducts > firearmCount &&
                 uncategorizedCombat == 0 &&
-                bloodIssues.Count == 0;
+                bloodIssueCount == 0;
 
             if (ok)
             {
@@ -513,6 +516,8 @@ namespace Hanger51.EditorTools
                     ", citizens with RNG Blood=" +
                     citizens.Length +
                     "/" + citizens.Length +
+                    ", expected full-roster firearms=" +
+                    expectedFirearms +
                     ", RNG Blood setup issues=0.");
             }
             else
@@ -538,9 +543,90 @@ namespace Hanger51.EditorTools
                     ", missing BloodSupply=" + missingSupply +
                     ", categorized combat products=" + categorizedProducts +
                     ", uncategorized combat products=" + uncategorizedCombat +
-                    ", RNG Blood setup issues=" + bloodIssues.Count +
+                    ", expected full-roster firearms=" + expectedFirearms +
+                    ", RNG Blood setup issues=" + bloodIssueCount +
                     ".");
             }
+        }
+
+        static int RunBloodSetupFixAll(
+            out int remainingIssues)
+        {
+            remainingIssues = -1;
+
+            Type setupType =
+                Type.GetType(
+                    "Rng.Blood.EditorTools.BloodSetup, Rng.Blood.Editor");
+
+            if (setupType == null)
+            {
+                Debug.LogWarning(
+                    "Step 174 could not load the RNG Blood editor setup assembly. Runtime blood integration was still installed. Open Tools -> RNG Blood -> Setup manually if blood stains do not appear.");
+                return 0;
+            }
+
+            System.Reflection.MethodInfo fixAll =
+                setupType.GetMethod(
+                    "FixAll",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.Static);
+
+            int fixedCount = 0;
+
+            if (fixAll != null)
+            {
+                object result =
+                    fixAll.Invoke(
+                        null,
+                        null);
+
+                if (result is int count)
+                    fixedCount = count;
+            }
+
+            remainingIssues =
+                GetBloodSetupIssueCount();
+
+            return fixedCount;
+        }
+
+        static int GetBloodSetupIssueCount()
+        {
+            Type setupType =
+                Type.GetType(
+                    "Rng.Blood.EditorTools.BloodSetup, Rng.Blood.Editor");
+
+            if (setupType == null)
+                return -1;
+
+            System.Reflection.MethodInfo check =
+                setupType.GetMethod(
+                    "Check",
+                    System.Reflection.BindingFlags.Public |
+                    System.Reflection.BindingFlags.Static);
+
+            if (check == null)
+                return -1;
+
+            object result =
+                check.Invoke(
+                    null,
+                    null);
+
+            if (result is System.Collections.ICollection collection)
+                return collection.Count;
+
+            System.Collections.IEnumerable enumerable =
+                result as System.Collections.IEnumerable;
+
+            if (enumerable == null)
+                return -1;
+
+            int count = 0;
+            foreach (object _ in enumerable)
+                count++;
+
+            return count;
         }
 
         static List<FamilySpec> BuildFamilies()
