@@ -599,25 +599,33 @@ namespace Hanger51.Weapons
             root.transform.SetParent(model.transform,false);
 
             SpawnAttachment(
+                model,
                 root.transform,
                 activeState.optic,
+                H51AttachmentSlot.Optic,
                 activeDefinition.OpticMount);
 
             SpawnAttachment(
+                model,
                 root.transform,
                 activeState.muzzle,
+                H51AttachmentSlot.Muzzle,
                 activeDefinition.MuzzleMount);
 
             SpawnAttachment(
+                model,
                 root.transform,
                 activeState.underbarrel,
+                H51AttachmentSlot.Underbarrel,
                 activeDefinition.UnderbarrelMount);
         }
 
         void SpawnAttachment(
+            GameObject weaponModel,
             Transform parent,
             H51CombatItemDefinition attachment,
-            Vector3 mount)
+            H51AttachmentSlot slot,
+            Vector3 mountOffset)
         {
             if (!attachment || !attachment.AttachmentPrefab)
                 return;
@@ -632,7 +640,11 @@ namespace Hanger51.Weapons
                     ? attachment.InventoryItem.DisplayName
                     : attachment.name;
 
-            visual.transform.localPosition = mount;
+            visual.transform.localPosition =
+                ResolveAttachmentMount(
+                    weaponModel,
+                    slot) +
+                mountOffset;
             visual.transform.localRotation =
                 Quaternion.Euler(attachment.AttachmentEuler);
             visual.transform.localScale =
@@ -647,6 +659,89 @@ namespace Hanger51.Weapons
                 visual.GetComponentsInChildren<InventoryPickup>(true);
             for (int i=0;i<pickups.Length;i++)
                 pickups[i].enabled = false;
+        }
+
+        static Vector3 ResolveAttachmentMount(
+            GameObject model,
+            H51AttachmentSlot slot)
+        {
+            if (!model)
+                return Vector3.zero;
+
+            Renderer[] renderers =
+                model.GetComponentsInChildren<Renderer>(true);
+
+            bool haveBounds = false;
+            Bounds localBounds = new Bounds(Vector3.zero,Vector3.zero);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Renderer renderer = renderers[i];
+                if (!renderer ||
+                    renderer.transform.IsChildOf(
+                        model.transform.Find("H51 Runtime Attachments")))
+                    continue;
+
+                Bounds world = renderer.bounds;
+                Vector3 min = world.min;
+                Vector3 max = world.max;
+
+                Vector3[] corners =
+                {
+                    new Vector3(min.x,min.y,min.z),
+                    new Vector3(min.x,min.y,max.z),
+                    new Vector3(min.x,max.y,min.z),
+                    new Vector3(min.x,max.y,max.z),
+                    new Vector3(max.x,min.y,min.z),
+                    new Vector3(max.x,min.y,max.z),
+                    new Vector3(max.x,max.y,min.z),
+                    new Vector3(max.x,max.y,max.z)
+                };
+
+                for (int c=0;c<corners.Length;c++)
+                {
+                    Vector3 local =
+                        model.transform.InverseTransformPoint(corners[c]);
+
+                    if (!haveBounds)
+                    {
+                        localBounds = new Bounds(local,Vector3.zero);
+                        haveBounds = true;
+                    }
+                    else
+                        localBounds.Encapsulate(local);
+                }
+            }
+
+            if (!haveBounds)
+                return Vector3.zero;
+
+            // LowPolyWeapons models are authored side-on with the barrel along
+            // local X. Use the live bounds so long rifles and short carbines
+            // receive sensible mount positions without per-model hand tuning.
+            switch (slot)
+            {
+                case H51AttachmentSlot.Optic:
+                    return new Vector3(
+                        localBounds.center.x + localBounds.extents.x*.06f,
+                        localBounds.max.y + localBounds.size.y*.03f,
+                        localBounds.center.z);
+
+                case H51AttachmentSlot.Muzzle:
+                    return new Vector3(
+                        localBounds.max.x,
+                        localBounds.center.y,
+                        localBounds.center.z);
+
+                case H51AttachmentSlot.Underbarrel:
+                    return new Vector3(
+                        localBounds.center.x + localBounds.extents.x*.14f,
+                        localBounds.min.y - localBounds.size.y*.02f,
+                        localBounds.center.z);
+
+                default:
+                    return localBounds.center;
+            }
         }
 
         void SetAttachment(
