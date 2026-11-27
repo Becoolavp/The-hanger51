@@ -19,6 +19,7 @@ namespace Hanger51.Weapons
             public H51CombatItemDefinition optic;
             public H51CombatItemDefinition muzzle;
             public H51CombatItemDefinition underbarrel;
+            public bool slideLockedBack;
         }
 
         [SerializeField] Camera playerCamera;
@@ -50,6 +51,11 @@ namespace Hanger51.Weapons
         int presentationSignature;
         int shotSequenceCounter;
         bool wasAiming;
+        Transform handgunSlide;
+        GameObject handgunSlideOwner;
+        Vector3 handgunSlideRestLocal;
+        float handgunSlideCycle;
+        const float HandgunSlideDuration = .095f;
         Texture2D scopeMaskTexture;
 
         void Awake()
@@ -331,6 +337,18 @@ namespace Hanger51.Weapons
             capsule.radius = targetLength*.17f;
             capsule.height = targetLength;
 
+            Collider[] playerColliders =
+                GetComponentsInChildren<Collider>(true);
+            for (int i=0;i<playerColliders.Length;i++)
+            {
+                Collider playerCollider = playerColliders[i];
+                if (playerCollider)
+                    Physics.IgnoreCollision(
+                        capsule,
+                        playerCollider,
+                        true);
+            }
+
             Rigidbody body =
                 casing.AddComponent<Rigidbody>();
             body.mass =
@@ -405,6 +423,9 @@ namespace Hanger51.Weapons
             activeDefinition = definition;
             activeState = null;
             lastWeaponModel = null;
+            handgunSlide = null;
+            handgunSlideOwner = null;
+            handgunSlideCycle = 0f;
             presentationSignature = 0;
 
             if (activeDefinition &&
@@ -530,6 +551,13 @@ namespace Hanger51.Weapons
             PlayFireAudio();
             EjectSpentCasing();
 
+            if (activeDefinition.WeaponClass == H51WeaponClass.Handgun)
+            {
+                activeState.slideLockedBack =
+                    activeState.magazine <= 0;
+                handgunSlideCycle = HandgunSlideDuration;
+            }
+
             recoilVisual =
                 Mathf.Clamp(
                     recoilVisual +
@@ -572,17 +600,24 @@ namespace Hanger51.Weapons
                 return;
             }
 
-            H51CombatItemDefinition ammo =
-                registry.FindAmmo(activeDefinition.Cartridge);
+            List<H51CombatItemDefinition> compatibleAmmo =
+                registry.FindAllAmmo(
+                    activeDefinition.Cartridge);
 
-            if (!ammo || !ammo.InventoryItem)
+            if (compatibleAmmo == null ||
+                compatibleAmmo.Count == 0)
             {
                 ShowStatus("No compatible ammunition definition is configured.");
                 return;
             }
 
-            int available =
-                inventory.CountItem(ammo.InventoryItem);
+            int available = 0;
+            for (int i=0;i<compatibleAmmo.Count;i++)
+            {
+                H51CombatItemDefinition ammo = compatibleAmmo[i];
+                if (ammo && ammo.InventoryItem)
+                    available += inventory.CountItem(ammo.InventoryItem);
+            }
 
             int requested =
                 Mathf.Min(needed,available);
@@ -590,18 +625,47 @@ namespace Hanger51.Weapons
             if (requested <= 0)
             {
                 ShowStatus(
-                    "No " +
-                    ammo.InventoryItem.DisplayName +
-                    " in inventory.");
+                    "No compatible " +
+                    FriendlyCartridge(activeDefinition.Cartridge) +
+                    " ammunition in inventory.");
                 return;
             }
 
-            int removed =
-                inventory.RemoveItemQuantity(
-                    ammo.InventoryItem,
-                    requested);
+            int remaining =
+                requested;
+            int removed = 0;
+
+            for (int i=0;i<compatibleAmmo.Count && remaining>0;i++)
+            {
+                H51CombatItemDefinition ammo = compatibleAmmo[i];
+                if (!ammo || !ammo.InventoryItem)
+                    continue;
+
+                int have =
+                    inventory.CountItem(
+                        ammo.InventoryItem);
+
+                int take =
+                    Mathf.Min(
+                        remaining,
+                        have);
+
+                if (take <= 0)
+                    continue;
+
+                int consumed =
+                    inventory.RemoveItemQuantity(
+                        ammo.InventoryItem,
+                        take);
+
+                removed += consumed;
+                remaining -= consumed;
+            }
 
             activeState.magazine += removed;
+            if (activeDefinition.WeaponClass == H51WeaponClass.Handgun &&
+                removed > 0)
+                activeState.slideLockedBack = false;
 
             PlayRandom(
                 activeDefinition.ReloadClips,
@@ -615,6 +679,24 @@ namespace Hanger51.Weapons
                 " round" +
                 (removed == 1 ? string.Empty : "s") +
                 ".");
+        }
+
+        static string FriendlyCartridge(
+            H51Cartridge cartridge)
+        {
+            switch (cartridge)
+            {
+                case H51Cartridge.NineByNineteen:
+                    return "9x19 mm";
+                case H51Cartridge.FiveFiveSixByFortyFive:
+                    return "5.56x45 mm";
+                case H51Cartridge.SevenSixTwoByFiftyOne:
+                    return "7.62x51 mm";
+                case H51Cartridge.TwelveGauge:
+                    return "12 gauge";
+                default:
+                    return "compatible";
+            }
         }
 
         void ThrowGrenade()
@@ -877,6 +959,8 @@ namespace Hanger51.Weapons
             UpdateMagnifiedScopeVisibility(
                 model,
                 smoothAim);
+
+            UpdateHandgunSlide(model);
         }
 
         int AttachmentSignature(WeaponState state)
@@ -1387,6 +1471,248 @@ namespace Hanger51.Weapons
                 localBounds.max.y -
                 localBounds.size.y*.035f,
                 localBounds.center.z);
+        }
+
+        void UpdateHandgunSlide(
+            GameObject model)
+        {
+            if (!model ||
+                !activeDefinition ||
+                activeDefinition.WeaponClass != H51WeaponClass.Handgun)
+            {
+                RestoreHandgunSlide();
+                return;
+            }
+
+            if (handgunSlideOwner != model ||
+                !handgunSlide)
+            {
+                RestoreHandgunSlide();
+                handgunSlideOwner = model;
+                handgunSlide = FindHandgunSlide(model);
+
+                if (handgunSlide)
+                    handgunSlideRestLocal =
+                        handgunSlide.localPosition;
+            }
+
+            if (!handgunSlide)
+                return;
+
+            if (handgunSlideCycle > 0f)
+                handgunSlideCycle =
+                    Mathf.Max(
+                        0f,
+                        handgunSlideCycle-Time.unscaledDeltaTime);
+
+            float backAmount = 0f;
+
+            if (handgunSlideCycle > 0f)
+            {
+                float progress =
+                    1f -
+                    handgunSlideCycle/
+                    HandgunSlideDuration;
+
+                backAmount =
+                    Mathf.Sin(
+                        Mathf.Clamp01(progress) *
+                        Mathf.PI);
+            }
+
+            if (activeState != null &&
+                activeState.slideLockedBack)
+            {
+                backAmount =
+                    Mathf.Max(
+                        backAmount,
+                        1f);
+            }
+
+            const float slideTravel = .035f;
+            handgunSlide.localPosition =
+                handgunSlideRestLocal +
+                Vector3.right*
+                (slideTravel*backAmount);
+        }
+
+        void RestoreHandgunSlide()
+        {
+            if (handgunSlide)
+                handgunSlide.localPosition =
+                    handgunSlideRestLocal;
+
+            handgunSlide = null;
+            handgunSlideOwner = null;
+            handgunSlideCycle = 0f;
+        }
+
+        static Transform FindHandgunSlide(
+            GameObject model)
+        {
+            if (!model)
+                return null;
+
+            Renderer[] allRenderers =
+                model.GetComponentsInChildren<Renderer>(true);
+
+            if (allRenderers.Length == 0)
+                return null;
+
+            bool haveWeaponBounds = false;
+            Bounds weaponBounds =
+                new Bounds(
+                    Vector3.zero,
+                    Vector3.zero);
+
+            for (int i=0;i<allRenderers.Length;i++)
+            {
+                Renderer renderer = allRenderers[i];
+
+                if (!renderer ||
+                    renderer.transform.name.StartsWith(
+                        "H51 ",
+                        System.StringComparison.Ordinal))
+                    continue;
+
+                Bounds world =
+                    renderer.bounds;
+
+                Vector3 min = world.min;
+                Vector3 max = world.max;
+                Vector3[] corners =
+                {
+                    new Vector3(min.x,min.y,min.z),
+                    new Vector3(min.x,min.y,max.z),
+                    new Vector3(min.x,max.y,min.z),
+                    new Vector3(min.x,max.y,max.z),
+                    new Vector3(max.x,min.y,min.z),
+                    new Vector3(max.x,min.y,max.z),
+                    new Vector3(max.x,max.y,min.z),
+                    new Vector3(max.x,max.y,max.z)
+                };
+
+                for (int c=0;c<corners.Length;c++)
+                {
+                    Vector3 local =
+                        model.transform.InverseTransformPoint(
+                            corners[c]);
+
+                    if (!haveWeaponBounds)
+                    {
+                        weaponBounds =
+                            new Bounds(
+                                local,
+                                Vector3.zero);
+                        haveWeaponBounds = true;
+                    }
+                    else
+                        weaponBounds.Encapsulate(local);
+                }
+            }
+
+            if (!haveWeaponBounds)
+                return null;
+
+            Transform best = null;
+            float bestScore = float.NegativeInfinity;
+
+            for (int i=0;i<model.transform.childCount;i++)
+            {
+                Transform child =
+                    model.transform.GetChild(i);
+
+                if (!child ||
+                    child.name == "H51 Runtime Attachments")
+                    continue;
+
+                Renderer[] renderers =
+                    child.GetComponentsInChildren<Renderer>(true);
+
+                if (renderers.Length == 0)
+                    continue;
+
+                bool haveBounds = false;
+                Bounds bounds =
+                    new Bounds(
+                        Vector3.zero,
+                        Vector3.zero);
+
+                for (int r=0;r<renderers.Length;r++)
+                {
+                    Bounds world =
+                        renderers[r].bounds;
+
+                    Vector3 min = world.min;
+                    Vector3 max = world.max;
+                    Vector3[] corners =
+                    {
+                        new Vector3(min.x,min.y,min.z),
+                        new Vector3(min.x,min.y,max.z),
+                        new Vector3(min.x,max.y,min.z),
+                        new Vector3(min.x,max.y,max.z),
+                        new Vector3(max.x,min.y,min.z),
+                        new Vector3(max.x,min.y,max.z),
+                        new Vector3(max.x,max.y,min.z),
+                        new Vector3(max.x,max.y,max.z)
+                    };
+
+                    for (int j=0;j<corners.Length;j++)
+                    {
+                        Vector3 local =
+                            model.transform.InverseTransformPoint(
+                                corners[j]);
+
+                        if (!haveBounds)
+                        {
+                            bounds =
+                                new Bounds(
+                                    local,
+                                    Vector3.zero);
+                            haveBounds = true;
+                        }
+                        else
+                            bounds.Encapsulate(local);
+                    }
+                }
+
+                if (!haveBounds)
+                    continue;
+
+                bool highEnough =
+                    bounds.center.y >
+                    weaponBounds.center.y +
+                    weaponBounds.size.y*.08f;
+
+                bool longEnough =
+                    bounds.size.x >
+                    weaponBounds.size.x*.30f;
+
+                // A semi-auto slide is a broad top assembly. This width check
+                // rejects narrow revolver barrels/cylinders so they do not
+                // receive a fake reciprocating-slide animation.
+                bool broadEnough =
+                    bounds.size.z >
+                    weaponBounds.size.z*.42f;
+
+                if (!highEnough ||
+                    !longEnough ||
+                    !broadEnough)
+                    continue;
+
+                float score =
+                    bounds.size.x*2f +
+                    bounds.size.z +
+                    bounds.center.y*1.5f;
+
+                if (score > bestScore)
+                {
+                    bestScore = score;
+                    best = child;
+                }
+            }
+
+            return best;
         }
 
         void UpdateMagnifiedScopeVisibility(
