@@ -43,6 +43,12 @@ namespace Hanger51.Weapons
         Underbarrel
     }
 
+    public enum H51MedicalKitRole
+    {
+        Trauma,
+        Medical
+    }
+
     [CreateAssetMenu(
         fileName = "CombatItem",
         menuName = "Hanger 51/Weapons/Combat Item Definition")]
@@ -93,6 +99,9 @@ namespace Hanger51.Weapons
         [SerializeField, Range(.5f,1.1f)] float muzzleVelocityMultiplier = 1f;
         [SerializeField, Range(.5f,1.2f)] float recoilMultiplier = 1f;
 
+        [Header("Medical")]
+        [SerializeField] H51MedicalKitRole medicalKitRole = H51MedicalKitRole.Trauma;
+
         [Header("Grenade")]
         [SerializeField, Min(.2f)] float grenadeFuseSeconds = 3.5f;
         [SerializeField, Min(.5f)] float grenadeBlastRadius = 7f;
@@ -136,6 +145,7 @@ namespace Hanger51.Weapons
         public float GrenadeFuseSeconds => grenadeFuseSeconds;
         public float GrenadeBlastRadius => grenadeBlastRadius;
         public float GrenadeTrauma => grenadeTrauma;
+        public H51MedicalKitRole MedicalKitRole => medicalKitRole;
 
         public void ConfigureFirearm(
             InventoryItemDefinition item,
@@ -264,10 +274,13 @@ namespace Hanger51.Weapons
             grenadeTrauma = Mathf.Max(1f,trauma);
         }
 
-        public void ConfigureMedicalKit(InventoryItemDefinition item)
+        public void ConfigureMedicalKit(
+            InventoryItemDefinition item,
+            H51MedicalKitRole role = H51MedicalKitRole.Trauma)
         {
             inventoryItem = item;
             kind = H51CombatItemKind.MedicalKit;
+            medicalKitRole = role;
         }
     }
 }
