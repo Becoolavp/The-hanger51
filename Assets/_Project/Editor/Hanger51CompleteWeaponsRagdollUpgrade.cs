@@ -573,7 +573,7 @@ namespace Hanger51.EditorTools
         static string Friendly(string value)
         {
             if (string.IsNullOrWhiteSpace(value)) return "Equipment";
-            string spaced = Regex.Replace(value.Replace("_"," "),"(?<=[A-Za-z])(?=\d)"," ");
+            string spaced = Regex.Replace(value.Replace("_"," "),@"(?<=[A-Za-z])(?=\d)"," ");
             return Regex.Replace(spaced,@"\s+"," ").Trim();
         }
 
