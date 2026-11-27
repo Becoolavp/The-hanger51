@@ -18,6 +18,8 @@ namespace Hanger51.NPCs
         H51CitizenIdentity identity;
         NavMeshAgent agent;
         GameObject phoneVisual;
+        bool phoneRequestedVisible;
+        bool travelVisualSuppressed;
         bool callPlaced;
         bool pausedForEmergency;
         bool beingTransported;
@@ -139,6 +141,17 @@ namespace Hanger51.NPCs
                     -8f,
                     Mathf.Max(10f, injurySeverity));
             }
+        }
+
+        public void SetTravelVisualSuppressed(bool suppressed)
+        {
+            travelVisualSuppressed = suppressed;
+
+            if (phoneVisual)
+                phoneVisual.SetActive(
+                    phoneRequestedVisible &&
+                    !travelVisualSuppressed &&
+                    !beingTransported);
         }
 
         void Update()
@@ -311,7 +324,15 @@ namespace Hanger51.NPCs
 
         void ShowPhone(bool show)
         {
+            phoneRequestedVisible = show;
+
             if (!show)
+            {
+                if (phoneVisual) phoneVisual.SetActive(false);
+                return;
+            }
+
+            if (travelVisualSuppressed || beingTransported)
             {
                 if (phoneVisual) phoneVisual.SetActive(false);
                 return;
