@@ -15,6 +15,7 @@ namespace Hanger51.NPCs
         [SerializeField] Animator visualAnimator;
 
         bool vehicleVisualSuppressed;
+        CharacterObject requestedPreset;
 
         public H51CitizenPresentation ConfiguredPresentation => configuredPresentation;
         public string PresetName => presetName;
@@ -68,22 +69,18 @@ namespace Hanger51.NPCs
                 ? WorkPreset
                 : PickCasualPreset(dayIndex);
 
-            if (!target || target == characterPreset)
+            if (!target)
                 return;
 
             characterPreset = target;
+            requestedPreset = target;
             presetName = target.name;
             NormalizeV4OutfitAlpha();
 
-            if (!outfitSystem)
-                return;
+            if (!Application.isPlaying && outfitSystem)
+                outfitSystem.characterData = target;
 
-            outfitSystem.characterData = target;
-
-            // Routine changes happen after Start, so ask BoZo to rebuild only
-            // when its runtime system is ready. Otherwise OnStart will load it.
-            if (Application.isPlaying && outfitSystem.initalized)
-                outfitSystem.LoadFromObject(target);
+            TryApplyRequestedWardrobe();
         }
 
         public void SetVehicleVisualSuppressed(bool suppressed)
@@ -107,8 +104,31 @@ namespace Hanger51.NPCs
 
         void LateUpdate()
         {
+            TryApplyRequestedWardrobe();
+
             if (vehicleVisualSuppressed)
                 ApplyVehicleVisualSuppression();
+        }
+
+        void TryApplyRequestedWardrobe()
+        {
+            if (!Application.isPlaying ||
+                !requestedPreset ||
+                !outfitSystem ||
+                !outfitSystem.initalized ||
+                outfitSystem.isloading)
+                return;
+
+            if (outfitSystem.characterData == requestedPreset)
+            {
+                requestedPreset = null;
+                return;
+            }
+
+            CharacterObject target =
+                requestedPreset;
+            requestedPreset = null;
+            outfitSystem.LoadFromObject(target);
         }
 
         void Awake()
