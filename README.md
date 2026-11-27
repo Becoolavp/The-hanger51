@@ -632,6 +632,36 @@ Important first-pass limitations:
 - magnified optics currently use FOV zoom + scope mask/reticle rather than a separate render-to-texture scope camera;
 - attachment state is currently stored per weapon definition during the runtime session rather than as fully serialized per-instance gun condition.
 
+### LowPolyWeapons visual, orientation and procurement-store upgrade — IMPLEMENTED / PENDING UNITY VALIDATION
+
+After the first combat build, magenta weapon models were traced to the imported pack's shared material/shader setup rather than missing meshes or missing art. The pack's `Texture_01.png` color atlas is present and referenced by the shared weapon material, but the imported material is not valid for Hanger 51's URP rendering path.
+
+Run:
+
+`Hanger 51 -> World -> Current -> 172 - Repair Weapon Visuals And Upgrade Store`
+
+then:
+
+`Hanger 51 -> World -> Current -> 173 - Validate Weapon Visuals And Store Upgrade`
+
+Step 172:
+
+- converts `LowPolyWeapons_MAIN.mat` and the pack background material to `Universal Render Pipeline/Lit`;
+- explicitly restores the supplied `Texture_01.png` atlas to the URP Base Map so weapon colors/texturing survive the shader conversion;
+- flips the first-person firearm presentation by exactly 180 degrees from the original test setup while leaving dropped/world prefab orientation unchanged;
+- preserves that corrected orientation in the original Step 170 installer so rerunning the earlier setup cannot reintroduce the backwards-held gun;
+- separates the existing procurement UI into **Aircraft Parts** and **Weapons** tabs instead of mixing aircraft components and firearms in one scrolling list;
+- adds a rotating live 3D preview of the actual selected product prefab in the product-details panel;
+- expands the firearm selection from three bodies to eighteen: six distinct 5.56 rifle bodies, six distinct 9mm pistol bodies, and six distinct 7.62 precision-rifle bodies;
+- keeps all variants connected to the existing ballistic, ammo, attachment, anatomical-damage, inventory, shipment and emergency-response systems.
+
+The additional fifteen variants use `AssaultRifle2_01` through `AssaultRifle6_01`, `Pistol2_01` through `Pistol6_01`, and `SniperRifle2_01` through `SniperRifle6_01`. All of those exact prefab paths were verified in the imported pack before the upgrade was committed.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51LowPolyWeaponsVisualStoreUpgrade.cs`
+- `Assets/_Project/Scripts/Commerce/HangarShopUI.cs`
+
 Important files:
 
 - `Assets/_Project/Scripts/Weapons/H51CombatItemDefinition.cs`
