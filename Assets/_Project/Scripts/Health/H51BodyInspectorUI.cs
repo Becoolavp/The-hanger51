@@ -524,8 +524,9 @@ namespace Hanger51.Health
                         new Rect(area.x,y,area.width,24f),
                         "External bleeding: " +
                         region.externalBleedMlPerMinute.ToString("0") +
-                        " mL/min",
-                        labelStyle);
+                        " mL/min" +
+                        (region.arterialBleed ? "   —   ARTERIAL" : string.Empty),
+                        region.arterialBleed ? headingStyle : labelStyle);
                     y += 25f;
 
                     GUI.Label(
