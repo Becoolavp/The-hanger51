@@ -19,7 +19,20 @@ namespace Hanger51.Weapons
         None,
         NineByNineteen,
         FiveFiveSixByFortyFive,
-        SevenSixTwoByFiftyOne
+        SevenSixTwoByFiftyOne,
+        TwelveGauge
+    }
+
+    public enum H51WeaponClass
+    {
+        Unknown,
+        Handgun,
+        AssaultRifle,
+        SniperRifle,
+        Smg,
+        MachineGun,
+        Shotgun,
+        HeavyWeapon
     }
 
     public enum H51AttachmentSlot
@@ -40,6 +53,7 @@ namespace Hanger51.Weapons
         [SerializeField] H51CombatItemKind kind;
 
         [Header("Firearm")]
+        [SerializeField] H51WeaponClass weaponClass;
         [SerializeField] H51Cartridge cartridge;
         [SerializeField, Min(.1f)] float projectileMassGrams = 4f;
         [SerializeField, Min(10f)] float muzzleVelocityMps = 850f;
@@ -53,6 +67,16 @@ namespace Hanger51.Weapons
         [SerializeField] Vector3 viewLocalPosition = new Vector3(.20f,-.24f,.62f);
         [SerializeField] Vector3 viewLocalEuler = new Vector3(2f,180f,0f);
         [SerializeField, Range(.25f,3f)] float viewScaleMultiplier = 1f;
+        [SerializeField, Min(1)] int projectilesPerShot = 1;
+        [SerializeField, Range(0f,12f)] float projectileSpreadDegrees = .08f;
+
+        [Header("Audio")]
+        [SerializeField] AudioClip[] gunshotClips = System.Array.Empty<AudioClip>();
+        [SerializeField] AudioClip[] tailClips = System.Array.Empty<AudioClip>();
+        [SerializeField] AudioClip[] reloadClips = System.Array.Empty<AudioClip>();
+        [SerializeField] AudioClip[] aimClips = System.Array.Empty<AudioClip>();
+        [SerializeField] AudioClip[] equipClips = System.Array.Empty<AudioClip>();
+        [SerializeField] AudioClip[] shellClips = System.Array.Empty<AudioClip>();
 
         [Header("Attachment mounts")]
         [SerializeField] Vector3 opticMount = new Vector3(0f,.04f,0f);
@@ -75,6 +99,7 @@ namespace Hanger51.Weapons
 
         public InventoryItemDefinition InventoryItem => inventoryItem;
         public H51CombatItemKind Kind => kind;
+        public H51WeaponClass WeaponClass => weaponClass;
         public H51Cartridge Cartridge => cartridge;
         public float ProjectileMassGrams => projectileMassGrams;
         public float MuzzleVelocityMps => muzzleVelocityMps;
@@ -88,6 +113,14 @@ namespace Hanger51.Weapons
         public Vector3 ViewLocalPosition => viewLocalPosition;
         public Vector3 ViewLocalEuler => viewLocalEuler;
         public float ViewScaleMultiplier => viewScaleMultiplier;
+        public int ProjectilesPerShot => Mathf.Max(1,projectilesPerShot);
+        public float ProjectileSpreadDegrees => Mathf.Max(0f,projectileSpreadDegrees);
+        public AudioClip[] GunshotClips => gunshotClips;
+        public AudioClip[] TailClips => tailClips;
+        public AudioClip[] ReloadClips => reloadClips;
+        public AudioClip[] AimClips => aimClips;
+        public AudioClip[] EquipClips => equipClips;
+        public AudioClip[] ShellClips => shellClips;
         public Vector3 OpticMount => opticMount;
         public Vector3 MuzzleMount => muzzleMount;
         public Vector3 UnderbarrelMount => underbarrelMount;
@@ -149,6 +182,32 @@ namespace Hanger51.Weapons
             viewLocalPosition = position;
             viewLocalEuler = euler;
             viewScaleMultiplier = Mathf.Clamp(scaleMultiplier,.25f,3f);
+        }
+
+        public void ConfigureWeaponClass(
+            H51WeaponClass configuredClass,
+            int configuredProjectilesPerShot = 1,
+            float configuredSpreadDegrees = .08f)
+        {
+            weaponClass = configuredClass;
+            projectilesPerShot = Mathf.Max(1,configuredProjectilesPerShot);
+            projectileSpreadDegrees = Mathf.Clamp(configuredSpreadDegrees,0f,12f);
+        }
+
+        public void ConfigureAudio(
+            AudioClip[] configuredGunshots,
+            AudioClip[] configuredTails,
+            AudioClip[] configuredReloads,
+            AudioClip[] configuredAim,
+            AudioClip[] configuredEquip,
+            AudioClip[] configuredShells)
+        {
+            gunshotClips = configuredGunshots ?? System.Array.Empty<AudioClip>();
+            tailClips = configuredTails ?? System.Array.Empty<AudioClip>();
+            reloadClips = configuredReloads ?? System.Array.Empty<AudioClip>();
+            aimClips = configuredAim ?? System.Array.Empty<AudioClip>();
+            equipClips = configuredEquip ?? System.Array.Empty<AudioClip>();
+            shellClips = configuredShells ?? System.Array.Empty<AudioClip>();
         }
 
         public void ConfigureAmmo(
