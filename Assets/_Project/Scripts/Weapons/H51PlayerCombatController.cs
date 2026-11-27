@@ -1559,6 +1559,10 @@ namespace Hanger51.Weapons
             if (allRenderers.Length == 0)
                 return null;
 
+            Transform attachmentRoot =
+                model.transform.Find(
+                    "H51 Runtime Attachments");
+
             bool haveWeaponBounds = false;
             Bounds weaponBounds =
                 new Bounds(
@@ -1570,9 +1574,8 @@ namespace Hanger51.Weapons
                 Renderer renderer = allRenderers[i];
 
                 if (!renderer ||
-                    renderer.transform.name.StartsWith(
-                        "H51 ",
-                        System.StringComparison.Ordinal))
+                    (attachmentRoot &&
+                     renderer.transform.IsChildOf(attachmentRoot)))
                     continue;
 
                 Bounds world =
