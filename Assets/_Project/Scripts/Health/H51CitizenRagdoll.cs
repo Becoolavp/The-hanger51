@@ -286,11 +286,63 @@ namespace Hanger51.Health
 
             SetPhysics(true);
 
+            for (int i=0;i<bodies.Count;i++)
+            {
+                Rigidbody body = bodies[i];
+                if (!body)
+                    continue;
+
+                body.WakeUp();
+                body.linearVelocity +=
+                    pendingDirection*
+                    Mathf.Clamp(
+                        pendingImpulse*.035f,
+                        0f,
+                        .22f);
+
+                body.angularVelocity +=
+                    Random.onUnitSphere*
+                    Random.Range(.15f,.65f);
+            }
+
             if (!regionBodies.TryGetValue(pendingRegion,out Rigidbody hitBody))
                 hitBody = regionBodies.TryGetValue(H51BodyRegion.Chest,out Rigidbody chest) ? chest : null;
 
+            float impactImpulse =
+                Mathf.Clamp(
+                    pendingImpulse*1.35f,
+                    .65f,
+                    10f);
+
             if (hitBody && pendingImpulse > .01f)
-                hitBody.AddForce(pendingDirection*Mathf.Clamp(pendingImpulse,.5f,8f),ForceMode.Impulse);
+            {
+                hitBody.AddForce(
+                    pendingDirection*impactImpulse +
+                    Vector3.up*Mathf.Min(.45f,impactImpulse*.06f),
+                    ForceMode.Impulse);
+            }
+
+            if (regionBodies.TryGetValue(H51BodyRegion.Pelvis,out Rigidbody hips) && hips)
+            {
+                hips.AddForce(
+                    pendingDirection*
+                    Mathf.Clamp(
+                        impactImpulse*.18f,
+                        .10f,
+                        1.35f),
+                    ForceMode.Impulse);
+            }
+
+            if (regionBodies.TryGetValue(H51BodyRegion.Chest,out Rigidbody chestBody) && chestBody)
+            {
+                chestBody.AddTorque(
+                    Random.onUnitSphere*
+                    Mathf.Clamp(
+                        impactImpulse*.18f,
+                        .08f,
+                        1.2f),
+                    ForceMode.Impulse);
+            }
         }
 
         void Recover()
