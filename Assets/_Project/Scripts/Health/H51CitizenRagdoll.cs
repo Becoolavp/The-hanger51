@@ -54,7 +54,18 @@ namespace Hanger51.Health
             if (!built)
                 EnsureRig();
 
-            if (!health || !ragdolled || permanent)
+            if (!health || !ragdolled)
+                return;
+
+            // Development reset/respawn support: ResetHealthy can revive a
+            // test citizen, so release a formerly permanent death ragdoll.
+            if (permanent && !health.IsDead)
+            {
+                permanent = false;
+                recoverAfter = 0f;
+            }
+
+            if (permanent)
                 return;
 
             if (Time.time >= recoverAfter &&
