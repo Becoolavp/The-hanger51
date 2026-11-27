@@ -40,6 +40,7 @@ namespace Hanger51.Commerce
             new List<Behaviour>();
 
         readonly List<Button> spawnedProductButtons = new List<Button>();
+        readonly List<Button> weaponCategoryButtons = new List<Button>();
         readonly List<Behaviour> behavioursDisabledByShop = new List<Behaviour>();
 
         HangarShopTerminal terminal;
@@ -49,6 +50,23 @@ namespace Hanger51.Commerce
         ShopDepartment activeDepartment = ShopDepartment.AircraftParts;
         Button aircraftTabButton;
         Button weaponsTabButton;
+        GameObject weaponCategoryRoot;
+        RectTransform productScrollRect;
+        string activeWeaponCategory = "All";
+
+        static readonly string[] WeaponCategories =
+        {
+            "All",
+            "Handguns",
+            "Assault Rifles",
+            "Sniper Rifles",
+            "SMGs",
+            "Machine Guns",
+            "Shotguns",
+            "Explosives",
+            "Ammunition",
+            "Gear"
+        };
 
         RawImage previewImage;
         GameObject previewRoot;
@@ -237,8 +255,8 @@ namespace Hanger51.Commerce
                 Transform scroll = productPanel.Find("Product Scroll View");
                 if (scroll is RectTransform scrollRect)
                 {
-                    scrollRect.offsetMin = new Vector2(12f,12f);
-                    scrollRect.offsetMax = new Vector2(-12f,-62f);
+                    productScrollRect = scrollRect;
+                    UpdateProductScrollLayout();
                 }
 
                 if (aircraftTabButton == null)
@@ -266,6 +284,8 @@ namespace Hanger51.Commerce
                     weaponsTabButton.onClick.AddListener(
                         () => SwitchDepartment(ShopDepartment.Weapons));
                 }
+
+                EnsureWeaponCategoryUi(productPanel);
             }
 
             Transform detailsPanel = window.Find("Product Details Panel");
@@ -353,8 +373,13 @@ namespace Hanger51.Commerce
                 return;
 
             activeDepartment = department;
+
+            if (department == ShopDepartment.Weapons)
+                activeWeaponCategory = "All";
+
             selectedCatalogIndex = FindFirstIndexForDepartment(department);
 
+            UpdateProductScrollLayout();
             RefreshDepartmentButtons();
             BuildProductButtons();
             RefreshAll();
@@ -369,6 +394,141 @@ namespace Hanger51.Commerce
         {
             SetTabVisual(aircraftTabButton, activeDepartment == ShopDepartment.AircraftParts);
             SetTabVisual(weaponsTabButton, activeDepartment == ShopDepartment.Weapons);
+
+            if (weaponCategoryRoot != null)
+                weaponCategoryRoot.SetActive(activeDepartment == ShopDepartment.Weapons);
+
+            for (int i=0;i<weaponCategoryButtons.Count && i<WeaponCategories.Length;i++)
+                SetTabVisual(
+                    weaponCategoryButtons[i],
+                    activeWeaponCategory == WeaponCategories[i]);
+        }
+
+        void EnsureWeaponCategoryUi(
+            Transform productPanel)
+        {
+            if (weaponCategoryRoot != null)
+                return;
+
+            weaponCategoryRoot =
+                new GameObject(
+                    "Weapon Category Filters",
+                    typeof(RectTransform));
+
+            weaponCategoryRoot.transform.SetParent(
+                productPanel,
+                false);
+
+            RectTransform rootRect =
+                weaponCategoryRoot.GetComponent<RectTransform>();
+
+            rootRect.anchorMin =
+                rootRect.anchorMax =
+                    new Vector2(0f,1f);
+            rootRect.pivot =
+                new Vector2(0f,1f);
+            rootRect.anchoredPosition =
+                new Vector2(12f,-56f);
+            rootRect.sizeDelta =
+                new Vector2(396f,68f);
+
+            for (int i=0;i<WeaponCategories.Length;i++)
+            {
+                int row = i/5;
+                int column = i%5;
+
+                Button button =
+                    CreateRuntimeButton(
+                        rootRect,
+                        "Weapon Filter - " + WeaponCategories[i],
+                        WeaponCategories[i].ToUpperInvariant(),
+                        new Vector2(
+                            column*79f,
+                            -row*34f),
+                        new Vector2(75f,29f));
+
+                Text text =
+                    button.GetComponentInChildren<Text>(true);
+
+                if (text)
+                {
+                    text.fontSize = 10;
+                    text.resizeTextForBestFit = true;
+                    text.resizeTextMinSize = 8;
+                    text.resizeTextMaxSize = 11;
+                }
+
+                string captured =
+                    WeaponCategories[i];
+
+                button.onClick.AddListener(
+                    () => SetWeaponCategory(captured));
+
+                weaponCategoryButtons.Add(button);
+            }
+
+            weaponCategoryRoot.SetActive(false);
+        }
+
+        void SetWeaponCategory(
+            string category)
+        {
+            if (activeDepartment != ShopDepartment.Weapons)
+                return;
+
+            activeWeaponCategory =
+                string.IsNullOrWhiteSpace(category)
+                    ? "All"
+                    : category;
+
+            selectedCatalogIndex =
+                FindFirstIndexForDepartment(
+                    ShopDepartment.Weapons);
+
+            RefreshDepartmentButtons();
+            BuildProductButtons();
+            RefreshAll();
+
+            SetStatus(
+                "Weapons / " +
+                activeWeaponCategory +
+                " — select a product to inspect the live 3D preview.");
+        }
+
+        void UpdateProductScrollLayout()
+        {
+            if (productScrollRect == null)
+                return;
+
+            productScrollRect.offsetMin =
+                new Vector2(12f,12f);
+
+            productScrollRect.offsetMax =
+                new Vector2(
+                    -12f,
+                    activeDepartment == ShopDepartment.Weapons
+                        ? -132f
+                        : -62f);
+        }
+
+        bool MatchesActiveWeaponCategory(
+            ShopCatalogEntry product)
+        {
+            if (product == null ||
+                activeWeaponCategory == "All")
+                return true;
+
+            string category =
+                product.Category ?? string.Empty;
+
+            if (activeWeaponCategory == "Gear")
+            {
+                return
+                    category.Contains("Accessories") ||
+                    category.Contains("Medical");
+            }
+
+            return category.Contains(activeWeaponCategory);
         }
 
         static void SetTabVisual(Button button,bool selected)
@@ -408,7 +568,9 @@ namespace Hanger51.Commerce
 
             for (int i=0;i<terminal.Catalog.Count;i++)
             {
-                if (MatchesDepartment(terminal.Catalog[i],department))
+                if (MatchesDepartment(terminal.Catalog[i],department) &&
+                    (department != ShopDepartment.Weapons ||
+                     MatchesActiveWeaponCategory(terminal.Catalog[i])))
                     return i;
             }
 
@@ -422,7 +584,9 @@ namespace Hanger51.Commerce
                     ? terminal.GetProduct(selectedCatalogIndex)
                     : null;
 
-            if (!MatchesDepartment(selected,activeDepartment))
+            if (!MatchesDepartment(selected,activeDepartment) ||
+                (activeDepartment == ShopDepartment.Weapons &&
+                 !MatchesActiveWeaponCategory(selected)))
                 selectedCatalogIndex = FindFirstIndexForDepartment(activeDepartment);
         }
 
@@ -443,7 +607,9 @@ namespace Hanger51.Commerce
             for (int index=0;index<terminal.Catalog.Count;index++)
             {
                 ShopCatalogEntry product = terminal.Catalog[index];
-                if (!MatchesDepartment(product,activeDepartment))
+                if (!MatchesDepartment(product,activeDepartment) ||
+                    (activeDepartment == ShopDepartment.Weapons &&
+                     !MatchesActiveWeaponCategory(product)))
                     continue;
 
                 Button button =
