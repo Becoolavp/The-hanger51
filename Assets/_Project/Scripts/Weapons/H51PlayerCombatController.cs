@@ -930,15 +930,20 @@ namespace Hanger51.Weapons
                     ? attachment.InventoryItem.DisplayName
                     : attachment.name);
 
-            visual.transform.localPosition =
-                ResolveAttachmentMount(
-                    weaponModel,
-                    slot) +
-                mountOffset;
+            visual.transform.localPosition = Vector3.zero;
             visual.transform.localRotation =
                 Quaternion.Euler(attachment.AttachmentEuler);
             visual.transform.localScale =
                 attachment.AttachmentScale;
+
+            PlaceAttachmentByBounds(
+                weaponModel,
+                visual,
+                slot,
+                ResolveAttachmentMount(
+                    weaponModel,
+                    slot) +
+                mountOffset);
 
             Collider[] colliders =
                 visual.GetComponentsInChildren<Collider>(true);
@@ -949,6 +954,104 @@ namespace Hanger51.Weapons
                 visual.GetComponentsInChildren<InventoryPickup>(true);
             for (int i=0;i<pickups.Length;i++)
                 pickups[i].enabled = false;
+        }
+
+        static void PlaceAttachmentByBounds(
+            GameObject weaponModel,
+            GameObject attachmentVisual,
+            H51AttachmentSlot slot,
+            Vector3 targetMount)
+        {
+            if (!weaponModel || !attachmentVisual)
+                return;
+
+            Renderer[] renderers =
+                attachmentVisual.GetComponentsInChildren<Renderer>(true);
+
+            if (renderers.Length == 0)
+            {
+                attachmentVisual.transform.localPosition = targetMount;
+                return;
+            }
+
+            Transform frame = weaponModel.transform;
+            bool haveBounds = false;
+            Bounds bounds = new Bounds(Vector3.zero,Vector3.zero);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Bounds world = renderers[i].bounds;
+                Vector3 min = world.min;
+                Vector3 max = world.max;
+                Vector3[] corners =
+                {
+                    new Vector3(min.x,min.y,min.z),
+                    new Vector3(min.x,min.y,max.z),
+                    new Vector3(min.x,max.y,min.z),
+                    new Vector3(min.x,max.y,max.z),
+                    new Vector3(max.x,min.y,min.z),
+                    new Vector3(max.x,min.y,max.z),
+                    new Vector3(max.x,max.y,min.z),
+                    new Vector3(max.x,max.y,max.z)
+                };
+
+                for (int j=0;j<corners.Length;j++)
+                {
+                    Vector3 local = frame.InverseTransformPoint(corners[j]);
+                    if (!haveBounds)
+                    {
+                        bounds = new Bounds(local,Vector3.zero);
+                        haveBounds = true;
+                    }
+                    else
+                        bounds.Encapsulate(local);
+                }
+            }
+
+            if (!haveBounds)
+            {
+                attachmentVisual.transform.localPosition = targetMount;
+                return;
+            }
+
+            Vector3 attachmentPoint;
+
+            switch (slot)
+            {
+                case H51AttachmentSlot.Optic:
+                    attachmentPoint =
+                        new Vector3(
+                            bounds.center.x,
+                            bounds.min.y,
+                            bounds.center.z);
+                    break;
+
+                case H51AttachmentSlot.Muzzle:
+                    // Barrel points toward -X in the corrected weapon view;
+                    // align the rear/+X end of the muzzle device to the barrel.
+                    attachmentPoint =
+                        new Vector3(
+                            bounds.max.x,
+                            bounds.center.y,
+                            bounds.center.z);
+                    break;
+
+                case H51AttachmentSlot.Underbarrel:
+                    attachmentPoint =
+                        new Vector3(
+                            bounds.center.x,
+                            bounds.max.y,
+                            bounds.center.z);
+                    break;
+
+                default:
+                    attachmentPoint = bounds.center;
+                    break;
+            }
+
+            attachmentVisual.transform.localPosition +=
+                targetMount -
+                attachmentPoint;
         }
 
         static Vector3 ResolveAttachmentMount(
