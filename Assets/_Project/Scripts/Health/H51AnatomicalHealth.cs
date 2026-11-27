@@ -90,6 +90,8 @@ namespace Hanger51.Health
             new List<H51OrganState>();
 
         float lowOxygenSeconds;
+        float breathingSupportSeconds;
+        float shockSupportSeconds;
         bool emergencyReported;
 
         H51CitizenEmergencyState citizenEmergency;
@@ -325,6 +327,109 @@ namespace Hanger51.Health
             OnChanged?.Invoke(this);
         }
 
+        public H51BodyRegion FindWorstBleedingLimb()
+        {
+            H51BodyRegion[] limbs =
+            {
+                H51BodyRegion.LeftArm,
+                H51BodyRegion.RightArm,
+                H51BodyRegion.LeftLeg,
+                H51BodyRegion.RightLeg
+            };
+
+            H51BodyRegion best = H51BodyRegion.LeftArm;
+            float highest = 0f;
+
+            for (int i=0;i<limbs.Length;i++)
+            {
+                H51BodyRegionState state = GetRegion(limbs[i]);
+                if (state != null &&
+                    state.externalBleedMlPerMinute > highest)
+                {
+                    highest = state.externalBleedMlPerMinute;
+                    best = limbs[i];
+                }
+            }
+
+            return best;
+        }
+
+        public float WorstLimbBleedMlPerMinute
+        {
+            get
+            {
+                H51BodyRegionState state =
+                    GetRegion(FindWorstBleedingLimb());
+                return state != null
+                    ? state.externalBleedMlPerMinute
+                    : 0f;
+            }
+        }
+
+        public void ApplyTraumaDressing()
+        {
+            for (int i=0;i<regions.Count;i++)
+            {
+                H51BodyRegionState state = regions[i];
+                if (state == null)
+                    continue;
+
+                state.externalBleedMlPerMinute *= .24f;
+            }
+
+            pain = Mathf.Max(0f,pain-4f);
+            OnChanged?.Invoke(this);
+        }
+
+        public void ApplyTourniquetToWorstLimb()
+        {
+            H51BodyRegion region = FindWorstBleedingLimb();
+            H51BodyRegionState state = GetRegion(region);
+            if (state == null ||
+                state.externalBleedMlPerMinute <= .01f)
+                return;
+
+            state.externalBleedMlPerMinute *= .025f;
+            pain = Mathf.Clamp(pain+6f,0f,100f);
+            OnChanged?.Invoke(this);
+        }
+
+        public void ApplyChestSealAndBreathingSupport()
+        {
+            H51BodyRegionState chest =
+                GetRegion(H51BodyRegion.Chest);
+            if (chest != null)
+                chest.externalBleedMlPerMinute *= .12f;
+
+            breathingSupportSeconds =
+                Mathf.Max(breathingSupportSeconds,120f);
+            lowOxygenSeconds =
+                Mathf.Max(0f,lowOxygenSeconds-8f);
+            OnChanged?.Invoke(this);
+        }
+
+        public void ProvideAirwaySupport()
+        {
+            breathingSupportSeconds =
+                Mathf.Max(breathingSupportSeconds,90f);
+            oxygenSaturation =
+                Mathf.Clamp01(oxygenSaturation+.04f);
+            lowOxygenSeconds =
+                Mathf.Max(0f,lowOxygenSeconds-10f);
+            OnChanged?.Invoke(this);
+        }
+
+        public void ProvideShockSupport()
+        {
+            shockSupportSeconds =
+                Mathf.Max(shockSupportSeconds,120f);
+            shock =
+                Mathf.Max(0f,shock-8f);
+            pain =
+                Mathf.Max(0f,pain-3f);
+            OnChanged?.Invoke(this);
+        }
+
         public void ResetHealthy()
         {
             EnsureAnatomy();
@@ -350,6 +455,10 @@ namespace Hanger51.Health
             causeOfDeath =
                 string.Empty;
             lowOxygenSeconds =
+                0f;
+            breathingSupportSeconds =
+                0f;
+            shockSupportSeconds =
                 0f;
             emergencyReported =
                 false;
@@ -672,6 +781,16 @@ namespace Hanger51.Health
                     lungs * .48f +
                     heart * .08f);
 
+            if (breathingSupportSeconds > 0f)
+            {
+                breathingSupportSeconds =
+                    Mathf.Max(0f,breathingSupportSeconds-dt);
+                targetOxygen =
+                    Mathf.Max(
+                        targetOxygen,
+                        Mathf.Lerp(.78f,.96f,lungs));
+            }
+
             targetOxygen *=
                 Mathf.Lerp(.58f,1f,blood);
 
@@ -707,6 +826,13 @@ namespace Hanger51.Health
                         organShock * .88f) +
                     painShock) *
                 100f;
+
+            if (shockSupportSeconds > 0f)
+            {
+                shockSupportSeconds =
+                    Mathf.Max(0f,shockSupportSeconds-dt);
+                targetShock *= .82f;
+            }
 
             shock =
                 Mathf.MoveTowards(
