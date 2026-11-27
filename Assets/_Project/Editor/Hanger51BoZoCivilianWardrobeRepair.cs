@@ -335,6 +335,9 @@ namespace Hanger51.EditorTools
                     .ToArray();
 
             int missingVisual = 0;
+            int incompleteWardrobeSet = 0;
+            int insufficientCasualVariety = 0;
+            int inactiveVisual = 0;
             int nonGeneratedPreset = 0;
             int wrongPresentationBase = 0;
             int missingTop = 0;
@@ -361,77 +364,131 @@ namespace Hanger51.EditorTools
                 OutfitSystem outfit =
                     visual ? visual.GetComponent<OutfitSystem>() : null;
 
-                if (!adapter || !visual || !outfit || !adapter.CharacterPreset)
+                CharacterObject workPreset =
+                    adapter ? adapter.WorkPreset : null;
+                CharacterObject[] casualPresets =
+                    adapter ? adapter.CasualPresets : null;
+
+                if (!adapter || !visual || !outfit || !workPreset)
                 {
                     missingVisual++;
                     continue;
                 }
 
-                string presetPath =
-                    AssetDatabase.GetAssetPath(adapter.CharacterPreset);
-                if (string.IsNullOrWhiteSpace(presetPath) ||
-                    !presetPath.StartsWith(
-                        GeneratedFolder + "/",
-                        StringComparison.Ordinal))
-                    nonGeneratedPreset++;
+                if (!visual.gameObject.activeSelf ||
+                    !outfit.enabled)
+                    inactiveVisual++;
+
+                if (casualPresets == null ||
+                    casualPresets.Length != CasualVariantCount ||
+                    casualPresets.Any(p => !p))
+                    incompleteWardrobeSet++;
 
                 bool female =
                     identity.Presentation ==
                     H51CitizenPresentation.Female;
                 string expectedPrefix =
                     female ? "H51_F_" : "H51_M_";
-                if (!adapter.CharacterPreset.name.StartsWith(
-                        expectedPrefix,
-                        StringComparison.Ordinal))
-                    wrongPresentationBase++;
 
-                CharacterData data =
-                    adapter.CharacterPreset.GetCharacterData();
+                List<CharacterObject> presets =
+                    new List<CharacterObject> { workPreset };
+                if (casualPresets != null)
+                    presets.AddRange(casualPresets.Where(p => p));
 
-                if (data == null || data.versionID < 4)
-                    staleSaveVersion++;
+                HashSet<string> casualSignatures =
+                    new HashSet<string>(StringComparer.Ordinal);
 
-                if (data != null && data.outfitDatas != null)
+                for (int pIndex=0;pIndex<presets.Count;pIndex++)
                 {
-                    for (int d=0;d<data.outfitDatas.Count;d++)
+                    CharacterObject preset =
+                        presets[pIndex];
+                    if (!preset)
+                        continue;
+
+                    string presetPath =
+                        AssetDatabase.GetAssetPath(preset);
+                    if (string.IsNullOrWhiteSpace(presetPath) ||
+                        !presetPath.StartsWith(
+                            GeneratedFolder + "/",
+                            StringComparison.Ordinal))
+                        nonGeneratedPreset++;
+
+                    if (!preset.name.StartsWith(
+                            expectedPrefix,
+                            StringComparison.Ordinal))
+                        wrongPresentationBase++;
+
+                    CharacterData data =
+                        preset.GetCharacterData();
+
+                    if (data == null || data.versionID < 4)
+                        staleSaveVersion++;
+
+                    if (data != null && data.outfitDatas != null)
                     {
-                        OutfitData item =
-                            data.outfitDatas[d];
+                        for (int d=0;d<data.outfitDatas.Count;d++)
+                        {
+                            OutfitData item =
+                                data.outfitDatas[d];
 
-                        if (item.alpha < .999f)
-                            invalidOutfitAlpha++;
+                            if (item.alpha < .999f)
+                                invalidOutfitAlpha++;
 
-                        if (!string.IsNullOrWhiteSpace(item.outfit) &&
-                            !Resources.Load<Outfit>(item.outfit))
-                            missingOutfitResource++;
+                            if (!string.IsNullOrWhiteSpace(item.outfit) &&
+                                !Resources.Load<Outfit>(item.outfit))
+                                missingOutfitResource++;
+                        }
+                    }
+
+                    List<string> paths =
+                        data != null && data.outfitDatas != null
+                            ? data.outfitDatas
+                                .Where(d => !string.IsNullOrWhiteSpace(d.outfit))
+                                .Select(d => d.outfit)
+                                .ToList()
+                            : new List<string>();
+
+                    string top =
+                        paths.FirstOrDefault(x =>
+                            x.StartsWith("Top/",StringComparison.Ordinal));
+                    string bottom =
+                        paths.FirstOrDefault(x =>
+                            x.StartsWith("Bottom/",StringComparison.Ordinal));
+                    string feet =
+                        paths.FirstOrDefault(x =>
+                            x.StartsWith("Feet/",StringComparison.Ordinal));
+
+                    if (string.IsNullOrWhiteSpace(top))
+                        missingTop++;
+                    if (string.IsNullOrWhiteSpace(bottom))
+                        missingBottom++;
+                    if (string.IsNullOrWhiteSpace(feet))
+                        missingFeet++;
+
+                    if (paths.Any(IsFantasyOrDemoOnlyPath))
+                        fantasyParts++;
+
+                    if (paths.Any(x =>
+                        x.StartsWith("Pupil/",StringComparison.Ordinal) &&
+                        !string.Equals(
+                            x,
+                            "Pupil/Pupil_Round",
+                            StringComparison.Ordinal)))
+                        unsafePupil++;
+
+                    if (pIndex > 0 &&
+                        !string.IsNullOrWhiteSpace(top) &&
+                        !string.IsNullOrWhiteSpace(bottom) &&
+                        !string.IsNullOrWhiteSpace(feet))
+                    {
+                        casualSignatures.Add(
+                            top + "|" + bottom + "|" + feet);
                     }
                 }
 
-                List<string> paths =
-                    data != null && data.outfitDatas != null
-                        ? data.outfitDatas
-                            .Where(d => !string.IsNullOrWhiteSpace(d.outfit))
-                            .Select(d => d.outfit)
-                            .ToList()
-                        : new List<string>();
-
-                if (!paths.Any(p => p.StartsWith("Top/",StringComparison.Ordinal)))
-                    missingTop++;
-                if (!paths.Any(p => p.StartsWith("Bottom/",StringComparison.Ordinal)))
-                    missingBottom++;
-                if (!paths.Any(p => p.StartsWith("Feet/",StringComparison.Ordinal)))
-                    missingFeet++;
-
-                if (paths.Any(IsFantasyOrDemoOnlyPath))
-                    fantasyParts++;
-
-                if (paths.Any(p =>
-                    p.StartsWith("Pupil/",StringComparison.Ordinal) &&
-                    !string.Equals(
-                        p,
-                        "Pupil/Pupil_Round",
-                        StringComparison.Ordinal)))
-                    unsafePupil++;
+                if (casualSignatures.Count <
+                    Mathf.Min(3,CasualVariantCount))
+                    insufficientCasualVariety++;
 
                 if (outfit.cleanAfterMerge)
                     prematureClean++;
@@ -453,6 +510,9 @@ namespace Hanger51.EditorTools
             bool ok =
                 citizens.Length > 0 &&
                 missingVisual == 0 &&
+                incompleteWardrobeSet == 0 &&
+                insufficientCasualVariety == 0 &&
+                inactiveVisual == 0 &&
                 nonGeneratedPreset == 0 &&
                 wrongPresentationBase == 0 &&
                 missingTop == 0 &&
@@ -469,14 +529,19 @@ namespace Hanger51.EditorTools
             {
                 Debug.Log(
                     "Step 165 passed. Citizens=" + citizens.Length +
-                    ". All use generated Hanger 51 civilian presets with correct male/female bases, mandatory Top/Bottom/Feet clothing, human-only accessories/pupils, BoZo v4 alpha=1 on every outfit layer, valid Resources paths, and safe texture-bake settings. Scene-time visual physics needing runtime neutralization=" +
+                    ". All citizens have one work preset plus " +
+                    CasualVariantCount +
+                    " off-duty presets, at least three distinct casual outfit combinations, correct male/female bases, mandatory Top/Bottom/Feet clothing, active visual roots, human-only accessories/pupils, BoZo v4 alpha=1 on every outfit layer, valid Resources paths, and safe texture-bake settings. Scene-time visual physics needing runtime neutralization=" +
                     visualPhysics + ".");
             }
             else
             {
                 Debug.LogError(
                     "Step 165 failed. Citizens=" + citizens.Length +
-                    ", missing visual/preset=" + missingVisual +
+                    ", missing visual/work preset=" + missingVisual +
+                    ", incomplete wardrobe sets=" + incompleteWardrobeSet +
+                    ", insufficient casual variety=" + insufficientCasualVariety +
+                    ", inactive visuals=" + inactiveVisual +
                     ", non-generated demo preset=" + nonGeneratedPreset +
                     ", wrong presentation base=" + wrongPresentationBase +
                     ", missing Top=" + missingTop +
