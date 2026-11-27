@@ -267,7 +267,9 @@ namespace Hanger51.EditorTools
                 if (medical)
                 {
                     H51CombatItemDefinition d = EnsureDefinition("Medical_" + prefab.name);
-                    d.ConfigureMedicalKit(item);
+                    d.ConfigureMedicalKit(
+                        item,
+                        H51MedicalKitRole.Medical);
                     EditorUtility.SetDirty(d);
                     AddDefinition(definitions,d);
                 }
