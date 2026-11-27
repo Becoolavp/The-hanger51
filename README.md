@@ -580,6 +580,69 @@ Important files:
 - `Assets/_Project/Editor/Hanger51WorldCurrentCleanup166.cs`
 - `Assets/_Project/Editor/Hanger51WorldMenuOrganizer.cs`
 
+### LowPolyWeapons purchase, combat, ballistics, emergency and trauma-treatment pass — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The imported `Assets/LowPolyWeapons` pack is now connected to Hanger 51 through the existing commerce/inventory stack rather than a separate weapon-only inventory.
+
+Run:
+
+`Hanger 51 -> World -> Current -> 170 - Install Low Poly Weapons Combat System`
+
+then:
+
+`Hanger 51 -> World -> Current -> 171 - Validate Low Poly Weapons Combat System`
+
+Step 170 keeps the existing aviation-parts catalog and appends twelve combat products. The first playable set is intentionally representative rather than wiring every model variant at once:
+
+- 5.56 service rifle using `AssaultRifle1_01`;
+- 9mm service pistol using `Pistol1_01`;
+- 7.62 precision rifle using `SniperRifle1_01`;
+- matching 5.56×45, 9×19 and 7.62×51 ammunition cases;
+- compact red-dot and magnified optics;
+- rifle suppressor and vertical foregrip;
+- fragmentation grenade;
+- trauma medical kit.
+
+Purchases use the normal parts-computer -> shipment-bay -> animated crate -> unbox -> pickup -> inventory pipeline. Player inventory capacity is raised to at least 20 slots so combat items can coexist with aircraft/engine parts.
+
+Runtime controls in a Development Build:
+
+- `LMB`: fire equipped firearm / throw equipped grenade;
+- `RMB`: aim down sights;
+- `R`: reload from matching ammunition stacks in inventory;
+- `C`: open/close weapon customization while a firearm is equipped;
+- `F`: open the trauma-treatment panel for the aimed injured NPC (or self if no patient is targeted) while a trauma kit is equipped;
+- `H`: existing Body Inspector.
+
+Weapon customization transfers owned attachments out of inventory while installed and returns them when removed or swapped. Optics change the actual ADS field of view. The magnified optic uses a circular scope blackout/reticle. The suppressor and foregrip carry configured velocity/recoil modifiers rather than being visual-only.
+
+Ballistics are projectile-based, not hitscan. The initial cartridge profiles use representative projectile mass/muzzle-velocity values for 9×19, 5.56×45 and 7.62×51. `H51BallisticProjectile` advances under gravity plus a lightweight drag model, calculates impact kinetic energy and momentum at the collision point, then routes the hit into `H51AnatomicalHealth`. NPCs receive a separate trigger-only anatomical hitbox rig for head, neck, chest, abdomen, pelvis, both arms and both legs while retaining their original navigation/collision capsule.
+
+Projectile momentum also feeds `H51BallisticImpactReaction`. Reactions are deliberately restrained: ordinary bullets should create a believable flinch/displacement rather than unrealistically throwing a person across the room. Fatal injuries stop the NPC routine and leave the body/state in the world for testing instead of deleting the citizen.
+
+Gunshot and grenade injuries route into the existing emergency system. Injured citizens request ambulance + police response. A fatal victim remains in-world and cannot resume its schedule when emergency callbacks finish.
+
+The trauma kit is injury-driven instead of a generic HP refill. It consumes one kit when treatment begins and exposes context-sensitive stabilization actions for external hemorrhage, severe limb bleeding/tourniquet use, chest/breathing injury, airway/breathing support, and shock support. It warns when major blood loss or critical internal-organ damage exceeds what the field kit can correct. These actions stabilize physiology but do not regenerate destroyed organs or replace lost blood.
+
+Important first-pass limitations:
+
+- only the representative firearms/attachments listed above are cataloged so far; the same data-driven system is intended to absorb the pack's SMGs, shotguns, LMGs, heavy weapons, additional optics, mines/C4/Molotovs and remaining variants later;
+- police/ambulance dispatch responds to shootings, but armed police combat AI is not yet implemented;
+- firearm audio, muzzle flash, casing ejection and more advanced weapon animation are still future polish;
+- magnified optics currently use FOV zoom + scope mask/reticle rather than a separate render-to-texture scope camera;
+- attachment state is currently stored per weapon definition during the runtime session rather than as fully serialized per-instance gun condition.
+
+Important files:
+
+- `Assets/_Project/Scripts/Weapons/H51CombatItemDefinition.cs`
+- `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticProjectile.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticImpactReaction.cs`
+- `Assets/_Project/Scripts/Weapons/H51GrenadeProjectile.cs`
+- `Assets/_Project/Scripts/Weapons/H51MedicalTreatmentUI.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHitboxRig.cs`
+- `Assets/_Project/Editor/Hanger51LowPolyWeaponsCombatSetup.cs`
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
