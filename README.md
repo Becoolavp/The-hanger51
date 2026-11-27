@@ -461,6 +461,10 @@ The next Development Build exposed a second regression after Step 164: citizens 
 
 The population pipeline no longer uses BoZo's showcase character saves as final citizen appearances.
 
+Wardrobes are now schedule-aware. Step 164 generates one occupation/work preset plus four deterministic off-duty presets per citizen. The citizen brain requests the work preset while the NPC is at work or traveling toward work; home, shopping, leisure, appointments, lunch, and non-work travel use an off-duty preset selected by game day. This gives each citizen consistent identity/hair/skin while rotating real civilian clothing instead of locking everyone into one outfit forever.
+
+Vehicle occupancy is also hardened against floating BoZo fragments. The old commute code only hid renderers cached during `H51CitizenBrain.Awake()`, while BoZo can instantiate additional merged/outfit renderers later. `H51BoZoCitizenVisual` now force-suppresses every current and newly created BoZo renderer for the entire time the citizen is riding in a vehicle, then restores rendering after exit. This targets the intermittent floating black box/head/mesh seen above citizen cars.
+
 Run:
 
 `Hanger 51 -> World -> Current -> 164 - Apply Human Civilian BoZo Wardrobes`
@@ -498,9 +502,10 @@ The runtime bridge also treats BoZo as **visual-only**. `H51BoZoCitizenVisual` d
 
 Step 165 validates:
 
-- every citizen has a generated Hanger 51 civilian preset rather than a BoZo demo preset;
-- the generated preset name matches the stored male/female presentation;
-- every citizen has a Top, Bottom, and Feet item;
+- every citizen has a generated Hanger 51 work preset plus four generated off-duty presets rather than BoZo demo presets;
+- at least three distinct Top/Bottom/Feet combinations exist across each citizen's off-duty set;
+- generated preset names match the stored male/female presentation;
+- every work and off-duty preset has a Top, Bottom, and Feet item;
 - no fantasy/demo-only part remains;
 - no non-round fantasy pupil remains;
 - every generated preset is BoZo save version 4 or newer;
