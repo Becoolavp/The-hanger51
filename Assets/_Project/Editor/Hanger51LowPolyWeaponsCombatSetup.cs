@@ -137,8 +137,6 @@ namespace Hanger51.EditorTools
 
             if (!player.GetComponent<H51AnatomicalHealth>())
                 Undo.AddComponent<H51AnatomicalHealth>(player.gameObject);
-            if (!player.GetComponent<H51AnatomicalHitboxRig>())
-                Undo.AddComponent<H51AnatomicalHitboxRig>(player.gameObject);
 
             H51CitizenIdentity[] citizens =
                 UnityEngine.Object.FindObjectsByType<H51CitizenIdentity>(
@@ -214,8 +212,6 @@ namespace Hanger51.EditorTools
                 player ? player.GetComponent<H51MedicalTreatmentUI>() : null;
             H51AnatomicalHealth playerHealth =
                 player ? player.GetComponent<H51AnatomicalHealth>() : null;
-            H51AnatomicalHitboxRig playerHitboxes =
-                player ? player.GetComponent<H51AnatomicalHitboxRig>() : null;
             HangarShopTerminal terminal =
                 UnityEngine.Object.FindFirstObjectByType<HangarShopTerminal>(
                     FindObjectsInactive.Include);
@@ -293,7 +289,6 @@ namespace Hanger51.EditorTools
                 combat &&
                 medical &&
                 playerHealth &&
-                playerHitboxes &&
                 terminal &&
                 dispatch &&
                 combatProducts >= 12 &&
@@ -337,7 +332,6 @@ namespace Hanger51.EditorTools
                     ", combat controller=" + (combat ? "yes" : "MISSING") +
                     ", medical UI=" + (medical ? "yes" : "MISSING") +
                     ", player health=" + (playerHealth ? "yes" : "MISSING") +
-                    ", player hitboxes=" + (playerHitboxes ? "yes" : "MISSING") +
                     ", terminal=" + (terminal ? "yes" : "MISSING") +
                     ", emergency dispatch=" + (dispatch ? "yes" : "MISSING") +
                     ", combat products=" + combatProducts + "/12" +
