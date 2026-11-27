@@ -277,6 +277,29 @@ namespace Hanger51.Health
 
         public void ApplyDamage(
             H51BodyRegion region,
+            Vector3 worldPoint,
+            float amount,
+            H51DamageType type,
+            Vector3 direction,
+            float penetration = 0f)
+        {
+            if (dead || amount <= 0f)
+                return;
+
+            Vector3 local =
+                transform.InverseTransformPoint(worldPoint);
+
+            ApplyDamageInternal(
+                region,
+                local,
+                amount,
+                type,
+                Mathf.Clamp01(penetration),
+                direction);
+        }
+
+        public void ApplyDamage(
+            H51BodyRegion region,
             float amount,
             H51DamageType type,
             float penetration = 0f)
