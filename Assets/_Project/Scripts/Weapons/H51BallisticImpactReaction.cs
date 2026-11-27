@@ -78,6 +78,17 @@ namespace Hanger51.Weapons
                     1.5f,
                     12f);
 
+            H51CitizenRagdoll ragdoll =
+                GetComponent<H51CitizenRagdoll>();
+            if (!ragdoll)
+                ragdoll = gameObject.AddComponent<H51CitizenRagdoll>();
+
+            ragdoll.RegisterImpact(
+                region,
+                direction,
+                projectileMomentumKgMps,
+                trauma);
+
             flinchRegion = region;
             flinch =
                 Mathf.Max(
