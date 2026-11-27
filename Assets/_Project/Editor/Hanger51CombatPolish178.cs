@@ -82,6 +82,9 @@ namespace Hanger51.EditorTools
                             "combat-pack-loot-bigamobox",
                             StringComparison.Ordinal) &&
                         !e.ProductId.StartsWith(
+                            "combat-pack-loot-healthpack",
+                            StringComparison.Ordinal) &&
+                        !e.ProductId.StartsWith(
                             "combat-functional-ammo-",
                             StringComparison.Ordinal) &&
                         !e.ProductId.StartsWith(
