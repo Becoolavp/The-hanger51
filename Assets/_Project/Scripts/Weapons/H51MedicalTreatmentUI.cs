@@ -47,6 +47,12 @@ namespace Hanger51.Weapons
                 return false;
             }
 
+            if (newTarget.IsDead)
+            {
+                reason = "The patient is deceased in the current simulation; a trauma kit cannot reverse the fatal state.";
+                return false;
+            }
+
             if (!inventory)
                 inventory = GetComponent<PlayerInventory>();
 
