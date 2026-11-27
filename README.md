@@ -841,6 +841,59 @@ Important files:
 - `Assets/_Project/Scripts/Weapons/H51BallisticImpactReaction.cs`
 - `Assets/_Project/Scripts/Health/H51CitizenRagdoll.cs`
 
+### NPC internal organs, casualty Body Inspector, and safe UI close — IMPLEMENTED / PENDING UNITY VALIDATION
+
+Run:
+
+`Hanger 51 -> World -> Current -> 180 - Install NPC Internal Organs And Casualty Inspector`
+
+then:
+
+`Hanger 51 -> World -> Current -> 181 - Validate NPC Internal Organs And Casualty Inspector`
+
+This pass changes casualty damage/inspection from broad-region approximation to a two-layer anatomical model:
+
+- the existing 9 body-region hit volumes remain the outer soft-tissue/bone/vessel layer;
+- every anatomical body now also receives 10 invisible internal organ volumes: brain, heart, left/right lung, liver, stomach, intestines, left/right kidney and spine;
+- organ volumes are anchored to the humanoid skeleton when available and are preserved by BoZo's visual-physics cleanup;
+- ballistic/penetrating region hits no longer automatically mean an organ was struck;
+- the ballistic trace looks through the outer body region for a nested organ volume belonging to the same victim;
+- a direct organ intersection uses organ-specific injury scaling;
+- a direct ballistic brain intersection produces catastrophic CNS damage, while a facial/scalp/head-region graze can remain a survivable head wound;
+- heart, lung, liver, kidney, intestinal and spinal intersections likewise damage the actual organ rather than whichever organ happened to be inferred from the broad region.
+
+NPC inspection now reuses the same full `H51BodyInspectorUI` used by the player:
+
+- injured/deceased NPCs open as **CASUALTY INSPECTOR**;
+- body regions and live organ markers are clickable;
+- organ condition, region condition, arterial bleeding, fractures, internal bleeding, blood volume, oxygen, consciousness, pain, shock, adrenaline, pulse, pressure and cause of death remain visible;
+- the medical treatment controls are layered onto that same casualty inspection flow instead of using the older text-only trauma panel;
+- development damage/reset buttons are hidden during external casualty inspection.
+
+Input handoff is also hardened:
+
+- closing the casualty inspector immediately relocks the cursor;
+- the ESC event that closed the UI is ignored for the following frame so it cannot instantly unlock the cursor again;
+- primary fire is suppressed for two frames after a modal UI closes, preventing the click used to regain gameplay focus from firing an equipped weapon;
+- weapon customization now uses the same safe close path.
+
+Ragdoll reliability also receives a deferred-ready fix:
+
+- if an NPC dies before the BoZo humanoid Animator has finished becoming available, the ragdoll transition is retried automatically as soon as the rig can be built;
+- this prevents the state where health reports **DECEASED** but the visual remains frozen standing upright.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51NpcOrganInspectorUpgrade.cs`
+- `Assets/_Project/Scripts/Health/H51OrganHitbox.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHitboxRig.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHealth.cs`
+- `Assets/_Project/Scripts/Health/H51BodyInspectorUI.cs`
+- `Assets/_Project/Scripts/Health/H51CitizenRagdoll.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticProjectile.cs`
+- `Assets/_Project/Scripts/Weapons/H51MedicalTreatmentUI.cs`
+- `Assets/_Project/Scripts/Player/FirstPersonController.cs`
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
