@@ -303,6 +303,31 @@ namespace Hanger51.Health
 
         public void ApplyDamage(
             H51BodyRegion region,
+            H51OrganType organ,
+            Vector3 worldPoint,
+            float amount,
+            H51DamageType type,
+            Vector3 direction,
+            float penetration = 0f)
+        {
+            if (dead || amount <= 0f)
+                return;
+
+            Vector3 local =
+                transform.InverseTransformPoint(worldPoint);
+
+            ApplyDamageInternal(
+                region,
+                local,
+                amount,
+                type,
+                Mathf.Clamp01(penetration),
+                direction,
+                organ);
+        }
+
+        public void ApplyDamage(
+            H51BodyRegion region,
             float amount,
             H51DamageType type,
             float penetration = 0f)
@@ -530,7 +555,8 @@ namespace Hanger51.Health
             float amount,
             H51DamageType type,
             float penetration,
-            Vector3 direction)
+            Vector3 direction,
+            H51OrganType? forcedOrgan = null)
         {
             H51BodyRegionState body =
                 GetRegion(region);
@@ -613,7 +639,8 @@ namespace Hanger51.Health
                 localPoint,
                 amount,
                 type,
-                penetration);
+                penetration,
+                forcedOrgan);
 
             adrenaline =
                 Mathf.Max(
@@ -633,8 +660,27 @@ namespace Hanger51.Health
             Vector3 local,
             float amount,
             H51DamageType type,
-            float penetration)
+            float penetration,
+            H51OrganType? forcedOrgan)
         {
+            if (forcedOrgan.HasValue)
+            {
+                ApplyDirectOrganDamage(
+                    forcedOrgan.Value,
+                    amount,
+                    type,
+                    penetration);
+                return;
+            }
+
+            // Ballistic and penetrating projectiles now need to actually
+            // intersect one of the invisible organ volumes. A broad body-region
+            // hit by itself represents soft tissue, bone and surface vessels;
+            // it no longer means the bullet automatically hit the brain/heart/lung.
+            if (type == H51DamageType.Ballistic ||
+                type == H51DamageType.Penetrating)
+                return;
+
             float organScale =
                 Mathf.Lerp(
                     .28f,
@@ -760,6 +806,132 @@ namespace Hanger51.Health
                     H51OrganType.Spine,
                     amount * organScale * .12f,
                     InternalBleedFor(type,amount,.04f));
+            }
+        }
+
+        void ApplyDirectOrganDamage(
+            H51OrganType organType,
+            float amount,
+            H51DamageType type,
+            float penetration)
+        {
+            float damage =
+                Mathf.Max(
+                    amount,
+                    0f);
+
+            float bleedScale = 1f;
+
+            switch (organType)
+            {
+                case H51OrganType.Brain:
+                    if (type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating)
+                    {
+                        damage =
+                            Mathf.Max(
+                                amount*7.5f,
+                                Mathf.Lerp(
+                                    82f,
+                                    100f,
+                                    Mathf.Clamp01(
+                                        penetration+.15f)));
+
+                        bleedScale = 1.35f;
+                    }
+                    else
+                    {
+                        damage *= 1.8f;
+                        bleedScale = .75f;
+                    }
+                    break;
+
+                case H51OrganType.Heart:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 5.2f
+                            : 1.6f;
+                    bleedScale = 2.4f;
+                    break;
+
+                case H51OrganType.LeftLung:
+                case H51OrganType.RightLung:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 3.2f
+                            : 1.35f;
+                    bleedScale = 1.35f;
+                    break;
+
+                case H51OrganType.Liver:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 2.8f
+                            : 1.35f;
+                    bleedScale = 2.0f;
+                    break;
+
+                case H51OrganType.LeftKidney:
+                case H51OrganType.RightKidney:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 2.5f
+                            : 1.25f;
+                    bleedScale = 1.45f;
+                    break;
+
+                case H51OrganType.Spine:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 4.0f
+                            : 1.8f;
+                    bleedScale = .65f;
+                    break;
+
+                case H51OrganType.Stomach:
+                case H51OrganType.Intestines:
+                    damage *=
+                        type == H51DamageType.Ballistic ||
+                        type == H51DamageType.Penetrating
+                            ? 2.3f
+                            : 1.15f;
+                    bleedScale = .85f;
+                    break;
+            }
+
+            DamageOrgan(
+                organType,
+                damage,
+                InternalBleedFor(
+                    type,
+                    amount,
+                    bleedScale));
+
+            H51OrganState organ =
+                GetOrgan(organType);
+
+            if (organType == H51OrganType.Brain &&
+                (type == H51DamageType.Ballistic ||
+                 type == H51DamageType.Penetrating) &&
+                organ != null &&
+                organ.condition <= 20f)
+            {
+                Die("catastrophic brain injury");
+                return;
+            }
+
+            if (organType == H51OrganType.Heart &&
+                (type == H51DamageType.Ballistic ||
+                 type == H51DamageType.Penetrating) &&
+                organ != null &&
+                organ.condition <= 3f)
+            {
+                Die("catastrophic cardiac injury");
             }
         }
 
