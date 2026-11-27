@@ -765,7 +765,7 @@ Step 176:
 - adds all hand/melee weapon prefabs under **Melee**;
 - adds all heavy-weapon prefabs under **Heavy Weapons** while dedicated rocket/heavy-projectile mechanics remain a later pass;
 - adds every loot/ammo/medical/equipment prefab to the store;
-- turns both LowPolyWeapons health-pack prefabs into valid trauma-kit definitions;
+- turns both LowPolyWeapons health-pack prefabs into **Medical** kit definitions, while the dedicated Trauma Kit remains the major-hemorrhage/chest-trauma item;
 - expands the Weapons terminal filters to **Handguns, Assault Rifles, Sniper Rifles, SMGs, Machine Guns, Shotguns, Heavy Weapons, Melee, Explosives, Attachments, Ammunition, Medical, and Equipment**;
 - assigns all firearms a casing visual derived from the supplied LowPolyWeapons Bullet prefabs;
 - strips the projectile child from the cartridge prefab at runtime so only the spent case is ejected;
@@ -790,7 +790,7 @@ Medical interaction no longer requires holding a trauma kit before the player ca
 - aiming at an injured living NPC adds `F  Inspect / give first aid`;
 - aiming at a deceased NPC adds `F  Inspect injuries`;
 - the trauma assessment can be opened with no kit;
-- a trauma kit is consumed only when treatment actually begins;
+- the appropriate kit is consumed only when treatment actually begins;
 - deceased patients remain inspectable but cannot receive field treatment.
 
 Important files:
@@ -803,6 +803,43 @@ Important files:
 - `Assets/_Project/Scripts/Weapons/H51SpentCasing.cs`
 - `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
 - `Assets/_Project/Scripts/Commerce/HangarShopUI.cs`
+
+### Ammo-box functionality, stronger reactions, true ragdoll ownership, and semi-auto slide cycling — IMPLEMENTED / PENDING UNITY VALIDATION
+
+Run:
+
+`Hanger 51 -> World -> Current -> 178 - Fix Ammo Boxes Medical Roles Ragdoll And Pistol Cycling`
+
+then:
+
+`Hanger 51 -> World -> Current -> 179 - Validate Ammo Boxes Medical Roles Ragdoll And Pistol Cycling`
+
+This pass corrects several runtime issues found after Step 176 testing:
+
+- all ten `AmoBox_*` prefabs and all three `BigAmoBox_*` prefabs are converted from generic loot into real reloadable ammunition definitions;
+- the boxes are distributed across 9x19 mm, 5.56x45 mm, 7.62x51 mm and 12 gauge, with the store delivering a real round quantity rather than one useless prop;
+- reload now totals and consumes **all** compatible ammunition definitions for the firearm's cartridge, so any compatible small/bulk ammo box can feed the weapon;
+- the HUD reserve counter also sums every compatible ammo box instead of only the first ammo definition;
+- already-purchased generic ammo-box inventory assets are reused/reconfigured when possible, so test inventory should become functional after Step 178 rather than requiring replacement;
+- ejected brass/shotgun hull colliders explicitly ignore every collider on the player, preventing spent casings from nudging the player controller;
+- the old root-transform death Slerp is removed from `H51BallisticImpactReaction`; once a citizen is ragdolled, physics owns the body completely;
+- fatal/knockdown ragdolls receive a restrained impact impulse plus small angular variation across the physical bodies, producing a real collapse instead of a slow scripted tip-over;
+- procedural arm/leg/head/torso flinches are deliberately stronger and the whole-body reaction displacement is increased while remaining far below cinematic bullet-launch forces;
+- semi-automatic handgun prefabs are inspected at runtime for a separate broad upper/slide assembly; compatible pistols cycle that actual part rearward and forward on fire and lock it rearward on an empty magazine;
+- the slide detector rejects narrow top pieces so revolver barrels/cylinders are not given a fake reciprocating slide;
+- the two imported `Healthpack_*` items are now **Medical Kits**, used for airway/breathing and shock support;
+- the dedicated **Trauma Kit** is reserved for trauma dressing, tourniquet and chest-wound stabilization;
+- the casualty UI explains the two kit roles directly.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51CombatPolish178.cs`
+- `Assets/_Project/Scripts/Weapons/H51CombatItemRegistry.cs`
+- `Assets/_Project/Scripts/Weapons/H51CombatItemDefinition.cs`
+- `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
+- `Assets/_Project/Scripts/Weapons/H51MedicalTreatmentUI.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticImpactReaction.cs`
+- `Assets/_Project/Scripts/Health/H51CitizenRagdoll.cs`
 
 ### Wheel-install diagnostics
 
