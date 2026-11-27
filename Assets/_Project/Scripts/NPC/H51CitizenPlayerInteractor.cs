@@ -1,6 +1,8 @@
 using System;
+using Hanger51.Health;
 using Hanger51.Inventory;
 using Hanger51.Player;
+using Hanger51.Weapons;
 using UnityEngine;
 using UnityEngine.InputSystem;
 
@@ -13,6 +15,7 @@ namespace Hanger51.NPCs
         [SerializeField] Camera playerCamera;
         [SerializeField] InventoryUI inventoryUI;
         [SerializeField] H51CitizenDialogueUI dialogueUI;
+        [SerializeField] H51MedicalTreatmentUI medicalUI;
         [SerializeField, Min(1f)] float interactionDistance = 4.5f;
         [SerializeField] LayerMask interactionLayers = ~0;
 
@@ -49,16 +52,55 @@ namespace Hanger51.NPCs
                 return;
             }
 
+            H51AnatomicalHealth aimedHealth =
+                aimedCitizen
+                    ? aimedCitizen.GetComponent<H51AnatomicalHealth>()
+                    : null;
+
+            bool injured =
+                aimedHealth &&
+                (aimedHealth.IsDead ||
+                 aimedHealth.OverallStatus != "FULLY FUNCTIONAL" ||
+                 aimedHealth.TotalBleedMlPerMinute > .5f);
+
             if (inventoryUI)
             {
                 if (aimedCitizen && aimedCitizen.Identity)
-                    inventoryUI.SetInteractionPrompt($"E  Talk to {aimedCitizen.Identity.DisplayName}");
+                {
+                    string prompt =
+                        $"E  Talk to {aimedCitizen.Identity.DisplayName}";
+
+                    if (injured)
+                        prompt += aimedHealth.IsDead
+                            ? "    F  Inspect injuries"
+                            : "    F  Inspect / give first aid";
+
+                    inventoryUI.SetInteractionPrompt(prompt);
+                }
                 else if (aimedDoor)
                     inventoryUI.SetInteractionPrompt(aimedDoor.InteractionText);
                 ownsPrompt = true;
             }
 
             Keyboard keyboard = Keyboard.current;
+
+            if (injured &&
+                keyboard != null &&
+                keyboard.fKey.wasPressedThisFrame)
+            {
+                Resolve();
+
+                if (medicalUI &&
+                    medicalUI.TryInspect(aimedHealth,out string reason))
+                {
+                    ClearOwnedPrompt();
+                    return;
+                }
+
+                if (inventoryUI && !string.IsNullOrWhiteSpace(reason))
+                    inventoryUI.ShowStatusMessage(reason,3f);
+            }
+
             if (keyboard != null && keyboard.eKey.wasPressedThisFrame)
             {
                 ClearOwnedPrompt();
@@ -115,6 +157,8 @@ namespace Hanger51.NPCs
             if (!inventoryUI) inventoryUI = FindFirstObjectByType<InventoryUI>();
             if (!dialogueUI) dialogueUI = GetComponent<H51CitizenDialogueUI>();
             if (!dialogueUI) dialogueUI = gameObject.AddComponent<H51CitizenDialogueUI>();
+            if (!medicalUI) medicalUI = GetComponent<H51MedicalTreatmentUI>();
+            if (!medicalUI) medicalUI = gameObject.AddComponent<H51MedicalTreatmentUI>();
         }
 
         void ClearOwnedPrompt()
