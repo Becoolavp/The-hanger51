@@ -344,13 +344,18 @@ namespace Hanger51.Health
                 new Rect(cx-21f,area.y+264f,42f,18f),
                 "INT");
 
+            string overlayHint =
+                string.IsNullOrWhiteSpace(GUI.tooltip)
+                    ? "ORGAN COLOR = LIVE CONDITION"
+                    : GUI.tooltip.ToUpperInvariant();
+
             GUI.Label(
                 new Rect(
                     area.x,
                     area.y+456f,
                     area.width,
                     18f),
-                "ORGAN COLOR = LIVE CONDITION",
+                overlayHint,
                 smallStyle);
         }
 
@@ -583,6 +588,9 @@ namespace Hanger51.Health
                 {
                     selectedOrgan =
                         organ.organ;
+                    selectedRegion =
+                        RegionForOrgan(
+                            organ.organ);
                 }
 
                 GUI.color =
@@ -879,6 +887,30 @@ namespace Hanger51.Health
             if (condition >= 25f)
                 return new Color(1f,.42f,.16f,1f);
             return new Color(.95f,.16f,.16f,1f);
+        }
+
+        static H51BodyRegion RegionForOrgan(
+            H51OrganType organ)
+        {
+            switch (organ)
+            {
+                case H51OrganType.Brain:
+                    return H51BodyRegion.Head;
+
+                case H51OrganType.Heart:
+                case H51OrganType.LeftLung:
+                case H51OrganType.RightLung:
+                case H51OrganType.Spine:
+                    return H51BodyRegion.Chest;
+
+                case H51OrganType.Liver:
+                case H51OrganType.Stomach:
+                case H51OrganType.Intestines:
+                case H51OrganType.LeftKidney:
+                case H51OrganType.RightKidney:
+                default:
+                    return H51BodyRegion.Abdomen;
+            }
         }
 
         void EnsureStyles()
