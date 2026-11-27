@@ -673,6 +673,61 @@ Step 172:
 
 The additional fifteen variants use `AssaultRifle2_01` through `AssaultRifle6_01`, `Pistol2_01` through `Pistol6_01`, and `SniperRifle2_01` through `SniperRifle6_01`. All of those exact prefab paths were verified in the imported pack before the upgrade was committed.
 
+### RealisticGunSounds + RNG Blood + full weapon-class catalog — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The purchased/imported packages are now integrated through the existing Hanger 51 combat/anatomy systems rather than through their demo scenes.
+
+Run:
+
+`Hanger 51 -> World -> Current -> 174 - Integrate Weapon Audio Blood And Full Categories`
+
+then:
+
+`Hanger 51 -> World -> Current -> 175 - Validate Weapon Audio Blood And Full Categories`
+
+Step 174 scans the actual imported LowPolyWeapons prefab folders and builds/reuses definitions for the complete supported firearm roster:
+
+- 36 handguns;
+- 36 assault rifles;
+- 36 sniper rifles;
+- 36 SMGs;
+- 24 LMG/machine guns;
+- 30 shotguns;
+- 198 firearm prefabs total.
+
+The Weapons terminal now has a second level of filtering for **Handguns, Assault Rifles, Sniper Rifles, SMGs, Machine Guns, Shotguns, Explosives, Ammunition, and Gear** while preserving the separate Aircraft Parts department and live 3D product preview.
+
+`RealisticGunSounds_v1.2` is mapped by firearm class and numbered weapon family. Every gun receives the complete matching gunshot bank plus class-appropriate tails, reloads, aim/equip Foley and shell sounds. Families that outnumber the sound pack's named banks wrap to the closest bank rather than becoming silent. LMGs use the MachineGun banks. Shotguns receive their own audio family and a new 12-gauge ammunition definition.
+
+Shotguns now launch an eight-pellet pattern. Pellet anatomy damage is calculated independently, but RNG Blood creates one shotgun-style blood event per victim per trigger pull so a single hit does not incorrectly stack eight complete shotgun blood sprays.
+
+RNG Blood is driven by `H51AnatomicalHealth`:
+
+- bullet/close-bullet/headshot/shotgun/explosion presets are selected from the actual hit;
+- `BloodWounds` keeps wounds visible on the BoZo body;
+- ongoing external bleeding produces drips whose frequency follows the actual mL/min bleed rate;
+- anatomically plausible brachial/femoral/neck/pelvic arterial hits are marked as arterial, receive substantially higher external blood loss and produce RNG Blood fountains;
+- dressings and tourniquets reduce the same physiological bleed rate, so the visual bleeding slows/stops with treatment;
+- `H51AnatomicalHealth` implements RNG Blood's reservoir interface so pools/smears use the same remaining blood volume rather than a second independent five-litre counter;
+- death uses RNG Blood's body-pool system while deceased NPCs remain in-world for testing.
+
+The Body Inspector labels a selected external wound **ARTERIAL** when that region has a major arterial bleed.
+
+Hit reactions are now body-region aware. Arm hits produce protective upper/lower-arm flinches, leg hits produce a stronger balance reaction, and head/neck/chest impacts use distinct torso/head responses. Whole-body displacement remains deliberately restrained to projectile momentum rather than cinematic bullet knockback.
+
+The migration invokes RNG Blood's official editor setup checker through reflection because its editor assembly is intentionally non-auto-referenced. It applies fixable URP depth/setup changes using the package's own `FixAll` implementation and Step 175 reports any remaining package setup issues.
+
+Important integration files:
+
+- `Assets/_Project/Editor/Hanger51CombatAudioBloodUpgrade.cs`
+- `Assets/_Project/Scripts/Health/H51BloodVisualBridge.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHealth.cs`
+- `Assets/_Project/Scripts/Weapons/H51CombatItemDefinition.cs`
+- `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticProjectile.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticImpactReaction.cs`
+- `Assets/_Project/Scripts/Commerce/HangarShopUI.cs`
+
 Important files:
 
 - `Assets/_Project/Editor/Hanger51LowPolyWeaponsVisualStoreUpgrade.cs`
