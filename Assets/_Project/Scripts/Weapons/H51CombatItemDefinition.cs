@@ -141,6 +141,16 @@ namespace Hanger51.Weapons
             underbarrelMount = underbarrelPosition;
         }
 
+        public void SetViewPresentation(
+            Vector3 position,
+            Vector3 euler,
+            float scaleMultiplier)
+        {
+            viewLocalPosition = position;
+            viewLocalEuler = euler;
+            viewScaleMultiplier = Mathf.Clamp(scaleMultiplier,.25f,3f);
+        }
+
         public void ConfigureAmmo(
             InventoryItemDefinition item,
             H51Cartridge configuredCartridge)
