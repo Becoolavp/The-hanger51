@@ -1469,7 +1469,8 @@ namespace Hanger51.Weapons
 
         void OnGUI()
         {
-            if (!activeDefinition)
+            if ((pilotInteractor && pilotInteractor.IsPiloting) ||
+                !activeDefinition)
                 return;
 
             if (activeDefinition.Kind == H51CombatItemKind.Firearm &&
