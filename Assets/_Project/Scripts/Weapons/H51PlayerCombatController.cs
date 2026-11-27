@@ -39,6 +39,8 @@ namespace Hanger51.Weapons
         float nextShotTime;
         float aimBlend;
         float baseCameraFov = 60f;
+        float recoilVisual;
+        float recoilSpread;
         bool customizationOpen;
         string statusMessage = string.Empty;
         float statusUntil;
@@ -240,8 +242,16 @@ namespace Hanger51.Weapons
             nextShotTime =
                 Time.time + interval;
 
+            float recoilMultiplier = 1f;
+            if (activeState.muzzle)
+                recoilMultiplier *= activeState.muzzle.RecoilMultiplier;
+            if (activeState.underbarrel)
+                recoilMultiplier *= activeState.underbarrel.RecoilMultiplier;
+
             float spreadDegrees =
-                Mathf.Lerp(.32f,.055f,aimBlend);
+                Mathf.Lerp(.32f,.055f,aimBlend) *
+                (1f + recoilSpread) *
+                recoilMultiplier;
 
             Vector2 random =
                 Random.insideUnitCircle *
@@ -270,6 +280,17 @@ namespace Hanger51.Weapons
                 direction*.45f,
                 direction,
                 velocityMultiplier);
+
+            recoilVisual =
+                Mathf.Clamp(
+                    recoilVisual + .055f*recoilMultiplier,
+                    0f,
+                    .13f);
+            recoilSpread =
+                Mathf.Clamp(
+                    recoilSpread + .18f*recoilMultiplier,
+                    0f,
+                    .85f);
 
             presentationSignature = 0;
         }
@@ -482,6 +503,17 @@ namespace Hanger51.Weapons
             if (!playerCamera)
                 return;
 
+            recoilVisual =
+                Mathf.MoveTowards(
+                    recoilVisual,
+                    0f,
+                    Time.unscaledDeltaTime*.36f);
+            recoilSpread =
+                Mathf.MoveTowards(
+                    recoilSpread,
+                    0f,
+                    Time.unscaledDeltaTime*1.55f);
+
             float targetAim =
                 aiming &&
                 activeDefinition &&
@@ -550,7 +582,9 @@ namespace Hanger51.Weapons
                 Vector3.Lerp(
                     hip,
                     ads,
-                    aimBlend);
+                    aimBlend) +
+                Vector3.back*recoilVisual +
+                Vector3.up*recoilVisual*.18f;
 
             model.transform.localRotation =
                 Quaternion.Euler(activeDefinition.ViewLocalEuler);
