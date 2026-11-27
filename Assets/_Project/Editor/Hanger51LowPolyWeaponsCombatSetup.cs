@@ -137,6 +137,8 @@ namespace Hanger51.EditorTools
 
             if (!player.GetComponent<H51AnatomicalHealth>())
                 Undo.AddComponent<H51AnatomicalHealth>(player.gameObject);
+            if (!player.GetComponent<H51AnatomicalHitboxRig>())
+                Undo.AddComponent<H51AnatomicalHitboxRig>(player.gameObject);
 
             H51CitizenIdentity[] citizens =
                 UnityEngine.Object.FindObjectsByType<H51CitizenIdentity>(
@@ -155,6 +157,9 @@ namespace Hanger51.EditorTools
                     Undo.AddComponent<H51AnatomicalHealth>(citizen.gameObject);
                     addedNpcHealth++;
                 }
+
+                if (!citizen.GetComponent<H51AnatomicalHitboxRig>())
+                    Undo.AddComponent<H51AnatomicalHitboxRig>(citizen.gameObject);
             }
 
             List<ShopCatalogEntry> catalog =
@@ -209,6 +214,8 @@ namespace Hanger51.EditorTools
                 player ? player.GetComponent<H51MedicalTreatmentUI>() : null;
             H51AnatomicalHealth playerHealth =
                 player ? player.GetComponent<H51AnatomicalHealth>() : null;
+            H51AnatomicalHitboxRig playerHitboxes =
+                player ? player.GetComponent<H51AnatomicalHitboxRig>() : null;
             HangarShopTerminal terminal =
                 UnityEngine.Object.FindFirstObjectByType<HangarShopTerminal>(
                     FindObjectsInactive.Include);
@@ -273,6 +280,10 @@ namespace Hanger51.EditorTools
                     FindObjectsSortMode.None);
             int missingNpcHealth =
                 citizens.Count(c => c && !c.GetComponent<H51AnatomicalHealth>());
+            int missingNpcHitboxes =
+                citizens.Count(c => c && !c.GetComponent<H51AnatomicalHitboxRig>());
+            int missingNpcCapsules =
+                citizens.Count(c => c && !c.GetComponent<CapsuleCollider>());
 
             bool ok =
                 player &&
@@ -282,6 +293,7 @@ namespace Hanger51.EditorTools
                 combat &&
                 medical &&
                 playerHealth &&
+                playerHitboxes &&
                 terminal &&
                 dispatch &&
                 combatProducts >= 12 &&
@@ -292,7 +304,9 @@ namespace Hanger51.EditorTools
                 attachmentCount >= 4 &&
                 grenadeCount >= 1 &&
                 medicalCount >= 1 &&
-                missingNpcHealth == 0;
+                missingNpcHealth == 0 &&
+                missingNpcHitboxes == 0 &&
+                missingNpcCapsules == 0;
 
             if (ok)
             {
@@ -309,6 +323,9 @@ namespace Hanger51.EditorTools
                     ", NPC anatomical-health coverage=" +
                     (citizens.Length-missingNpcHealth) +
                     "/" + citizens.Length +
+                    ", anatomical hitboxes=" +
+                    (citizens.Length-missingNpcHitboxes) +
+                    "/" + citizens.Length +
                     ", emergency dispatch connected. Build a Development Build and test purchase -> unbox -> pickup -> equip -> reload/fire/customize/treat.");
             }
             else
@@ -320,6 +337,7 @@ namespace Hanger51.EditorTools
                     ", combat controller=" + (combat ? "yes" : "MISSING") +
                     ", medical UI=" + (medical ? "yes" : "MISSING") +
                     ", player health=" + (playerHealth ? "yes" : "MISSING") +
+                    ", player hitboxes=" + (playerHitboxes ? "yes" : "MISSING") +
                     ", terminal=" + (terminal ? "yes" : "MISSING") +
                     ", emergency dispatch=" + (dispatch ? "yes" : "MISSING") +
                     ", combat products=" + combatProducts + "/12" +
@@ -331,6 +349,8 @@ namespace Hanger51.EditorTools
                     ", grenades=" + grenadeCount + "/1" +
                     ", medical=" + medicalCount + "/1" +
                     ", NPCs missing anatomy=" + missingNpcHealth +
+                    ", NPCs missing anatomical hitbox rigs=" + missingNpcHitboxes +
+                    ", NPCs missing root hit capsules=" + missingNpcCapsules +
                     ".");
             }
         }
