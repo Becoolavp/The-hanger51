@@ -299,7 +299,6 @@ namespace Hanger51.Weapons
                     0f,
                     .85f);
 
-            presentationSignature = 0;
         }
 
         void Reload()
@@ -532,32 +531,28 @@ namespace Hanger51.Weapons
                 Mathf.MoveTowards(
                     aimBlend,
                     targetAim,
-                    Time.unscaledDeltaTime*7f);
+                    Time.unscaledDeltaTime*5.4f);
 
-            float desiredFov =
-                baseCameraFov;
+            float smoothAim =
+                aimBlend * aimBlend * (3f - 2f*aimBlend);
 
-            if (activeDefinition &&
-                activeDefinition.Kind == H51CombatItemKind.Firearm)
-            {
-                desiredFov =
-                    activeState != null &&
-                    activeState.optic
-                        ? activeState.optic.OpticFov
-                        : activeDefinition.IronSightFov;
+            float targetSightFov =
+                activeDefinition &&
+                activeDefinition.Kind == H51CombatItemKind.Firearm &&
+                activeState != null &&
+                activeState.optic
+                    ? activeState.optic.OpticFov
+                    : activeDefinition && activeDefinition.Kind == H51CombatItemKind.Firearm
+                        ? activeDefinition.IronSightFov
+                        : baseCameraFov;
 
-                desiredFov =
-                    Mathf.Lerp(
-                        baseCameraFov,
-                        desiredFov,
-                        aimBlend);
-            }
-
+            // Drive FOV from the exact same blend as the weapon pose. This
+            // keeps the optic and zoom locked together during the transition.
             playerCamera.fieldOfView =
                 Mathf.Lerp(
-                    playerCamera.fieldOfView,
-                    desiredFov,
-                    1f-Mathf.Exp(-Time.unscaledDeltaTime*10f));
+                    baseCameraFov,
+                    targetSightFov,
+                    smoothAim);
 
             if (!equippedView ||
                 !activeDefinition ||
@@ -577,22 +572,6 @@ namespace Hanger51.Weapons
                 presentationSignature = 0;
             }
 
-            Vector3 hip =
-                activeDefinition.ViewLocalPosition;
-            Vector3 ads =
-                new Vector3(
-                    0f,
-                    -.18f,
-                    Mathf.Max(.32f,hip.z-.12f));
-
-            model.transform.localPosition =
-                Vector3.Lerp(
-                    hip,
-                    ads,
-                    aimBlend) +
-                Vector3.back*recoilVisual +
-                Vector3.up*recoilVisual*.18f;
-
             model.transform.localRotation =
                 Quaternion.Euler(activeDefinition.ViewLocalEuler);
 
@@ -603,11 +582,43 @@ namespace Hanger51.Weapons
             int signature =
                 AttachmentSignature(activeState);
 
-            if (signature != presentationSignature)
+            if (signature != presentationSignature ||
+                !AttachmentVisualsIntact(model,activeState))
             {
-                presentationSignature = signature;
                 RebuildAttachmentVisuals(model);
+                presentationSignature = signature;
             }
+
+            Vector3 hip =
+                activeDefinition.ViewLocalPosition;
+
+            // The first pass placed long guns too far from the camera.
+            // Clamp the authored depth so the weapon reads as shoulder-held
+            // rather than floating several feet in front of the player.
+            hip.z =
+                Mathf.Min(
+                    hip.z,
+                    activeDefinition.Cartridge == H51Cartridge.NineByNineteen
+                        ? .34f
+                        : .42f);
+
+            Vector3 ads =
+                ResolveAdsPosition(
+                    model,
+                    activeState,
+                    hip);
+
+            model.transform.localPosition =
+                Vector3.Lerp(
+                    hip,
+                    ads,
+                    smoothAim) +
+                Vector3.back*recoilVisual +
+                Vector3.up*recoilVisual*.18f;
+
+            UpdateMagnifiedScopeVisibility(
+                model,
+                smoothAim);
         }
 
         int AttachmentSignature(WeaponState state)
@@ -677,9 +688,12 @@ namespace Hanger51.Weapons
                     parent);
 
             visual.name =
-                attachment.InventoryItem
+                "H51 " +
+                slot +
+                " - " +
+                (attachment.InventoryItem
                     ? attachment.InventoryItem.DisplayName
-                    : attachment.name;
+                    : attachment.name);
 
             visual.transform.localPosition =
                 ResolveAttachmentMount(
@@ -767,7 +781,7 @@ namespace Hanger51.Weapons
             {
                 case H51AttachmentSlot.Optic:
                     return new Vector3(
-                        localBounds.center.x + localBounds.extents.x*.06f,
+                        localBounds.center.x - localBounds.extents.x*.06f,
                         localBounds.max.y + localBounds.size.y*.03f,
                         localBounds.center.z);
 
@@ -783,12 +797,260 @@ namespace Hanger51.Weapons
 
                 case H51AttachmentSlot.Underbarrel:
                     return new Vector3(
-                        localBounds.center.x + localBounds.extents.x*.14f,
+                        localBounds.center.x - localBounds.extents.x*.14f,
                         localBounds.min.y - localBounds.size.y*.02f,
                         localBounds.center.z);
 
                 default:
                     return localBounds.center;
+            }
+        }
+
+        bool AttachmentVisualsIntact(
+            GameObject model,
+            WeaponState state)
+        {
+            if (!model || state == null)
+                return false;
+
+            Transform root =
+                model.transform.Find("H51 Runtime Attachments");
+
+            int expected =
+                (state.optic ? 1 : 0) +
+                (state.muzzle ? 1 : 0) +
+                (state.underbarrel ? 1 : 0);
+
+            if (!root)
+                return expected == 0;
+
+            int actual = 0;
+            for (int i=0;i<root.childCount;i++)
+            {
+                Transform child = root.GetChild(i);
+                if (child && child.gameObject.activeInHierarchy)
+                    actual++;
+            }
+
+            return actual == expected;
+        }
+
+        Vector3 ResolveAdsPosition(
+            GameObject model,
+            WeaponState state,
+            Vector3 fallbackHip)
+        {
+            if (!model || model.transform.parent == null)
+                return new Vector3(0f,-.18f,.28f);
+
+            Vector3 sightLocal;
+
+            if (!TryGetSightReferenceLocal(
+                    model,
+                    state,
+                    out sightLocal))
+            {
+                sightLocal =
+                    EstimateIronSightLocal(model);
+            }
+
+            Quaternion localRotation =
+                model.transform.localRotation;
+            Vector3 localScale =
+                model.transform.localScale;
+
+            Vector3 transformedSight =
+                localRotation *
+                Vector3.Scale(
+                    sightLocal,
+                    localScale);
+
+            // Put the optic/iron-sight center directly on the camera axis.
+            // The slight negative Y keeps the center just below the crosshair
+            // while transitioning, then settles nearly dead-center.
+            Vector3 desiredSightInParent =
+                new Vector3(
+                    0f,
+                    -.012f,
+                    state != null &&
+                    state.optic &&
+                    state.optic.OpticFov <= 26f
+                        ? .205f
+                        : .245f);
+
+            Vector3 solved =
+                desiredSightInParent -
+                transformedSight;
+
+            // Guard against unusual model bounds producing a wild pose.
+            solved.z =
+                Mathf.Clamp(
+                    solved.z,
+                    .08f,
+                    .40f);
+            solved.x =
+                Mathf.Clamp(
+                    solved.x,
+                    -.18f,
+                    .18f);
+            solved.y =
+                Mathf.Clamp(
+                    solved.y,
+                    -.36f,
+                    .10f);
+
+            return solved;
+        }
+
+        bool TryGetSightReferenceLocal(
+            GameObject model,
+            WeaponState state,
+            out Vector3 sightLocal)
+        {
+            sightLocal = Vector3.zero;
+
+            if (!model ||
+                state == null ||
+                !state.optic)
+                return false;
+
+            Transform root =
+                model.transform.Find("H51 Runtime Attachments");
+
+            if (!root)
+                return false;
+
+            Transform opticTransform = null;
+
+            for (int i=0;i<root.childCount;i++)
+            {
+                Transform child = root.GetChild(i);
+                if (child &&
+                    child.name.StartsWith(
+                        "H51 Optic",
+                        System.StringComparison.Ordinal))
+                {
+                    opticTransform = child;
+                    break;
+                }
+            }
+
+            if (!opticTransform)
+                return false;
+
+            Renderer[] renderers =
+                opticTransform.GetComponentsInChildren<Renderer>(true);
+
+            if (renderers.Length == 0)
+            {
+                sightLocal =
+                    model.transform.InverseTransformPoint(
+                        opticTransform.position);
+                return true;
+            }
+
+            Bounds bounds = renderers[0].bounds;
+            for (int i=1;i<renderers.Length;i++)
+                bounds.Encapsulate(renderers[i].bounds);
+
+            sightLocal =
+                model.transform.InverseTransformPoint(
+                    bounds.center);
+
+            return true;
+        }
+
+        static Vector3 EstimateIronSightLocal(
+            GameObject model)
+        {
+            Renderer[] renderers =
+                model.GetComponentsInChildren<Renderer>(true);
+
+            Transform attachmentRoot =
+                model.transform.Find("H51 Runtime Attachments");
+
+            bool haveBounds = false;
+            Bounds localBounds =
+                new Bounds(Vector3.zero,Vector3.zero);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                Renderer renderer = renderers[i];
+
+                if (!renderer ||
+                    (attachmentRoot &&
+                     renderer.transform.IsChildOf(attachmentRoot)))
+                    continue;
+
+                Bounds world = renderer.bounds;
+                Vector3 min = world.min;
+                Vector3 max = world.max;
+
+                Vector3[] corners =
+                {
+                    new Vector3(min.x,min.y,min.z),
+                    new Vector3(min.x,min.y,max.z),
+                    new Vector3(min.x,max.y,min.z),
+                    new Vector3(min.x,max.y,max.z),
+                    new Vector3(max.x,min.y,min.z),
+                    new Vector3(max.x,min.y,max.z),
+                    new Vector3(max.x,max.y,min.z),
+                    new Vector3(max.x,max.y,max.z)
+                };
+
+                for (int c=0;c<corners.Length;c++)
+                {
+                    Vector3 local =
+                        model.transform.InverseTransformPoint(
+                            corners[c]);
+
+                    if (!haveBounds)
+                    {
+                        localBounds =
+                            new Bounds(local,Vector3.zero);
+                        haveBounds = true;
+                    }
+                    else
+                        localBounds.Encapsulate(local);
+                }
+            }
+
+            if (!haveBounds)
+                return Vector3.zero;
+
+            // Muzzle is negative local X after the corrected presentation,
+            // so the rear sight sits slightly toward +X on top of the receiver.
+            return new Vector3(
+                localBounds.center.x +
+                localBounds.extents.x*.18f,
+                localBounds.max.y -
+                localBounds.size.y*.035f,
+                localBounds.center.z);
+        }
+
+        void UpdateMagnifiedScopeVisibility(
+            GameObject model,
+            float smoothAim)
+        {
+            if (!model)
+                return;
+
+            bool magnified =
+                activeState != null &&
+                activeState.optic &&
+                activeState.optic.OpticFov <= 26f;
+
+            bool hideForScope =
+                magnified &&
+                smoothAim >= .965f;
+
+            Renderer[] renderers =
+                model.GetComponentsInChildren<Renderer>(true);
+
+            for (int i=0;i<renderers.Length;i++)
+            {
+                if (renderers[i])
+                    renderers[i].enabled = !hideForScope;
             }
         }
 
@@ -883,7 +1145,7 @@ namespace Hanger51.Weapons
                     "    R RELOAD   C CUSTOMIZE",
                     hud);
 
-                if (aimBlend > .72f)
+                if (aimBlend > .94f)
                     DrawAimOverlay();
             }
             else if (activeDefinition.Kind == H51CombatItemKind.Grenade)
