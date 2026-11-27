@@ -26,6 +26,7 @@ namespace Hanger51.Health
             }
 
             GameObject root = new GameObject(RootName);
+            root.layer = 2; // Ignore Raycast: excluded from RNG Blood surface layers.
             root.transform.SetParent(transform,false);
             hitboxRoot = root.transform;
 
@@ -43,6 +44,7 @@ namespace Hanger51.Health
         void Box(H51BodyRegion region,Vector3 center,Vector3 size)
         {
             GameObject child = new GameObject(region + " Hitbox");
+            child.layer = 2;
             child.transform.SetParent(hitboxRoot,false);
             child.transform.localPosition = center;
 
