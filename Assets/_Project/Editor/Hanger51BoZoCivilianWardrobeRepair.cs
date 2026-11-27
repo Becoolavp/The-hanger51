@@ -19,6 +19,7 @@ namespace Hanger51.EditorTools
             "Assets/BoZo_StylizedModularCharacters/CustomCharacters/Resources/Anime/Default_Boy.asset";
         const string FemaleBasePath =
             "Assets/BoZo_StylizedModularCharacters/CustomCharacters/Resources/Anime/Default_Girl.asset";
+        const int CasualVariantCount = 4;
 
         enum WardrobeRole
         {
@@ -248,20 +249,38 @@ namespace Hanger51.EditorTools
 
                 CharacterObject basePreset =
                     isFemale ? femaleBase : maleBase;
-                CharacterObject civilianPreset =
+                CharacterObject workPreset =
                     CreateCitizenPreset(
                         identity,
                         basePreset,
                         isFemale,
-                        role);
+                        role,
+                        string.Empty,
+                        0);
 
-                if (!civilianPreset)
+                CharacterObject[] casualPresets =
+                    new CharacterObject[CasualVariantCount];
+
+                for (int variant=0;variant<CasualVariantCount;variant++)
+                {
+                    casualPresets[variant] =
+                        CreateCitizenPreset(
+                            identity,
+                            basePreset,
+                            isFemale,
+                            WardrobeRole.Casual,
+                            "_Casual_" + variant,
+                            variant);
+                }
+
+                if (!workPreset ||
+                    casualPresets.Any(p => !p))
                     continue;
 
                 Undo.RecordObject(
                     outfit,
-                    "Apply Hanger 51 civilian BoZo preset");
-                outfit.characterData = civilianPreset;
+                    "Apply Hanger 51 civilian BoZo presets");
+                outfit.characterData = workPreset;
                 outfit.loadMode = OutfitSystem.LoadMode.OnStart;
                 outfit.async = false;
                 outfit.cleanAfterMerge = false;
@@ -269,9 +288,10 @@ namespace Hanger51.EditorTools
                     OutfitSystem.TextureSize._512;
                 EditorUtility.SetDirty(outfit);
 
-                adapter.Configure(
+                adapter.ConfigureWardrobes(
                     presentation,
-                    civilianPreset,
+                    workPreset,
+                    casualPresets,
                     outfit,
                     animator);
                 EditorUtility.SetDirty(adapter);
@@ -297,7 +317,9 @@ namespace Hanger51.EditorTools
                 repaired + "/" + citizens.Length +
                 ", male=" + male +
                 ", female=" + female +
-                ". Fantasy head accessories/demo presets were removed. Every generated citizen preset has a Top, Bottom, and Feet outfit. Roles: " +
+                ". Each citizen now has one occupation/work preset plus " +
+                CasualVariantCount +
+                " deterministic off-duty presets. Work clothing is used at work/going to work; casual clothing rotates by game day. Fantasy head accessories/demo presets were removed. Every generated preset has a Top, Bottom, and Feet outfit. Roles: " +
                 roles +
                 ". Run Step 165.");
         }
@@ -474,7 +496,9 @@ namespace Hanger51.EditorTools
             H51CitizenIdentity identity,
             CharacterObject basePreset,
             bool female,
-            WardrobeRole role)
+            WardrobeRole role,
+            string assetSuffix,
+            int wardrobeSeedOffset)
         {
             string id =
                 !string.IsNullOrWhiteSpace(identity.CitizenId)
@@ -482,7 +506,8 @@ namespace Hanger51.EditorTools
                     : identity.DisplayName;
             string assetName =
                 (female ? "H51_F_" : "H51_M_") +
-                SafeName(id);
+                SafeName(id) +
+                (assetSuffix ?? string.Empty);
             string assetPath =
                 GeneratedFolder + "/" + assetName + ".asset";
 
@@ -591,7 +616,7 @@ namespace Hanger51.EditorTools
                 SelectWardrobe(
                     female,
                     role,
-                    seed);
+                    seed + wardrobeSeedOffset);
 
             retained.Add(
                 MakeWardrobeOutfit(
