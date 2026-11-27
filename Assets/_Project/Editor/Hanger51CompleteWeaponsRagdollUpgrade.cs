@@ -131,7 +131,13 @@ namespace Hanger51.EditorTools
                     1,
                     true);
 
-                H51CombatItemDefinition d = EnsureDefinition("Optic_" + prefab.name);
+                H51CombatItemDefinition d =
+                    definitions.FirstOrDefault(x =>
+                        x &&
+                        x.Kind == H51CombatItemKind.Optic &&
+                        x.InventoryItem &&
+                        x.InventoryItem.WorldPrefab == prefab)
+                    ?? EnsureDefinition("Optic_" + prefab.name);
                 float fov = Mathf.Lerp(52f,18f,optics.Count <= 1 ? 0f : i/(float)(optics.Count-1));
                 d.ConfigureAttachment(
                     item,
@@ -162,10 +168,19 @@ namespace Hanger51.EditorTools
                     1,
                     true);
 
-                H51CombatItemDefinition d = EnsureDefinition("Attachment_" + prefab.name);
+                H51AttachmentSlot slot =
+                    muzzle ? H51AttachmentSlot.Muzzle : H51AttachmentSlot.Underbarrel;
+
+                H51CombatItemDefinition d =
+                    definitions.FirstOrDefault(x =>
+                        x &&
+                        x.InventoryItem &&
+                        x.InventoryItem.WorldPrefab == prefab &&
+                        x.AttachmentSlot == slot)
+                    ?? EnsureDefinition("Attachment_" + prefab.name);
                 d.ConfigureAttachment(
                     item,
-                    muzzle ? H51AttachmentSlot.Muzzle : H51AttachmentSlot.Underbarrel,
+                    slot,
                     prefab,
                     45f,
                     Vector3.zero,
@@ -201,7 +216,13 @@ namespace Hanger51.EditorTools
 
                 if (throwable)
                 {
-                    H51CombatItemDefinition d = EnsureDefinition("Grenade_" + prefab.name);
+                    H51CombatItemDefinition d =
+                        definitions.FirstOrDefault(x =>
+                            x &&
+                            x.Kind == H51CombatItemKind.Grenade &&
+                            x.InventoryItem &&
+                            x.InventoryItem.WorldPrefab == prefab)
+                        ?? EnsureDefinition("Grenade_" + prefab.name);
                     d.ConfigureGrenade(item,3.4f,6.5f,78f);
                     EditorUtility.SetDirty(d);
                     AddDefinition(definitions,d);
