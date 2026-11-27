@@ -15,6 +15,15 @@ namespace Hanger51.Inventory
         public IReadOnlyList<InventorySlotData> Slots => slots;
         public int SlotCount => slotCount;
         public InventoryItemDefinition EquippedItem => equippedItem;
+
+        public void EnsureMinimumSlotCount(int minimum)
+        {
+            int previous = slotCount;
+            slotCount = Mathf.Max(slotCount,Mathf.Max(1,minimum));
+            EnsureSlotCount();
+            if (slotCount != previous)
+                NotifyInventoryChanged();
+        }
         public EnginePartConditionData EquippedCondition =>
             PeekFirstCondition(equippedItem);
 
