@@ -114,8 +114,23 @@ namespace Hanger51.Health
         public float Consciousness => consciousness;
         public bool IsDead => dead;
         public string CauseOfDeath => causeOfDeath;
-        public IReadOnlyList<H51BodyRegionState> Regions => regions;
-        public IReadOnlyList<H51OrganState> Organs => organs;
+        public IReadOnlyList<H51BodyRegionState> Regions
+        {
+            get
+            {
+                EnsureAnatomy();
+                return regions;
+            }
+        }
+
+        public IReadOnlyList<H51OrganState> Organs
+        {
+            get
+            {
+                EnsureAnatomy();
+                return organs;
+            }
+        }
 
         public float ExternalBleedMlPerMinute
         {
