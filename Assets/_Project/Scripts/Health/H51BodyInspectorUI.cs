@@ -12,6 +12,8 @@ namespace Hanger51.Health
         [SerializeField] Key toggleKey = Key.H;
 
         FirstPersonController controller;
+        H51AnatomicalHealth defaultTarget;
+        bool externalSession;
         H51BodyRegion selectedRegion = H51BodyRegion.Chest;
         H51OrganType? selectedOrgan;
 
@@ -24,12 +26,15 @@ namespace Hanger51.Health
         GUIStyle centeredStyle;
 
         public bool Visible => visible;
+        public bool ExternalSession => externalSession;
         public H51AnatomicalHealth Target => target;
 
         void Awake()
         {
             if (!target)
                 target = GetComponent<H51AnatomicalHealth>();
+
+            defaultTarget = target;
 
             controller =
                 GetComponent<FirstPersonController>();
@@ -47,6 +52,9 @@ namespace Hanger51.Health
                 Keyboard.current;
 
             if (keyboard == null)
+                return;
+
+            if (externalSession)
                 return;
 
             if (keyboard[toggleKey].wasPressedThisFrame)
@@ -69,6 +77,34 @@ namespace Hanger51.Health
                 null;
         }
 
+        public void OpenExternal(
+            H51AnatomicalHealth newTarget)
+        {
+            if (!newTarget)
+                return;
+
+            externalSession = true;
+            target = newTarget;
+            selectedRegion = H51BodyRegion.Chest;
+            selectedOrgan = null;
+            SetVisible(true);
+        }
+
+        public void CloseExternal()
+        {
+            if (!externalSession)
+                return;
+
+            externalSession = false;
+            SetVisible(false);
+            target =
+                defaultTarget
+                    ? defaultTarget
+                    : GetComponent<H51AnatomicalHealth>();
+            selectedRegion = H51BodyRegion.Chest;
+            selectedOrgan = null;
+        }
+
         public void SetVisible(
             bool show)
         {
@@ -80,7 +116,12 @@ namespace Hanger51.Health
                     GetComponent<FirstPersonController>();
 
             if (controller)
-                controller.SetExternalInputBlocked(show);
+            {
+                if (show)
+                    controller.SetExternalInputBlocked(true);
+                else
+                    controller.ResumeGameplayInputAfterUiClose();
+            }
             else
             {
                 Cursor.lockState =
@@ -140,7 +181,9 @@ namespace Hanger51.Health
                     inner.y,
                     370f,
                     38f),
-                "♥  BODY INSPECTOR",
+                externalSession
+                    ? "♥  CASUALTY INSPECTOR"
+                    : "♥  BODY INSPECTOR",
                 titleStyle);
 
             GUI.Label(
@@ -205,11 +248,14 @@ namespace Hanger51.Health
                     inner.y+inner.height-42f,
                     390f,
                     28f),
-                "H  CLOSE INSPECTOR",
+                externalSession
+                    ? "ESC  CLOSE CASUALTY INSPECTOR"
+                    : "H  CLOSE INSPECTOR",
                 headingStyle);
 
-            if (Debug.isDebugBuild ||
-                Application.isEditor)
+            if (!externalSession &&
+                (Debug.isDebugBuild ||
+                 Application.isEditor))
             {
                 DrawDevelopmentTests(
                     new Rect(
