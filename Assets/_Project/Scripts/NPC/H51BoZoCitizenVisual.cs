@@ -356,8 +356,13 @@ namespace Hanger51.NPCs
                 outfitSystem.GetComponentsInChildren<Collider>(true);
             for (int i=0;i<colliders.Length;i++)
             {
-                if (colliders[i] && !colliders[i].GetComponent<H51RagdollBone>())
+                if (colliders[i] &&
+                    !colliders[i].GetComponent<H51RagdollBone>() &&
+                    !colliders[i].GetComponent<H51OrganHitbox>() &&
+                    !colliders[i].GetComponent<H51AnatomicalHitbox>())
+                {
                     colliders[i].enabled = false;
+                }
             }
 
             CharacterController[] controllers =
