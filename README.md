@@ -744,6 +744,66 @@ Important files:
 - `Assets/_Project/Scripts/Health/H51AnatomicalHitboxRig.cs`
 - `Assets/_Project/Editor/Hanger51LowPolyWeaponsCombatSetup.cs`
 
+### Complete LowPolyWeapons catalog, physical casings, injury interaction and NPC ragdoll — IMPLEMENTED / PENDING UNITY VALIDATION
+
+Run:
+
+`Hanger 51 -> World -> Current -> 176 - Complete Weapon Pack Ragdoll Casings And Medical Interaction`
+
+then:
+
+`Hanger 51 -> World -> Current -> 177 - Validate Complete Weapon Pack Ragdoll Casings And Medical Interaction`
+
+This pass follows the 174/175 combat-audio/blood migration and completes the remaining LowPolyWeapons catalog surface.
+
+Step 176:
+
+- preserves the 198 firearm catalog created by Step 174;
+- adds every dedicated optic prefab and every attachment prefab to the store/customization registry;
+- adds every real grenade model variant as a usable throwable grenade;
+- adds C4, mines and the Molotov to **Explosives** as purchasable/equippable pack equipment while their dedicated placement/ignition mechanics remain a later pass;
+- adds all hand/melee weapon prefabs under **Melee**;
+- adds all heavy-weapon prefabs under **Heavy Weapons** while dedicated rocket/heavy-projectile mechanics remain a later pass;
+- adds every loot/ammo/medical/equipment prefab to the store;
+- turns both LowPolyWeapons health-pack prefabs into valid trauma-kit definitions;
+- expands the Weapons terminal filters to **Handguns, Assault Rifles, Sniper Rifles, SMGs, Machine Guns, Shotguns, Heavy Weapons, Melee, Explosives, Attachments, Ammunition, Medical, and Equipment**;
+- assigns all firearms a casing visual derived from the supplied LowPolyWeapons Bullet prefabs;
+- strips the projectile child from the cartridge prefab at runtime so only the spent case is ejected;
+- ejects one physical casing per shot with Rigidbody motion, tumbling and floor collisions;
+- uses `RealisticGunSounds_v1.2/AssaultRifle/Foley/ShellsBrass` for metallic case impacts and `Shotgun/Foley/ShellsPlastic` for shotgun hull impacts;
+- hides the equipped item model and weapon HUD/presentation while the player is piloting the P-51, including the external orbit camera;
+- improves attachment placement by aligning the actual attachment bounds to the weapon rail/muzzle/underbarrel surface rather than trusting prefab pivots.
+
+NPC injury/death behavior is also extended:
+
+- `H51CitizenRagdoll` builds a lightweight humanoid physics rig from the BoZo Humanoid Animator at runtime;
+- lighter impacts keep the existing procedural region-specific flinch;
+- severe leg/head/high-trauma hits can transition into a temporary physics knockdown;
+- fatal injury transitions into a permanent ragdoll instead of freezing the Animator upright;
+- the actual projectile hit region and momentum are passed into the physical body that was struck;
+- test/reset recovery is supported, but an injured NPC will not stand back up while its emergency state remains active;
+- BoZo visual sanitation explicitly preserves Hanger 51 ragdoll colliders/rigidbodies;
+- ragdoll bone colliders retain anatomical region information for later hits.
+
+Medical interaction no longer requires holding a trauma kit before the player can inspect a casualty:
+
+- aiming at an injured living NPC adds `F  Inspect / give first aid`;
+- aiming at a deceased NPC adds `F  Inspect injuries`;
+- the trauma assessment can be opened with no kit;
+- a trauma kit is consumed only when treatment actually begins;
+- deceased patients remain inspectable but cannot receive field treatment.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51CompleteWeaponsRagdollUpgrade.cs`
+- `Assets/_Project/Scripts/Health/H51CitizenRagdoll.cs`
+- `Assets/_Project/Scripts/Health/H51RagdollBone.cs`
+- `Assets/_Project/Scripts/NPC/H51CitizenPlayerInteractor.cs`
+- `Assets/_Project/Scripts/Weapons/H51MedicalTreatmentUI.cs`
+- `Assets/_Project/Scripts/Weapons/H51SpentCasing.cs`
+- `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
+- `Assets/_Project/Scripts/Commerce/HangarShopUI.cs`
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
