@@ -843,7 +843,7 @@ namespace Hanger51.Weapons
                 return;
 
             customizationOpen = false;
-            firstPersonController?.SetExternalInputBlocked(false);
+            firstPersonController?.ResumeGameplayInputAfterUiClose();
         }
 
         void UpdatePresentation(bool aiming)
