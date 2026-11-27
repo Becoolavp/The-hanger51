@@ -33,6 +33,7 @@ namespace Hanger51.NPCs
         H51CitizenAnchor medical;
         NavMeshAgent agent;
         Animator animator;
+        H51BoZoCitizenVisual bozoVisual;
         float nextThink;
         float pauseUntil;
         System.Random rng;
@@ -72,6 +73,7 @@ namespace Hanger51.NPCs
             if (!GetComponent<H51CitizenGrounding>())
                 gameObject.AddComponent<H51CitizenGrounding>();
             animator = GetComponentInChildren<Animator>(true);
+            bozoVisual = GetComponent<H51BoZoCitizenVisual>();
             rng = new System.Random(identity ? identity.AppearanceSeed : GetInstanceID());
             citizenRenderers = GetComponentsInChildren<Renderer>(true);
             rendererStates = new bool[citizenRenderers.Length];
@@ -445,9 +447,17 @@ namespace Hanger51.NPCs
 
             if (!desired)
             {
+                UpdateWardrobeForRoutine(false,worldClock);
                 currentActivityDescription = "I don't have anywhere I need to be right now.";
                 return;
             }
+
+            // Work clothing is used only while the citizen is working or
+            // actively traveling toward work. Shopping, leisure, home, lunch,
+            // and return trips use one of the citizen's off-duty wardrobes.
+            UpdateWardrobeForRoutine(
+                desiredState == H51CitizenRoutineState.Work,
+                worldClock);
 
             if (desiredState == H51CitizenRoutineState.Home)
                 currentActivityDescription = $"I'm heading home in {identity.TownName}.";
@@ -882,6 +892,11 @@ namespace Hanger51.NPCs
             if (!ownedVehicle || ridingInVehicle) return;
 
             ClearActiveActivity();
+
+            if (!bozoVisual)
+                bozoVisual = GetComponent<H51BoZoCitizenVisual>();
+            if (bozoVisual)
+                bozoVisual.SetVehicleVisualSuppressed(true);
             parentBeforeVehicle = transform.parent;
 
             for (int i = 0; i < citizenRenderers.Length; i++)
@@ -920,6 +935,8 @@ namespace Hanger51.NPCs
         {
             if (!ridingInVehicle || !ownedVehicle)
             {
+                if (bozoVisual)
+                    bozoVisual.SetVehicleVisualSuppressed(false);
                 ridingInVehicle = false;
                 return;
             }
@@ -981,7 +998,33 @@ namespace Hanger51.NPCs
 
             ownedVehicle.ReleaseDriver();
             ridingInVehicle = false;
+
+            if (!bozoVisual)
+                bozoVisual = GetComponent<H51BoZoCitizenVisual>();
+            if (bozoVisual)
+                bozoVisual.SetVehicleVisualSuppressed(false);
+
             nextThink = Time.time + .25f;
+        }
+
+        void UpdateWardrobeForRoutine(
+            bool goingToOrAtWork,
+            H51WorldClock worldClock)
+        {
+            if (!bozoVisual)
+                bozoVisual = GetComponent<H51BoZoCitizenVisual>();
+
+            if (!bozoVisual)
+                return;
+
+            int dayIndex =
+                worldClock
+                    ? worldClock.DayIndex
+                    : Mathf.FloorToInt(Time.time / 480f);
+
+            bozoVisual.SetWardrobeContext(
+                goingToOrAtWork,
+                dayIndex);
         }
 
         string ActivityDescriptionFor(H51CitizenRoutineState activityState, string label)
