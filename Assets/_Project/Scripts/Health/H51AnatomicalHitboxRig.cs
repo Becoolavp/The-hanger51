@@ -257,6 +257,11 @@ namespace Hanger51.Health
                     organ,
                     region);
 
+                ReanchorExistingOrgan(
+                    existing.transform,
+                    bone,
+                    rootLocalCenter);
+
                 Collider existingCollider =
                     existing.GetComponent<Collider>();
 
@@ -306,6 +311,11 @@ namespace Hanger51.Health
                     organ,
                     region);
 
+                ReanchorExistingOrgan(
+                    existing.transform,
+                    bone,
+                    rootLocalCenter);
+
                 Collider existingCollider =
                     existing.GetComponent<Collider>();
 
@@ -340,6 +350,59 @@ namespace Hanger51.Health
                 health,
                 organ,
                 region);
+        }
+
+        void ReanchorExistingOrgan(
+            Transform organTransform,
+            HumanBodyBones bone,
+            Vector3 rootLocalCenter)
+        {
+            if (!organTransform)
+                return;
+
+            Transform desiredParent =
+                hitboxRoot;
+
+            if (humanoidAnimator &&
+                humanoidAnimator.isHuman)
+            {
+                Transform boneTransform =
+                    humanoidAnimator.GetBoneTransform(bone);
+
+                if (boneTransform)
+                    desiredParent = boneTransform;
+            }
+
+            Vector3 desiredWorldPosition =
+                transform.TransformPoint(rootLocalCenter);
+
+            Quaternion desiredWorldRotation =
+                transform.rotation;
+
+            organTransform.position =
+                desiredWorldPosition;
+
+            organTransform.rotation =
+                desiredWorldRotation;
+
+            if (desiredParent &&
+                organTransform.parent != desiredParent)
+            {
+                organTransform.SetParent(
+                    desiredParent,
+                    true);
+            }
+
+            Vector3 scale =
+                desiredParent
+                    ? desiredParent.lossyScale
+                    : Vector3.one;
+
+            organTransform.localScale =
+                new Vector3(
+                    1f/Mathf.Max(.0001f,Mathf.Abs(scale.x)),
+                    1f/Mathf.Max(.0001f,Mathf.Abs(scale.y)),
+                    1f/Mathf.Max(.0001f,Mathf.Abs(scale.z)));
         }
 
         GameObject CreateOrganObject(
