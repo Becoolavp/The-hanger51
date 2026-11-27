@@ -526,6 +526,60 @@ For a fresh scene migration, the intended order is now:
 4. Step 165 - Validate Human Civilian BoZo Wardrobes
 5. Development Build and visually inspect citizens, clothing, movement, and occupation fit.
 
+### Current World reset, roadside repair, and civic interior grass cleanup — IMPLEMENTED / PENDING UNITY VALIDATION
+
+The World editor menu is now reorganized automatically. Completed numbered commands through Step 165 are moved from `Hanger 51 -> World -> Current` into:
+
+`Hanger 51 -> World -> Archive -> Steps 096-165`
+
+No tools are deleted; this only keeps the Current menu short. New work resumes at Step 166.
+
+Run:
+
+`Hanger 51 -> World -> Current -> 166 - Repair Bus Stops And Interior Grass`
+
+then:
+
+`Hanger 51 -> World -> Current -> 167 - Validate Bus Stops And Interior Grass`
+
+Step 166 re-snaps every generated roadside bus shelter against the **final** road-surface mesh, places it safely beyond the road edge/shoulder, keeps the long shelter axis parallel to the road, and points the open side toward traffic. It also finds the finished theater/cinema/hospital/medical `Interior Floor` footprints and removes both Terrain detail grass and spawned grass-prefab instances from those footprints so vegetation cannot clip through indoor floors.
+
+The earlier intermittent black cube above citizen cars also has an explicit fix: `H51CitizenEmergencyState` creates a dark runtime cube named `Emergency Phone`. That visual is now travel-suppressed whenever a citizen enters a car, in addition to the BoZo renderer suppression already used for vehicle occupants.
+
+### Anatomical player/NPC health system — FIRST SYSTEMIC PASS IMPLEMENTED / PENDING UNITY VALIDATION
+
+Run:
+
+`Hanger 51 -> World -> Current -> 168 - Install Anatomical Health System`
+
+then:
+
+`Hanger 51 -> World -> Current -> 169 - Validate Anatomical Health System`
+
+The same `H51AnatomicalHealth` model is installed on the player and every citizen. It currently contains:
+
+- nine damageable body regions: head, neck, chest, abdomen, pelvis, both arms, and both legs;
+- ten independently damageable anatomy targets: brain, heart, both lungs, liver, stomach, intestines, both kidneys, and spine;
+- circulating blood volume in liters;
+- separate external and internal bleeding rates;
+- oxygen saturation, pulse, systolic pressure, pain, shock, adrenaline, and consciousness;
+- fractures and disabled limbs;
+- organ-specific critical states and death from catastrophic brain/heart injury, exsanguination, or prolonged hypoxia;
+- point-based damage routing for future projectiles/weapons via `ApplyDamage(worldPoint, amount, type, direction, penetration)`;
+- NPC medical-emergency triggering from anatomical trauma;
+- citizen vehicle collision trauma routed into the anatomical model;
+- ambulance/on-scene treatment that stabilizes bleeding without magically restoring destroyed organs.
+
+The player receives `H51BodyInspectorUI`. Press **H** in Play Mode/Development Build to open it. It intentionally follows the same broad body-inspector concept as the supplied reference: body regions on the left, selected anatomy and organs in the center, and physiological bars/readouts on the right. Development builds also expose test controls for blunt trauma, penetrating trauma, stabilization, and full reset so the physiology can be exercised before weapons and medical items are fully connected.
+
+Important files:
+
+- `Assets/_Project/Scripts/Health/H51AnatomicalHealth.cs`
+- `Assets/_Project/Scripts/Health/H51BodyInspectorUI.cs`
+- `Assets/_Project/Editor/Hanger51AnatomicalHealthSetup.cs`
+- `Assets/_Project/Editor/Hanger51WorldCurrentCleanup166.cs`
+- `Assets/_Project/Editor/Hanger51WorldMenuOrganizer.cs`
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
