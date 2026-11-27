@@ -108,6 +108,16 @@ namespace Hanger51.Weapons
                     H51DamageType.Explosion,
                     .35f);
 
+                H51BloodVisualBridge blood =
+                    health.GetComponent<H51BloodVisualBridge>();
+                if (!blood)
+                    blood =
+                        health.gameObject.AddComponent<H51BloodVisualBridge>();
+
+                blood.RegisterExplosion(
+                    direction,
+                    trauma);
+
                 H51BallisticImpactReaction reaction =
                     health.GetComponent<H51BallisticImpactReaction>();
                 if (!reaction)
