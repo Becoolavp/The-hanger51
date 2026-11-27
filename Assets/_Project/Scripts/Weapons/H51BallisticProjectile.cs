@@ -1,6 +1,7 @@
 using System;
 using Hanger51.Health;
 using Hanger51.NPCs;
+using Rng.Blood;
 using UnityEngine;
 
 namespace Hanger51.Weapons
@@ -13,6 +14,9 @@ namespace Hanger51.Weapons
         Vector3 velocity;
         float age;
         float projectileMassKg;
+        int shotSequence;
+        static readonly System.Collections.Generic.Dictionary<long,float> shotgunBloodedVictims =
+            new System.Collections.Generic.Dictionary<long,float>();
         const float Radius = .006f;
         const float MaximumLifetime = 7f;
 
@@ -21,10 +25,12 @@ namespace Hanger51.Weapons
             GameObject configuredOwner,
             Vector3 position,
             Vector3 direction,
-            float velocityMultiplier)
+            float velocityMultiplier,
+            int configuredShotSequence = 0)
         {
             definition = configuredDefinition;
             owner = configuredOwner;
+            shotSequence = configuredShotSequence;
             transform.position = position;
 
             projectileMassKg =
@@ -155,14 +161,23 @@ namespace Hanger51.Weapons
                         2f,
                         95f);
 
+                if (definition.WeaponClass == H51WeaponClass.Shotgun)
+                    trauma *= .34f;
+
                 float penetration =
                     Mathf.Clamp01(
                         (energyJoules - 220f) / 2500f);
 
+                H51BodyRegion region =
+                    anatomicalHitbox &&
+                    anatomicalHitbox.Health == health
+                        ? anatomicalHitbox.Region
+                        : H51BodyRegion.Chest;
+
                 if (anatomicalHitbox && anatomicalHitbox.Health == health)
                 {
                     health.ApplyDamage(
-                        anatomicalHitbox.Region,
+                        region,
                         hit.point,
                         trauma,
                         H51DamageType.Ballistic,
@@ -186,9 +201,39 @@ namespace Hanger51.Weapons
                         health.gameObject.AddComponent<H51BallisticImpactReaction>();
 
                 reaction.ApplyProjectileImpact(
+                    region,
                     velocity.normalized,
                     momentum,
                     trauma);
+
+                H51BloodVisualBridge blood =
+                    health.GetComponent<H51BloodVisualBridge>();
+                if (!blood)
+                    blood =
+                        health.gameObject.AddComponent<H51BloodVisualBridge>();
+
+                if (ShouldSpawnBloodForVictim(health))
+                {
+                    BloodHitKind bloodKind =
+                        region == H51BodyRegion.Head
+                            ? BloodHitKind.Headshot
+                            : definition.WeaponClass == H51WeaponClass.Shotgun
+                                ? BloodHitKind.Shotgun
+                                : owner &&
+                                  Vector3.Distance(
+                                      owner.transform.position,
+                                      hit.point) < 3f
+                                    ? BloodHitKind.BulletClose
+                                    : BloodHitKind.Bullet;
+
+                    blood.RegisterBallisticWound(
+                        region,
+                        hit.point,
+                        hit.normal,
+                        velocity.normalized,
+                        trauma,
+                        bloodKind);
+                }
 
                 H51CitizenEmergencyState emergency =
                     health.GetComponent<H51CitizenEmergencyState>();
@@ -205,6 +250,41 @@ namespace Hanger51.Weapons
             }
 
             Destroy(gameObject);
+        }
+
+        bool ShouldSpawnBloodForVictim(
+            H51AnatomicalHealth health)
+        {
+            if (!health ||
+                definition.WeaponClass != H51WeaponClass.Shotgun ||
+                shotSequence == 0)
+                return true;
+
+            long key =
+                ((long)shotSequence << 32) ^
+                (uint)health.GetInstanceID();
+
+            if (shotgunBloodedVictims.ContainsKey(key))
+                return false;
+
+            shotgunBloodedVictims[key] =
+                Time.time;
+
+            if (shotgunBloodedVictims.Count > 512)
+            {
+                float cutoff = Time.time-10f;
+                var remove =
+                    new System.Collections.Generic.List<long>();
+
+                foreach (var pair in shotgunBloodedVictims)
+                    if (pair.Value < cutoff)
+                        remove.Add(pair.Key);
+
+                for (int i=0;i<remove.Count;i++)
+                    shotgunBloodedVictims.Remove(remove[i]);
+            }
+
+            return true;
         }
     }
 }
