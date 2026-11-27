@@ -174,11 +174,16 @@ namespace Hanger51.Weapons
                             penetration,
                             .55f);
 
+                H51RagdollBone ragdollBone =
+                    hit.collider.GetComponentInParent<H51RagdollBone>();
+
                 H51BodyRegion region =
                     anatomicalHitbox &&
                     anatomicalHitbox.Health == health
                         ? anatomicalHitbox.Region
-                        : H51BodyRegion.Chest;
+                        : ragdollBone
+                            ? ragdollBone.Region
+                            : H51BodyRegion.Chest;
 
                 if (anatomicalHitbox && anatomicalHitbox.Health == health)
                 {
