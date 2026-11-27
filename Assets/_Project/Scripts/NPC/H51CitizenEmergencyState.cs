@@ -41,7 +41,18 @@ namespace Hanger51.NPCs
         public bool RequiresPolice => requiresPolice;
         public bool RequiresFire => requiresFire;
         public float InjurySeverity => injurySeverity;
-        public bool NeedsTransport => requiresAmbulance && injurySeverity >= 35f;
+        public bool NeedsTransport
+        {
+            get
+            {
+                if (!anatomicalHealth)
+                    anatomicalHealth = GetComponent<H51AnatomicalHealth>();
+
+                return requiresAmbulance &&
+                    injurySeverity >= 35f &&
+                    (!anatomicalHealth || !anatomicalHealth.IsDead);
+            }
+        }
 
         public string CurrentStatusText
         {
@@ -315,6 +326,25 @@ namespace Hanger51.NPCs
         void ResumeRoutine()
         {
             if (beingTransported) return;
+
+            if (!anatomicalHealth)
+                anatomicalHealth = GetComponent<H51AnatomicalHealth>();
+
+            // A deceased test NPC remains in-world and must never resume its
+            // routine after ambulance/police callbacks finish.
+            if (anatomicalHealth && anatomicalHealth.IsDead)
+            {
+                if (brain) brain.enabled = false;
+
+                if (agent && agent.enabled && agent.isOnNavMesh)
+                {
+                    agent.isStopped = true;
+                    if (agent.hasPath) agent.ResetPath();
+                }
+
+                pausedForEmergency = true;
+                return;
+            }
 
             if (brain)
                 brain.enabled = brainWasEnabled;
