@@ -20,6 +20,7 @@ namespace Hanger51.Health
         GUIStyle labelStyle;
         GUIStyle smallStyle;
         GUIStyle buttonStyle;
+        GUIStyle organMarkerStyle;
         GUIStyle centeredStyle;
 
         public bool Visible => visible;
@@ -279,6 +280,78 @@ namespace Hanger51.Health
                 H51BodyRegion.RightLeg,
                 new Rect(cx+8f,area.y+326f,34f,128f),
                 "R\nLEG");
+
+            // Anatomical overlay. These compact markers sit approximately
+            // where the corresponding organs live inside the body silhouette.
+            // They are drawn after the region buttons so they remain clickable.
+            OrganMarker(
+                H51OrganType.Brain,
+                H51BodyRegion.Head,
+                new Rect(cx-13f,area.y+57f,26f,18f),
+                "BR");
+
+            OrganMarker(
+                H51OrganType.LeftLung,
+                H51BodyRegion.Chest,
+                new Rect(cx-43f,area.y+143f,27f,24f),
+                "L");
+
+            OrganMarker(
+                H51OrganType.RightLung,
+                H51BodyRegion.Chest,
+                new Rect(cx+16f,area.y+143f,27f,24f),
+                "R");
+
+            OrganMarker(
+                H51OrganType.Heart,
+                H51BodyRegion.Chest,
+                new Rect(cx-13f,area.y+169f,26f,23f),
+                "♥");
+
+            OrganMarker(
+                H51OrganType.Spine,
+                H51BodyRegion.Chest,
+                new Rect(cx-10f,area.y+132f,20f,20f),
+                "SP");
+
+            OrganMarker(
+                H51OrganType.Liver,
+                H51BodyRegion.Abdomen,
+                new Rect(cx-42f,area.y+218f,30f,20f),
+                "LI");
+
+            OrganMarker(
+                H51OrganType.Stomach,
+                H51BodyRegion.Abdomen,
+                new Rect(cx+12f,area.y+218f,30f,20f),
+                "ST");
+
+            OrganMarker(
+                H51OrganType.LeftKidney,
+                H51BodyRegion.Abdomen,
+                new Rect(cx-37f,area.y+242f,28f,19f),
+                "LK");
+
+            OrganMarker(
+                H51OrganType.RightKidney,
+                H51BodyRegion.Abdomen,
+                new Rect(cx+9f,area.y+242f,28f,19f),
+                "RK");
+
+            OrganMarker(
+                H51OrganType.Intestines,
+                H51BodyRegion.Abdomen,
+                new Rect(cx-21f,area.y+264f,42f,18f),
+                "INT");
+
+            GUI.Label(
+                new Rect(
+                    area.x,
+                    area.y+456f,
+                    area.width,
+                    18f),
+                "ORGAN COLOR = LIVE CONDITION",
+                smallStyle);
         }
 
         void RegionButton(
@@ -312,6 +385,63 @@ namespace Hanger51.Health
                     region;
                 selectedOrgan =
                     null;
+            }
+
+            GUI.color =
+                old;
+        }
+
+        void OrganMarker(
+            H51OrganType organType,
+            H51BodyRegion containingRegion,
+            Rect rect,
+            string shortLabel)
+        {
+            H51OrganState organ =
+                target.GetOrgan(organType);
+
+            if (organ == null)
+                return;
+
+            Color old =
+                GUI.color;
+
+            Color conditionColor =
+                OrganConditionColor(
+                    organ.condition);
+
+            bool selected =
+                selectedOrgan.HasValue &&
+                selectedOrgan.Value == organType;
+
+            GUI.color =
+                selected
+                    ? Color.Lerp(
+                        conditionColor,
+                        new Color(.35f,.90f,1f,1f),
+                        .42f)
+                    : conditionColor;
+
+            GUIContent content =
+                new GUIContent(
+                    shortLabel,
+                    organ.displayName +
+                    ": " +
+                    organ.condition.ToString("0") +
+                    "%");
+
+            if (GUI.Button(
+                    rect,
+                    content,
+                    organMarkerStyle))
+            {
+                selectedOrgan =
+                    organType;
+
+                // Keep the development trauma controls anatomically coherent:
+                // selecting an organ also selects the body region surrounding it.
+                selectedRegion =
+                    containingRegion;
             }
 
             GUI.color =
@@ -430,11 +560,18 @@ namespace Hanger51.Health
 
                 Color old =
                     GUI.color;
+                Color organColor =
+                    OrganConditionColor(
+                        organ.condition);
+
                 GUI.color =
                     selectedOrgan.HasValue &&
                     selectedOrgan.Value == organ.organ
-                        ? new Color(.45f,.85f,1f,1f)
-                        : ConditionColor(organ.condition);
+                        ? Color.Lerp(
+                            organColor,
+                            new Color(.35f,.90f,1f,1f),
+                            .42f)
+                        : organColor;
 
                 if (GUI.Button(
                         row,
@@ -730,6 +867,20 @@ namespace Hanger51.Health
             return new Color(1f,.30f,.30f,1f);
         }
 
+        static Color OrganConditionColor(
+            float condition)
+        {
+            if (condition >= 90f)
+                return new Color(.32f,.76f,.62f,1f);
+            if (condition >= 70f)
+                return new Color(.68f,.78f,.32f,1f);
+            if (condition >= 45f)
+                return new Color(1f,.72f,.22f,1f);
+            if (condition >= 25f)
+                return new Color(1f,.42f,.16f,1f);
+            return new Color(.95f,.16f,.16f,1f);
+        }
+
         void EnsureStyles()
         {
             if (titleStyle != null)
@@ -785,6 +936,16 @@ namespace Hanger51.Health
                     fontSize = 12,
                     fontStyle = FontStyle.Bold,
                     alignment = TextAnchor.MiddleCenter
+                };
+
+            organMarkerStyle =
+                new GUIStyle(GUI.skin.button)
+                {
+                    fontSize = 9,
+                    fontStyle = FontStyle.Bold,
+                    alignment = TextAnchor.MiddleCenter,
+                    padding = new RectOffset(1,1,1,1),
+                    margin = new RectOffset(0,0,0,0)
                 };
 
             centeredStyle =
