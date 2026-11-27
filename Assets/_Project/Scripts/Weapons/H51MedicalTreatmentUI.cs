@@ -12,6 +12,9 @@ namespace Hanger51.Weapons
         H51AnatomicalHealth target;
         PlayerInventory inventory;
         FirstPersonController controller;
+        H51CombatItemRegistry registry;
+        InventoryItemDefinition treatmentKit;
+        bool kitOpened;
         bool open;
         string status = string.Empty;
 
@@ -21,6 +24,7 @@ namespace Hanger51.Weapons
         {
             inventory = GetComponent<PlayerInventory>();
             controller = GetComponent<FirstPersonController>();
+            registry = GetComponent<H51CombatItemRegistry>();
         }
 
         void Update()
@@ -39,6 +43,22 @@ namespace Hanger51.Weapons
             InventoryItemDefinition medicalKit,
             out string reason)
         {
+            treatmentKit = medicalKit;
+            return OpenAssessment(newTarget,out reason);
+        }
+
+        public bool TryInspect(
+            H51AnatomicalHealth newTarget,
+            out string reason)
+        {
+            treatmentKit = FindAvailableTreatmentKit();
+            return OpenAssessment(newTarget,out reason);
+        }
+
+        bool OpenAssessment(
+            H51AnatomicalHealth newTarget,
+            out string reason)
+        {
             reason = string.Empty;
 
             if (!newTarget)
@@ -47,37 +67,21 @@ namespace Hanger51.Weapons
                 return false;
             }
 
-            if (newTarget.IsDead)
-            {
-                reason = "The patient is deceased in the current simulation; a trauma kit cannot reverse the fatal state.";
-                return false;
-            }
-
             if (!inventory)
                 inventory = GetComponent<PlayerInventory>();
-
-            if (!inventory || !medicalKit)
-            {
-                reason = "Medical inventory is unavailable.";
-                return false;
-            }
-
-            if (inventory.CountItem(medicalKit) <= 0)
-            {
-                reason = "No trauma kit is available.";
-                return false;
-            }
-
-            if (inventory.RemoveItemQuantity(medicalKit,1) != 1)
-            {
-                reason = "The trauma kit could not be opened.";
-                return false;
-            }
+            if (!registry)
+                registry = GetComponent<H51CombatItemRegistry>();
 
             target = newTarget;
             open = true;
-            status =
-                "Trauma kit opened. Stabilize the immediate threats, then arrange definitive care for severe blood loss or organ injury.";
+            kitOpened = false;
+            treatmentKit = treatmentKit ? treatmentKit : FindAvailableTreatmentKit();
+
+            status = newTarget.IsDead
+                ? "Assessment opened. The patient is deceased in the current simulation; injuries can still be inspected."
+                : treatmentKit && inventory && inventory.CountItem(treatmentKit) > 0
+                    ? "Assessment opened. A trauma kit is available if treatment is required."
+                    : "Assessment opened. You can inspect the injuries, but you need a trauma kit in inventory to perform treatment.";
 
             if (!controller)
                 controller = GetComponent<FirstPersonController>();
@@ -86,10 +90,64 @@ namespace Hanger51.Weapons
             return true;
         }
 
+        InventoryItemDefinition FindAvailableTreatmentKit()
+        {
+            if (!registry)
+                registry = GetComponent<H51CombatItemRegistry>();
+            if (!inventory || !registry)
+                return null;
+
+            for (int i=0;i<registry.Definitions.Count;i++)
+            {
+                H51CombatItemDefinition definition = registry.Definitions[i];
+                if (definition &&
+                    definition.Kind == H51CombatItemKind.MedicalKit &&
+                    definition.InventoryItem &&
+                    inventory.CountItem(definition.InventoryItem) > 0)
+                    return definition.InventoryItem;
+            }
+
+            return null;
+        }
+
+        bool EnsureTreatmentKit()
+        {
+            if (!target || target.IsDead)
+            {
+                status = "No field treatment can be applied to a deceased patient.";
+                return false;
+            }
+
+            if (kitOpened)
+                return true;
+
+            if (!inventory)
+                inventory = GetComponent<PlayerInventory>();
+
+            if (!treatmentKit ||
+                !inventory ||
+                inventory.CountItem(treatmentKit) <= 0)
+                treatmentKit = FindAvailableTreatmentKit();
+
+            if (!treatmentKit ||
+                !inventory ||
+                inventory.RemoveItemQuantity(treatmentKit,1) != 1)
+            {
+                status = "A trauma kit is required before treatment can begin.";
+                return false;
+            }
+
+            kitOpened = true;
+            status = "Trauma kit opened.";
+            return true;
+        }
+
         public void Close()
         {
             open = false;
             target = null;
+            treatmentKit = null;
+            kitOpened = false;
             status = string.Empty;
             controller?.SetExternalInputBlocked(false);
         }
@@ -186,8 +244,11 @@ namespace Hanger51.Weapons
                     "CONTROL EXTERNAL BLEEDING — trauma dressing",
                     button))
             {
-                target.ApplyTraumaDressing();
-                status = "Trauma dressing applied. External bleeding has been reduced.";
+                if (EnsureTreatmentKit())
+                {
+                    target.ApplyTraumaDressing();
+                    status = "Trauma dressing applied. External bleeding has been reduced.";
+                }
             }
             y += buttonH+gap;
 
@@ -197,9 +258,12 @@ namespace Hanger51.Weapons
                     "TOURNIQUET — worst severely bleeding limb",
                     button))
             {
-                H51BodyRegion limb = target.FindWorstBleedingLimb();
-                target.ApplyTourniquetToWorstLimb();
-                status = "Tourniquet applied to " + Friendly(limb.ToString()) + ".";
+                if (EnsureTreatmentKit())
+                {
+                    H51BodyRegion limb = target.FindWorstBleedingLimb();
+                    target.ApplyTourniquetToWorstLimb();
+                    status = "Tourniquet applied to " + Friendly(limb.ToString()) + ".";
+                }
             }
             GUI.enabled = true;
             y += buttonH+gap;
@@ -222,8 +286,11 @@ namespace Hanger51.Weapons
                     "CHEST WOUND / BREATHING SUPPORT",
                     button))
             {
-                target.ApplyChestSealAndBreathingSupport();
-                status = "Chest wound stabilization and breathing support applied.";
+                if (EnsureTreatmentKit())
+                {
+                    target.ApplyChestSealAndBreathingSupport();
+                    status = "Chest wound stabilization and breathing support applied.";
+                }
             }
             GUI.enabled = true;
             y += buttonH+gap;
@@ -234,8 +301,11 @@ namespace Hanger51.Weapons
                     "AIRWAY / BREATHING SUPPORT",
                     button))
             {
-                target.ProvideAirwaySupport();
-                status = "Airway and breathing support provided.";
+                if (EnsureTreatmentKit())
+                {
+                    target.ProvideAirwaySupport();
+                    status = "Airway and breathing support provided.";
+                }
             }
             GUI.enabled = true;
             y += buttonH+gap;
@@ -246,8 +316,11 @@ namespace Hanger51.Weapons
                     "SHOCK SUPPORT / PREPARE FOR TRANSPORT",
                     button))
             {
-                target.ProvideShockSupport();
-                status = "Shock-support measures applied. Continue monitoring and arrange transport if needed.";
+                if (EnsureTreatmentKit())
+                {
+                    target.ProvideShockSupport();
+                    status = "Shock-support measures applied. Continue monitoring and arrange transport if needed.";
+                }
             }
             GUI.enabled = true;
             y += buttonH+12f;
