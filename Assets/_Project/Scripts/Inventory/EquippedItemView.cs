@@ -44,6 +44,11 @@ namespace Hanger51.Inventory
             {
                 inventory.InventoryChanged -= RefreshView;
             }
+
+            // Cockpit entry disables this behaviour. Hide the already-instantiated
+            // model as well, otherwise an equipped firearm remains visible when
+            // the camera detaches into the P-51 external orbit view.
+            SetCurrentVisibility(false);
         }
 
         private void OnDestroy()
