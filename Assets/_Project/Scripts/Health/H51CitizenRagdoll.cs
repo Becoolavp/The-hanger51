@@ -18,6 +18,7 @@ namespace Hanger51.Health
         NavMeshAgent agent;
         CharacterController controller;
         H51CitizenBrain brain;
+        H51CitizenEmergencyState emergency;
 
         bool built;
         bool ragdolled;
@@ -36,6 +37,7 @@ namespace Hanger51.Health
             agent = GetComponent<NavMeshAgent>();
             controller = GetComponent<CharacterController>();
             brain = GetComponent<H51CitizenBrain>();
+            emergency = GetComponent<H51CitizenEmergencyState>();
 
             if (health)
                 health.OnDeath += HandleDeath;
@@ -72,7 +74,8 @@ namespace Hanger51.Health
                 !health.IsDead &&
                 health.Consciousness >= 35f &&
                 health.Shock < 70f &&
-                health.BloodFraction > .42f)
+                health.BloodFraction > .42f &&
+                (!emergency || !emergency.IsActive))
             {
                 Recover();
             }
@@ -324,7 +327,10 @@ namespace Hanger51.Health
                     agent.isStopped = false;
             }
 
-            if (brain && health && !health.IsDead)
+            if (brain &&
+                health &&
+                !health.IsDead &&
+                (!emergency || !emergency.IsActive))
                 brain.enabled = true;
 
             ragdolled = false;
