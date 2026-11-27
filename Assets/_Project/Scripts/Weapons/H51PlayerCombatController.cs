@@ -27,6 +27,7 @@ namespace Hanger51.Weapons
         [SerializeField] H51CombatItemRegistry registry;
         [SerializeField] H51MedicalTreatmentUI medicalUI;
         [SerializeField] FirstPersonController firstPersonController;
+        [SerializeField] AudioSource weaponAudioSource;
         [SerializeField, Min(1f)] float medicalInteractionDistance = 4f;
 
         readonly Dictionary<string,WeaponState> states =
@@ -45,11 +46,14 @@ namespace Hanger51.Weapons
         string statusMessage = string.Empty;
         float statusUntil;
         int presentationSignature;
+        int shotSequenceCounter;
+        bool wasAiming;
         Texture2D scopeMaskTexture;
 
         void Awake()
         {
             ResolveReferences();
+            EnsureAudioSource();
             if (playerCamera)
                 baseCameraFov = playerCamera.fieldOfView;
         }
@@ -119,6 +123,14 @@ namespace Hanger51.Weapons
                     mouse != null &&
                     mouse.rightButton.isPressed;
 
+                if (aiming && !wasAiming)
+                    PlayRandom(
+                        activeDefinition.AimClips,
+                        .34f,
+                        .97f,
+                        1.03f);
+
+                wasAiming = aiming;
                 UpdatePresentation(aiming);
 
                 if (keyboard != null &&
@@ -144,6 +156,7 @@ namespace Hanger51.Weapons
             }
             else
             {
+                wasAiming = false;
                 UpdatePresentation(false);
 
                 if (activeDefinition.Kind == H51CombatItemKind.Grenade &&
@@ -177,6 +190,95 @@ namespace Hanger51.Weapons
                 medicalUI = GetComponent<H51MedicalTreatmentUI>();
             if (!firstPersonController)
                 firstPersonController = GetComponent<FirstPersonController>();
+            EnsureAudioSource();
+        }
+
+        void EnsureAudioSource()
+        {
+            if (weaponAudioSource)
+                return;
+
+            weaponAudioSource =
+                GetComponent<AudioSource>();
+
+            if (!weaponAudioSource)
+                weaponAudioSource =
+                    gameObject.AddComponent<AudioSource>();
+
+            weaponAudioSource.playOnAwake = false;
+            weaponAudioSource.spatialBlend = 0f;
+            weaponAudioSource.dopplerLevel = 0f;
+            weaponAudioSource.volume = 1f;
+        }
+
+        void PlayFireAudio()
+        {
+            if (!activeDefinition)
+                return;
+
+            bool suppressed =
+                activeState != null &&
+                activeState.muzzle != null;
+
+            PlayRandom(
+                activeDefinition.GunshotClips,
+                suppressed ? .48f : .95f,
+                suppressed ? .94f : .97f,
+                suppressed ? 1.00f : 1.03f);
+
+            float tailChance =
+                activeDefinition.Automatic
+                    ? .28f
+                    : .82f;
+
+            if (Random.value <= tailChance)
+            {
+                PlayRandom(
+                    activeDefinition.TailClips,
+                    suppressed ? .15f : .48f,
+                    .96f,
+                    1.03f);
+            }
+
+            if (Random.value <= .42f)
+            {
+                PlayRandom(
+                    activeDefinition.ShellClips,
+                    .18f,
+                    .94f,
+                    1.07f);
+            }
+        }
+
+        void PlayRandom(
+            AudioClip[] clips,
+            float volume,
+            float pitchMin,
+            float pitchMax)
+        {
+            if (clips == null ||
+                clips.Length == 0)
+                return;
+
+            EnsureAudioSource();
+
+            AudioClip clip =
+                clips[
+                    Random.Range(
+                        0,
+                        clips.Length)];
+
+            if (!clip)
+                return;
+
+            weaponAudioSource.pitch =
+                Random.Range(
+                    pitchMin,
+                    pitchMax);
+
+            weaponAudioSource.PlayOneShot(
+                clip,
+                Mathf.Clamp01(volume));
         }
 
         void RefreshActiveDefinition()
@@ -197,11 +299,19 @@ namespace Hanger51.Weapons
 
             if (activeDefinition &&
                 activeDefinition.Kind == H51CombatItemKind.Firearm)
+            {
                 activeState = GetState(activeDefinition);
+                PlayRandom(
+                    activeDefinition.EquipClips,
+                    .42f,
+                    .96f,
+                    1.04f);
+            }
 
             if (!activeDefinition ||
                 activeDefinition.Kind != H51CombatItemKind.Firearm)
             {
+                wasAiming = false;
                 aimBlend = 0f;
                 if (playerCamera)
                     playerCamera.fieldOfView = baseCameraFov;
@@ -255,50 +365,81 @@ namespace Hanger51.Weapons
             if (activeState.underbarrel)
                 recoilMultiplier *= activeState.underbarrel.RecoilMultiplier;
 
-            float spreadDegrees =
+            float baseSpreadDegrees =
                 Mathf.Lerp(.32f,.055f,aimBlend) *
                 (1f + recoilSpread) *
                 recoilMultiplier;
 
-            Vector2 random =
-                Random.insideUnitCircle *
-                Mathf.Tan(spreadDegrees*Mathf.Deg2Rad);
+            int projectileCount =
+                Mathf.Max(
+                    1,
+                    activeDefinition.ProjectilesPerShot);
 
-            Vector3 direction =
-                (playerCamera.transform.forward +
-                 playerCamera.transform.right*random.x +
-                 playerCamera.transform.up*random.y)
-                .normalized;
-
-            GameObject projectileObject =
-                new GameObject("H51 Ballistic Projectile");
-            H51BallisticProjectile projectile =
-                projectileObject.AddComponent<H51BallisticProjectile>();
+            int shotSequence =
+                ++shotSequenceCounter;
 
             float velocityMultiplier =
                 activeState.muzzle
                     ? activeState.muzzle.MuzzleVelocityMultiplier
                     : 1f;
 
-            projectile.Initialize(
-                activeDefinition,
-                gameObject,
-                playerCamera.transform.position +
-                direction*.45f,
-                direction,
-                velocityMultiplier);
+            for (int i=0;i<projectileCount;i++)
+            {
+                float spreadDegrees =
+                    baseSpreadDegrees +
+                    activeDefinition.ProjectileSpreadDegrees;
+
+                Vector2 random =
+                    Random.insideUnitCircle *
+                    Mathf.Tan(
+                        spreadDegrees *
+                        Mathf.Deg2Rad);
+
+                Vector3 direction =
+                    (playerCamera.transform.forward +
+                     playerCamera.transform.right*random.x +
+                     playerCamera.transform.up*random.y)
+                    .normalized;
+
+                GameObject projectileObject =
+                    new GameObject("H51 Ballistic Projectile");
+
+                H51BallisticProjectile projectile =
+                    projectileObject.AddComponent<H51BallisticProjectile>();
+
+                projectile.Initialize(
+                    activeDefinition,
+                    gameObject,
+                    playerCamera.transform.position +
+                    direction*.45f,
+                    direction,
+                    velocityMultiplier,
+                    shotSequence);
+            }
+
+            PlayFireAudio();
 
             recoilVisual =
                 Mathf.Clamp(
-                    recoilVisual + .055f*recoilMultiplier,
+                    recoilVisual +
+                    .055f *
+                    recoilMultiplier *
+                    (activeDefinition.WeaponClass == H51WeaponClass.Shotgun
+                        ? 1.8f
+                        : 1f),
                     0f,
-                    .13f);
+                    .16f);
+
             recoilSpread =
                 Mathf.Clamp(
-                    recoilSpread + .18f*recoilMultiplier,
+                    recoilSpread +
+                    .18f *
+                    recoilMultiplier *
+                    (activeDefinition.WeaponClass == H51WeaponClass.Shotgun
+                        ? 1.55f
+                        : 1f),
                     0f,
-                    .85f);
-
+                    .95f);
         }
 
         void Reload()
@@ -350,6 +491,12 @@ namespace Hanger51.Weapons
                     requested);
 
             activeState.magazine += removed;
+
+            PlayRandom(
+                activeDefinition.ReloadClips,
+                .72f,
+                .97f,
+                1.03f);
 
             ShowStatus(
                 "Reloaded " +
