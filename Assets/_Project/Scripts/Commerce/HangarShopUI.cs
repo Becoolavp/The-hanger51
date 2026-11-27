@@ -93,6 +93,9 @@ namespace Hanger51.Commerce
                     Vector3.up,
                     10f * Time.unscaledDeltaTime,
                     Space.World);
+
+                if (previewCamera != null)
+                    previewCamera.Render();
             }
         }
 
