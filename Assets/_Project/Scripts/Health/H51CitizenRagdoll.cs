@@ -53,6 +53,8 @@ namespace Hanger51.Health
 
         void Update()
         {
+            RefreshAnimatorRigIfNeeded();
+
             if (!built)
                 EnsureRig();
 
@@ -94,6 +96,70 @@ namespace Hanger51.Health
             {
                 Recover();
             }
+        }
+
+        void RefreshAnimatorRigIfNeeded()
+        {
+            if (!visual)
+                visual =
+                    GetComponent<H51BoZoCitizenVisual>();
+
+            Animator current =
+                visual
+                    ? visual.VisualAnimator
+                    : GetComponentInChildren<Animator>(true);
+
+            if (!current ||
+                !current.isHuman ||
+                current == animator)
+                return;
+
+            bool wasRagdolled =
+                ragdolled;
+
+            animator =
+                current;
+
+            bodies.Clear();
+            colliders.Clear();
+            regionBodies.Clear();
+            built = false;
+            ragdolled = false;
+
+            EnsureRig();
+
+            if (built &&
+                (wasRagdolled ||
+                 (health && health.IsDead)))
+            {
+                permanent =
+                    permanent ||
+                    (health && health.IsDead);
+
+                ActivateRagdoll(
+                    health && health.IsDead);
+            }
+        }
+
+        void LateUpdate()
+        {
+            if (!ragdolled)
+                return;
+
+            if (animator &&
+                animator.enabled)
+            {
+                animator.speed = 1f;
+                animator.enabled = false;
+            }
+
+            if (controller &&
+                controller.enabled)
+                controller.enabled = false;
+
+            if (agent &&
+                agent.enabled)
+                agent.enabled = false;
         }
 
         public void RegisterImpact(
@@ -147,6 +213,7 @@ namespace Hanger51.Health
                 return;
 
             built = true;
+            animator.applyRootMotion = false;
 
             Rigidbody hips = AddBody(HumanBodyBones.Hips,H51BodyRegion.Pelvis,12f,.13f);
             Rigidbody spine = AddBody(HumanBodyBones.Spine,H51BodyRegion.Abdomen,10f,.12f);
