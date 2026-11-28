@@ -326,6 +326,34 @@ namespace Hanger51.Health
                 organ);
         }
 
+        public void ApplyOrganImpact(
+            H51OrganType organ,
+            float amount,
+            H51DamageType type,
+            float penetration = 0f)
+        {
+            if (dead || amount <= 0f)
+                return;
+
+            ApplyDirectOrganDamage(
+                organ,
+                amount,
+                type,
+                Mathf.Clamp01(penetration));
+
+            adrenaline =
+                Mathf.Max(
+                    adrenaline,
+                    Mathf.Clamp(
+                        amount * 1.15f,
+                        0f,
+                        100f));
+
+            OnChanged?.Invoke(this);
+            EvaluateCriticalState();
+            ReportNpcEmergencyIfNeeded();
+        }
+
         public void ApplyDamage(
             H51BodyRegion region,
             float amount,
