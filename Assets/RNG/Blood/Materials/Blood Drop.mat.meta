@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: d23556456cc848588f23d1095f7f86e4
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Materials/Blood Drop.mat
+  uploadId: 1057736

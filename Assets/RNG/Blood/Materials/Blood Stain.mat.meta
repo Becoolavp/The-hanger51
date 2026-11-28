@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: e137792fe2da476cba8360ca0fc4cafb
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Materials/Blood Stain.mat
+  uploadId: 1057736

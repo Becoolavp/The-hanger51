@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: d156d6774fe7d5a4db2be3c9223ac1de
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/Dummy/Crash Dummy.prefab
+  uploadId: 1057736

@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: 8422f25718e87d344a158d5500ea1499
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/Arena/Materials/Arena Floor.mat
+  uploadId: 1057736

@@ -1,0 +1,23 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e6f359289ffe5484a9516f5178d7da79, type: 3}
+  m_Name: MerlinCylinderCover
+  m_EditorClassIdentifier: Assembly-CSharp::Hanger51.Inventory.InventoryItemDefinition
+  itemId: merlin-cylinder-cover
+  displayName: V-1650 Cylinder Cover
+  description: A long cam and valve cover for one six-cylinder bank. Equip it to
+    reveal the highlighted mounting area, then secure it with six bolts.
+  maxStackSize: 2
+  placeholderColor: {r: 0.12, g: 0.13, b: 0.15, a: 1}
+  canEquip: 1
+  worldPrefab: {fileID: 2773478007903451656, guid: 4683301852e443c4c9433fd5d6377bcb, type: 3}
+  worldScale: {x: 0.36, y: 0.36, z: 0.36}

@@ -6,6 +6,9 @@ EditorBuildSettings:
   serializedVersion: 2
   m_Scenes:
   - enabled: 1
+    path: Assets/sofar.unity
+    guid: d93841f0d11021b4f90062fcc678b553
+  - enabled: 1
     path: Assets/_Project/Scenes/FirstPersonMovementTest.unity
     guid: 00f6ec33ab01482458662337b0b6fc4f
   - enabled: 1

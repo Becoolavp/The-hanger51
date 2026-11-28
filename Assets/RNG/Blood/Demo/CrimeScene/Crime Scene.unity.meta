@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: c30c4b982ce15e44d8a17031b6cff06e
+DefaultImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/CrimeScene/Crime Scene.unity
+  uploadId: 1057736

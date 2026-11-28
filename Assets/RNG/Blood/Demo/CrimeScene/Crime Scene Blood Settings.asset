@@ -1,0 +1,227 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 602ea20c5b3783a459d108d471a6ac8a, type: 3}
+  m_Name: Crime Scene Blood Settings
+  m_EditorClassIdentifier: 
+  <DropMaterial>k__BackingField: {fileID: 2100000, guid: d23556456cc848588f23d1095f7f86e4, type: 2}
+  <StainMaterial>k__BackingField: {fileID: 2100000, guid: e137792fe2da476cba8360ca0fc4cafb, type: 2}
+  <Surfaces>k__BackingField:
+    serializedVersion: 2
+    m_Bits: 1
+  <Colour>k__BackingField: {r: 0.42, g: 0.018, b: 0.015, a: 1}
+  <AlternateColour>k__BackingField: {r: 0.35, g: 0.9, b: 0.1, a: 1}
+  <StainLifetime>k__BackingField: 90
+  <GlassMaterialKeyword>k__BackingField: Glass
+  <MaxDrops>k__BackingField: 1024
+  <MaxSplats>k__BackingField: 800
+  <MaxPools>k__BackingField: 120
+  <MaxFootprints>k__BackingField: 150
+  <DryStart>k__BackingField: 0.25
+  <DryEnd>k__BackingField: 0.65
+  <FadeStart>k__BackingField: 0.75
+  <DryBrightness>k__BackingField: 0.7
+  <DryBrown>k__BackingField: 0.62
+  <DrySmoothness>k__BackingField: 0.15
+  <DropScale>k__BackingField: 1.38
+  <Gout>k__BackingField:
+    <CountMin>k__BackingField: 1
+    <CountMax>k__BackingField: 2
+    <ConeDegrees>k__BackingField: 34
+    <SpeedMin>k__BackingField: 1.5
+    <SpeedMax>k__BackingField: 3.6
+    <SizeMin>k__BackingField: 0.034
+    <SizeMax>k__BackingField: 0.055
+    <StainScale>k__BackingField: 7
+    <Lift>k__BackingField: 0.1
+    <Style>k__BackingField: 3
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <FlightPace>k__BackingField: 1.25
+  <DropSpeed>k__BackingField: 1.4
+  <DropReach>k__BackingField: 1.5
+  <DropSpread>k__BackingField: 1.25
+  <MergeGap>k__BackingField: 0.08
+  <MergeOverlap>k__BackingField: 0.65
+  <MergeSpread>k__BackingField: 0.78
+  <MergeRadiusMax>k__BackingField: 1.1
+  <MergeGrowSeconds>k__BackingField: 0.7
+  <MergeDryness>k__BackingField: 0.3
+  <WallRunSize>k__BackingField: 0.28
+  <ChestHeight>k__BackingField: 1.1
+  <PoolDelay>k__BackingField: 0.9
+  <PoolGrowSeconds>k__BackingField: 3.8
+  <PoolSeconds>k__BackingField: 150
+  <PoolRadiusBullet>k__BackingField: 1.3
+  <PoolRadiusHeadshot>k__BackingField: 1.8
+  <PoolRadiusSharp>k__BackingField: 1.7
+  <PoolRadiusBlunt>k__BackingField: 0.7
+  <PoolRadiusExplosion>k__BackingField: 1.4
+  <WoundDrip>k__BackingField:
+    <CountMin>k__BackingField: 1
+    <CountMax>k__BackingField: 1
+    <ConeDegrees>k__BackingField: 18
+    <SpeedMin>k__BackingField: 0.2
+    <SpeedMax>k__BackingField: 0.7
+    <SizeMin>k__BackingField: 0.01
+    <SizeMax>k__BackingField: 0.02
+    <StainScale>k__BackingField: 5
+    <Lift>k__BackingField: 0
+    <Style>k__BackingField: 1
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <PrintCount>k__BackingField: 8
+  <PrintLength>k__BackingField: 0.5
+  <PrintSide>k__BackingField: 0.16
+  <PrintReach>k__BackingField: 0.25
+  <StrideLength>k__BackingField: 1.15
+  <BulletFar>k__BackingField:
+    <CountMin>k__BackingField: 6
+    <CountMax>k__BackingField: 10
+    <ConeDegrees>k__BackingField: 14
+    <SpeedMin>k__BackingField: 4
+    <SpeedMax>k__BackingField: 7
+    <SizeMin>k__BackingField: 0.012
+    <SizeMax>k__BackingField: 0.026
+    <StainScale>k__BackingField: 9
+    <Lift>k__BackingField: 0.1
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <BulletClose>k__BackingField:
+    <CountMin>k__BackingField: 14
+    <CountMax>k__BackingField: 20
+    <ConeDegrees>k__BackingField: 24
+    <SpeedMin>k__BackingField: 5
+    <SpeedMax>k__BackingField: 9
+    <SizeMin>k__BackingField: 0.012
+    <SizeMax>k__BackingField: 0.03
+    <StainScale>k__BackingField: 9
+    <Lift>k__BackingField: 0.1
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <BackSpatter>k__BackingField:
+    <CountMin>k__BackingField: 5
+    <CountMax>k__BackingField: 8
+    <ConeDegrees>k__BackingField: 38
+    <SpeedMin>k__BackingField: 2
+    <SpeedMax>k__BackingField: 4
+    <SizeMin>k__BackingField: 0.01
+    <SizeMax>k__BackingField: 0.022
+    <StainScale>k__BackingField: 8
+    <Lift>k__BackingField: 0.2
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <Shotgun>k__BackingField:
+    <CountMin>k__BackingField: 20
+    <CountMax>k__BackingField: 30
+    <ConeDegrees>k__BackingField: 40
+    <SpeedMin>k__BackingField: 4
+    <SpeedMax>k__BackingField: 8
+    <SizeMin>k__BackingField: 0.009
+    <SizeMax>k__BackingField: 0.02
+    <StainScale>k__BackingField: 8
+    <Lift>k__BackingField: 0.1
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <Headshot>k__BackingField:
+    <CountMin>k__BackingField: 25
+    <CountMax>k__BackingField: 40
+    <ConeDegrees>k__BackingField: 60
+    <SpeedMin>k__BackingField: 3
+    <SpeedMax>k__BackingField: 7
+    <SizeMin>k__BackingField: 0.014
+    <SizeMax>k__BackingField: 0.045
+    <StainScale>k__BackingField: 9
+    <Lift>k__BackingField: 0.9
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 1
+    <MarkSize>k__BackingField: 0.55
+    <MarkStretch>k__BackingField: 1.25
+  <Blunt>k__BackingField:
+    <CountMin>k__BackingField: 3
+    <CountMax>k__BackingField: 6
+    <ConeDegrees>k__BackingField: 26
+    <SpeedMin>k__BackingField: 2
+    <SpeedMax>k__BackingField: 4
+    <SizeMin>k__BackingField: 0.026
+    <SizeMax>k__BackingField: 0.042
+    <StainScale>k__BackingField: 8
+    <Lift>k__BackingField: -0.2
+    <Style>k__BackingField: 3
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <Sharp>k__BackingField:
+    <CountMin>k__BackingField: 8
+    <CountMax>k__BackingField: 12
+    <ConeDegrees>k__BackingField: 9
+    <SpeedMin>k__BackingField: 4
+    <SpeedMax>k__BackingField: 7
+    <SizeMin>k__BackingField: 0.012
+    <SizeMax>k__BackingField: 0.024
+    <StainScale>k__BackingField: 9
+    <Lift>k__BackingField: 0.15
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 2
+    <MarkSize>k__BackingField: 0.16
+    <MarkStretch>k__BackingField: 5.5
+  <Explosion>k__BackingField:
+    <CountMin>k__BackingField: 20
+    <CountMax>k__BackingField: 30
+    <ConeDegrees>k__BackingField: 50
+    <SpeedMin>k__BackingField: 4
+    <SpeedMax>k__BackingField: 9
+    <SizeMin>k__BackingField: 0.012
+    <SizeMax>k__BackingField: 0.035
+    <StainScale>k__BackingField: 9
+    <Lift>k__BackingField: 0.5
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 1
+    <MarkSize>k__BackingField: 0.75
+    <MarkStretch>k__BackingField: 1.7
+  <Death>k__BackingField:
+    <CountMin>k__BackingField: 14
+    <CountMax>k__BackingField: 22
+    <ConeDegrees>k__BackingField: 45
+    <SpeedMin>k__BackingField: 2.5
+    <SpeedMax>k__BackingField: 5
+    <SizeMin>k__BackingField: 0.016
+    <SizeMax>k__BackingField: 0.04
+    <StainScale>k__BackingField: 10
+    <Lift>k__BackingField: 0.3
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1
+  <Mist>k__BackingField:
+    <CountMin>k__BackingField: 14
+    <CountMax>k__BackingField: 22
+    <ConeDegrees>k__BackingField: 34
+    <SpeedMin>k__BackingField: 3
+    <SpeedMax>k__BackingField: 8
+    <SizeMin>k__BackingField: 0.004
+    <SizeMax>k__BackingField: 0.008
+    <StainScale>k__BackingField: 0
+    <Lift>k__BackingField: 0.15
+    <Style>k__BackingField: 0
+    <MarkStyle>k__BackingField: 0
+    <MarkSize>k__BackingField: 0
+    <MarkStretch>k__BackingField: 1

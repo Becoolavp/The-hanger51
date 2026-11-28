@@ -1,0 +1,9 @@
+fileFormatVersion: 2
+guid: 484e155cf15848c4a25d7e515e9aaf09
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/BloodTuner.cs
+  uploadId: 1057736

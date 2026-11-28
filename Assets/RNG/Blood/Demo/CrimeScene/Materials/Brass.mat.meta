@@ -1,0 +1,15 @@
+fileFormatVersion: 2
+guid: df6c3d11294cc9e48839d1dbf2c68171
+NativeFormatImporter:
+  externalObjects: {}
+  mainObjectFileID: 2100000
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 421076
+  packageName: 'RNG - Blood: Procedural GPU Blood for URP'
+  packageVersion: 1.2.0
+  assetPath: Assets/RNG/Blood/Demo/CrimeScene/Materials/Brass.mat
+  uploadId: 1057736
