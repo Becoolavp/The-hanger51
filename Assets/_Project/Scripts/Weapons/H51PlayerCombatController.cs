@@ -57,6 +57,8 @@ namespace Hanger51.Weapons
         float handgunSlideCycle;
         const float HandgunSlideDuration = .095f;
         Texture2D scopeMaskTexture;
+        static Material brassCasingMaterial;
+        static Material shotgunHullMaterial;
 
         void Awake()
         {
@@ -269,115 +271,193 @@ namespace Hanger51.Weapons
         void EjectSpentCasing()
         {
             if (!activeDefinition ||
-                !activeDefinition.CasingPrefab ||
                 !playerCamera)
                 return;
 
+            float length;
+            float radius;
+            float mass;
+            bool shotgunHull = false;
+
+            switch (activeDefinition.Cartridge)
+            {
+                case H51Cartridge.NineByNineteen:
+                    length = .019f;
+                    radius = .0047f;
+                    mass = .004f;
+                    break;
+
+                case H51Cartridge.FiveFiveSixByFortyFive:
+                    length = .045f;
+                    radius = .0049f;
+                    mass = .005f;
+                    break;
+
+                case H51Cartridge.SevenSixTwoByFiftyOne:
+                    length = .051f;
+                    radius = .0061f;
+                    mass = .008f;
+                    break;
+
+                case H51Cartridge.TwelveGauge:
+                    length = .060f;
+                    radius = .0102f;
+                    mass = .011f;
+                    shotgunHull = true;
+                    break;
+
+                default:
+                    length = .038f;
+                    radius = .0052f;
+                    mass = .006f;
+                    break;
+            }
+
             GameObject casing =
-                Instantiate(activeDefinition.CasingPrefab);
+                GameObject.CreatePrimitive(
+                    PrimitiveType.Cylinder);
 
             casing.name =
                 "Spent Casing - " +
-                activeDefinition.name;
+                activeDefinition.Cartridge;
 
-            // The LowPolyWeapons Bullet_* prefabs contain a case plus a
-            // projectile child. A fired case keeps only the root case mesh.
-            for (int i=casing.transform.childCount-1;i>=0;i--)
-            {
-                GameObject child = casing.transform.GetChild(i).gameObject;
-                child.SetActive(false);
-                Destroy(child);
-            }
-
-            Collider[] originalColliders =
-                casing.GetComponentsInChildren<Collider>(true);
-            for (int i=0;i<originalColliders.Length;i++)
-            {
-                originalColliders[i].enabled = false;
-                Destroy(originalColliders[i]);
-            }
-
-            Renderer[] renderers =
-                casing.GetComponentsInChildren<Renderer>(true);
-
-            float targetLength =
-                activeDefinition.WeaponClass == H51WeaponClass.Handgun
-                    ? .021f
-                    : activeDefinition.WeaponClass == H51WeaponClass.Shotgun
-                        ? .052f
-                        : .044f;
-
-            if (renderers.Length > 0)
-            {
-                Bounds bounds = renderers[0].bounds;
-                for (int i=1;i<renderers.Length;i++)
-                    bounds.Encapsulate(renderers[i].bounds);
-
-                float largest =
-                    Mathf.Max(
-                        bounds.size.x,
-                        bounds.size.y,
-                        bounds.size.z);
-
-                if (largest > .0001f)
-                    casing.transform.localScale *=
-                        targetLength/largest;
-            }
+            // Unity's cylinder is two units tall on local Y.
+            casing.transform.localScale =
+                new Vector3(
+                    radius,
+                    length*.5f,
+                    radius);
 
             casing.transform.position =
                 playerCamera.transform.position +
-                playerCamera.transform.forward*.42f +
-                playerCamera.transform.right*.18f -
-                playerCamera.transform.up*.10f;
+                playerCamera.transform.forward*.34f +
+                playerCamera.transform.right*.16f -
+                playerCamera.transform.up*.08f;
 
             casing.transform.rotation =
-                Random.rotation;
+                playerCamera.transform.rotation *
+                Quaternion.Euler(
+                    Random.Range(-18f,18f),
+                    Random.Range(70f,110f),
+                    Random.Range(-18f,18f));
 
-            CapsuleCollider capsule =
-                casing.AddComponent<CapsuleCollider>();
-            capsule.direction = 0;
-            capsule.radius = targetLength*.17f;
-            capsule.height = targetLength;
+            Renderer renderer =
+                casing.GetComponent<Renderer>();
+
+            if (renderer)
+            {
+                renderer.sharedMaterial =
+                    GetCasingMaterial(
+                        shotgunHull);
+            }
+
+            Collider capsule =
+                casing.GetComponent<Collider>();
 
             Collider[] playerColliders =
                 GetComponentsInChildren<Collider>(true);
-            for (int i=0;i<playerColliders.Length;i++)
+
+            if (capsule)
             {
-                Collider playerCollider = playerColliders[i];
-                if (playerCollider)
-                    Physics.IgnoreCollision(
-                        capsule,
-                        playerCollider,
-                        true);
+                for (int i=0;i<playerColliders.Length;i++)
+                {
+                    Collider playerCollider =
+                        playerColliders[i];
+
+                    if (playerCollider)
+                    {
+                        Physics.IgnoreCollision(
+                            capsule,
+                            playerCollider,
+                            true);
+                    }
+                }
             }
 
             Rigidbody body =
                 casing.AddComponent<Rigidbody>();
-            body.mass =
-                activeDefinition.WeaponClass == H51WeaponClass.Shotgun
-                    ? .011f
-                    : activeDefinition.WeaponClass == H51WeaponClass.Handgun
-                        ? .004f
-                        : .006f;
+
+            body.mass = mass;
             body.collisionDetectionMode =
                 CollisionDetectionMode.ContinuousDynamic;
             body.interpolation =
                 RigidbodyInterpolation.Interpolate;
+
             body.linearVelocity =
                 playerCamera.transform.right*
-                    Random.Range(1.5f,2.6f) +
+                    Random.Range(1.55f,2.55f) +
                 playerCamera.transform.up*
-                    Random.Range(.65f,1.35f) +
+                    Random.Range(.70f,1.35f) +
                 playerCamera.transform.forward*
-                    Random.Range(-.25f,.35f);
+                    Random.Range(-.20f,.28f);
+
             body.angularVelocity =
                 Random.onUnitSphere*
-                Random.Range(8f,20f);
+                Random.Range(9f,22f);
 
             H51SpentCasing spent =
                 casing.AddComponent<H51SpentCasing>();
+
             spent.Initialize(
                 activeDefinition.ShellClips);
+        }
+
+        static Material GetCasingMaterial(
+            bool shotgunHull)
+        {
+            Material cached =
+                shotgunHull
+                    ? shotgunHullMaterial
+                    : brassCasingMaterial;
+
+            if (cached)
+                return cached;
+
+            Shader shader =
+                Shader.Find(
+                    "Universal Render Pipeline/Lit");
+
+            if (!shader)
+                shader =
+                    Shader.Find("Standard");
+
+            if (!shader)
+                return null;
+
+            Material material =
+                new Material(shader);
+
+            material.name =
+                shotgunHull
+                    ? "H51 Shotgun Hull Material"
+                    : "H51 Brass Casing Material";
+
+            Color color =
+                shotgunHull
+                    ? new Color(.48f,.07f,.045f,1f)
+                    : new Color(.72f,.48f,.12f,1f);
+
+            material.color = color;
+
+            if (material.HasProperty("_BaseColor"))
+                material.SetColor("_BaseColor",color);
+
+            if (material.HasProperty("_Metallic"))
+                material.SetFloat(
+                    "_Metallic",
+                    shotgunHull ? .15f : .78f);
+
+            if (material.HasProperty("_Smoothness"))
+                material.SetFloat(
+                    "_Smoothness",
+                    shotgunHull ? .28f : .52f);
+
+            if (shotgunHull)
+                shotgunHullMaterial = material;
+            else
+                brassCasingMaterial = material;
+
+            return material;
         }
 
         void PlayRandom(
@@ -910,8 +990,24 @@ namespace Hanger51.Weapons
             if (model != lastWeaponModel)
             {
                 lastWeaponModel = model;
-                modelBaseScale = model.transform.localScale;
+
+                if (model.transform.parent != playerCamera.transform)
+                {
+                    model.transform.SetParent(
+                        playerCamera.transform,
+                        false);
+                }
+
+                modelBaseScale =
+                    model.transform.localScale;
+
                 presentationSignature = 0;
+            }
+            else if (model.transform.parent != playerCamera.transform)
+            {
+                model.transform.SetParent(
+                    playerCamera.transform,
+                    false);
             }
 
             model.transform.localRotation =
