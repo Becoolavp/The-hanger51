@@ -894,6 +894,70 @@ Important files:
 - `Assets/_Project/Scripts/Weapons/H51MedicalTreatmentUI.cs`
 - `Assets/_Project/Scripts/Player/FirstPersonController.cs`
 
+### Ammunition shelf cleanup, wound-channel organ tracing, live-rig ragdoll, camera-locked ADS and true spent casings — IMPLEMENTED / PENDING UNITY VALIDATION
+
+Run:
+
+`Hanger 51 -> World -> Current -> 182 - Clean Ammo Catalog Refresh Anatomy Ragdoll ADS And Casings`
+
+then:
+
+`Hanger 51 -> World -> Current -> 183 - Validate Ammo Catalog Anatomy Ragdoll ADS And Casings`
+
+This pass responds to the post-181 gameplay validation.
+
+Ammunition store:
+
+- the entire **Weapons / Ammunition** shelf is rebuilt from scratch;
+- loose/single-bullet store products are removed;
+- the earlier ambiguous ammo-box products that reused old inventory assets are removed;
+- the shelf now contains exactly eight dedicated boxed products: standard + bulk 9x19 mm, 5.56x45 mm, 7.62x51 mm and 12 gauge;
+- every boxed product uses its own unique `InventoryItemDefinition` and matching cartridge definition, preventing a 9 mm product from being mutated into/reused as a 5.56 item;
+- reload still supports compatible legacy ammunition already in inventory, but new purchases are always from the clean V2 box definitions.
+
+Ballistics/anatomy:
+
+- a projectile that enters an anatomical body now traces an internal wound channel up to 0.90 m from the entry point;
+- every unique internal organ volume crossed by that path receives organ-specific ballistic trauma, with retained trauma decreasing as the projectile travels deeper;
+- a chest wound can therefore cross lung, heart and/or spine depending on the actual trajectory;
+- arm/leg hits correctly remain limb injuries rather than inventing torso-organ damage;
+- the brain hit volume is enlarged modestly to better match the cranial vault;
+- the heart hit volume is centered in the chest and enlarged slightly;
+- the spine remains a narrow posterior central structure;
+- existing organ colliders are resized/repositioned when Step 182 refreshes the anatomical rigs;
+- the casualty-inspector heart marker is centered more clearly while the spine marker is separated from it.
+
+Ragdoll:
+
+- `H51CitizenRagdoll` now watches BoZo's currently live Humanoid Animator;
+- if BoZo replaces/rebuilds the character visual after the ragdoll was first created, the physics rig is rebuilt on the new visible skeleton;
+- a citizen already dead at that time immediately re-enters physical ragdoll;
+- while ragdolled, LateUpdate continuously keeps the Animator, CharacterController and NavMeshAgent from reclaiming control and keeps the ragdoll rigidbodies/colliders active.
+
+ADS:
+
+- firearm presentation is reparented into the actual player-camera hierarchy;
+- weapon local pose, iron-sight solution, optic solution and camera pitch/yaw now share one coordinate frame;
+- looking up or down while aiming should no longer separate front and rear sights simply because the camera pitched independently of the weapon model.
+
+Spent casings:
+
+- ejection no longer instantiates the LowPolyWeapons complete-cartridge `Bullet_*` prefab and guesses which child is the case;
+- the runtime now creates dedicated caliber-sized spent cases: 9 mm, 5.56, 7.62 and 12-gauge hull dimensions;
+- metallic cartridges use a brass material and shotgun hulls use a red low-metallic hull material;
+- projectile/bullet-tip geometry can therefore no longer be ejected from the weapon;
+- casing/player collision ignore behavior and floor-impact audio remain active.
+
+Important files:
+
+- `Assets/_Project/Editor/Hanger51CombatBallisticsCleanup182.cs`
+- `Assets/_Project/Scripts/Weapons/H51PlayerCombatController.cs`
+- `Assets/_Project/Scripts/Weapons/H51BallisticProjectile.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHitboxRig.cs`
+- `Assets/_Project/Scripts/Health/H51AnatomicalHealth.cs`
+- `Assets/_Project/Scripts/Health/H51CitizenRagdoll.cs`
+- `Assets/_Project/Scripts/Health/H51BodyInspectorUI.cs`
+
 ### Wheel-install diagnostics
 
 A dedicated runtime recorder remains in the project:
