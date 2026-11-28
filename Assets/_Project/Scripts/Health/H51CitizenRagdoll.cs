@@ -117,6 +117,9 @@ namespace Hanger51.Health
             bool wasRagdolled =
                 ragdolled;
 
+            if (wasRagdolled)
+                SetPhysics(false);
+
             animator =
                 current;
 
@@ -160,6 +163,11 @@ namespace Hanger51.Health
             if (agent &&
                 agent.enabled)
                 agent.enabled = false;
+
+            // Keep the live skeleton under physics control even if another
+            // character-system pass tries to restore kinematic bodies or
+            // disable colliders after our Update.
+            SetPhysics(true);
         }
 
         public void RegisterImpact(
