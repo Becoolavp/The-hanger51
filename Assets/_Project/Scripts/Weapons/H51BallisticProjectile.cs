@@ -119,38 +119,7 @@ namespace Hanger51.Weapons
 
                     if (victim)
                     {
-                        RaycastHit resolvedHit = hit;
-
-                        // Region hitboxes form the outer body shell. Look a short
-                        // distance farther along the same ballistic segment for
-                        // a nested organ volume belonging to this same victim.
-                        // That lets a bullet enter through the head/chest/abdomen
-                        // and then register the actual organ it crossed.
-                        float organSearchLimit =
-                            hit.distance + .75f;
-
-                        for (int j=i;j<hits.Length;j++)
-                        {
-                            RaycastHit candidate =
-                                hits[j];
-
-                            if (!candidate.collider ||
-                                candidate.distance > organSearchLimit)
-                                break;
-
-                            H51OrganHitbox organ =
-                                candidate.collider
-                                    .GetComponent<H51OrganHitbox>();
-
-                            if (organ &&
-                                organ.Health == victim)
-                            {
-                                resolvedHit = candidate;
-                                break;
-                            }
-                        }
-
-                        Impact(resolvedHit);
+                        Impact(hit,victim);
                         return;
                     }
 
@@ -187,7 +156,9 @@ namespace Hanger51.Weapons
                 collider.GetComponentInParent<H51AnatomicalHealth>();
         }
 
-        void Impact(RaycastHit hit)
+        void Impact(
+            RaycastHit hit,
+            H51AnatomicalHealth forcedHealth = null)
         {
             float impactSpeed = velocity.magnitude;
             float energyJoules =
@@ -216,11 +187,13 @@ namespace Hanger51.Weapons
                 hit.collider.GetComponent<H51AnatomicalHitbox>();
 
             H51AnatomicalHealth health =
-                organHitbox && organHitbox.Health
-                    ? organHitbox.Health
-                    : anatomicalHitbox && anatomicalHitbox.Health
-                        ? anatomicalHitbox.Health
-                        : hit.collider.GetComponentInParent<H51AnatomicalHealth>();
+                forcedHealth
+                    ? forcedHealth
+                    : organHitbox && organHitbox.Health
+                        ? organHitbox.Health
+                        : anatomicalHitbox && anatomicalHitbox.Health
+                            ? anatomicalHitbox.Health
+                            : hit.collider.GetComponentInParent<H51AnatomicalHealth>();
 
             if (health)
             {
@@ -247,10 +220,20 @@ namespace Hanger51.Weapons
                 H51RagdollBone ragdollBone =
                     hit.collider.GetComponentInParent<H51RagdollBone>();
 
+                System.Collections.Generic.List<H51OrganHitbox> organHits =
+                    TraceInternalOrgans(
+                        health,
+                        hit,
+                        velocity.normalized);
+
+                H51OrganHitbox primaryOrgan =
+                    organHits.Count > 0
+                        ? organHits[0]
+                        : null;
+
                 H51BodyRegion region =
-                    organHitbox &&
-                    organHitbox.Health == health
-                        ? organHitbox.ContainingRegion
+                    primaryOrgan
+                        ? primaryOrgan.ContainingRegion
                         : anatomicalHitbox &&
                           anatomicalHitbox.Health == health
                             ? anatomicalHitbox.Region
@@ -258,21 +241,22 @@ namespace Hanger51.Weapons
                                 ? ragdollBone.Region
                                 : H51BodyRegion.Chest;
 
-                if (organHitbox &&
-                    organHitbox.Health == health)
+                if (anatomicalHitbox &&
+                    anatomicalHitbox.Health == health)
                 {
                     health.ApplyDamage(
                         region,
-                        organHitbox.Organ,
                         hit.point,
                         trauma,
                         H51DamageType.Ballistic,
                         velocity.normalized,
                         penetration);
                 }
-                else if (anatomicalHitbox &&
-                         anatomicalHitbox.Health == health)
+                else if (primaryOrgan)
                 {
+                    // The first collider can be a renderer/physics collider
+                    // instead of our outer region trigger. Use the organ's
+                    // containing region for the entry wound in that case.
                     health.ApplyDamage(
                         region,
                         hit.point,
@@ -288,6 +272,29 @@ namespace Hanger51.Weapons
                         trauma,
                         H51DamageType.Ballistic,
                         velocity.normalized,
+                        penetration);
+                }
+
+                for (int organIndex=0;
+                     organIndex<organHits.Count;
+                     organIndex++)
+                {
+                    H51OrganHitbox tracedOrgan =
+                        organHits[organIndex];
+
+                    if (!tracedOrgan)
+                        continue;
+
+                    float retainedTrauma =
+                        trauma *
+                        Mathf.Max(
+                            .55f,
+                            1f-organIndex*.15f);
+
+                    health.ApplyOrganImpact(
+                        tracedOrgan.Organ,
+                        retainedTrauma,
+                        H51DamageType.Ballistic,
                         penetration);
                 }
 
@@ -347,6 +354,74 @@ namespace Hanger51.Weapons
             }
 
             Destroy(gameObject);
+        }
+
+        System.Collections.Generic.List<H51OrganHitbox> TraceInternalOrgans(
+            H51AnatomicalHealth health,
+            RaycastHit entryHit,
+            Vector3 direction)
+        {
+            var result =
+                new System.Collections.Generic.List<H51OrganHitbox>();
+
+            if (!health ||
+                direction.sqrMagnitude < .001f)
+                return result;
+
+            H51OrganHitbox direct =
+                entryHit.collider
+                    ? entryHit.collider.GetComponent<H51OrganHitbox>()
+                    : null;
+
+            if (direct &&
+                direct.Health == health)
+                result.Add(direct);
+
+            Vector3 normalized =
+                direction.normalized;
+
+            Vector3 start =
+                entryHit.point +
+                normalized*.003f;
+
+            RaycastHit[] internalHits =
+                Physics.SphereCastAll(
+                    start,
+                    Radius*.72f,
+                    normalized,
+                    .90f,
+                    ~0,
+                    QueryTriggerInteraction.Collide);
+
+            if (internalHits == null ||
+                internalHits.Length == 0)
+                return result;
+
+            Array.Sort(
+                internalHits,
+                (a,b) => a.distance.CompareTo(b.distance));
+
+            for (int i=0;i<internalHits.Length;i++)
+            {
+                RaycastHit candidate =
+                    internalHits[i];
+
+                if (!candidate.collider)
+                    continue;
+
+                H51OrganHitbox organ =
+                    candidate.collider
+                        .GetComponent<H51OrganHitbox>();
+
+                if (!organ ||
+                    organ.Health != health ||
+                    result.Contains(organ))
+                    continue;
+
+                result.Add(organ);
+            }
+
+            return result;
         }
 
         bool ShouldSpawnBloodForVictim(
