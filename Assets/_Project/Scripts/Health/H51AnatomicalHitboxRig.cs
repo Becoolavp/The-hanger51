@@ -109,15 +109,15 @@ namespace Hanger51.Health
                 H51OrganType.Brain,
                 H51BodyRegion.Head,
                 HumanBodyBones.Head,
-                new Vector3(0f,1.64f,.015f),
-                .115f);
+                new Vector3(0f,1.64f,.010f),
+                .145f);
 
             OrganBox(
                 H51OrganType.Heart,
                 H51BodyRegion.Chest,
                 HumanBodyBones.Chest,
-                new Vector3(-.015f,1.145f,.035f),
-                new Vector3(.115f,.145f,.105f));
+                new Vector3(0f,1.18f,.015f),
+                new Vector3(.145f,.165f,.120f));
 
             OrganBox(
                 H51OrganType.LeftLung,
@@ -172,8 +172,8 @@ namespace Hanger51.Health
                 H51OrganType.Spine,
                 H51BodyRegion.Chest,
                 HumanBodyBones.Spine,
-                new Vector3(0f,1.06f,-.115f),
-                new Vector3(.065f,.56f,.075f));
+                new Vector3(0f,1.11f,-.115f),
+                new Vector3(.060f,.54f,.070f));
         }
 
         bool FindRegionHitbox(
@@ -266,7 +266,16 @@ namespace Hanger51.Health
                     existing.GetComponent<Collider>();
 
                 if (existingCollider)
+                {
                     existingCollider.enabled = true;
+
+                    SphereCollider sphere =
+                        existingCollider as SphereCollider;
+
+                    if (sphere)
+                        sphere.radius =
+                            Mathf.Max(.02f,radius);
+                }
 
                 existing.gameObject.layer = 2;
                 return;
@@ -320,7 +329,21 @@ namespace Hanger51.Health
                     existing.GetComponent<Collider>();
 
                 if (existingCollider)
+                {
                     existingCollider.enabled = true;
+
+                    BoxCollider box =
+                        existingCollider as BoxCollider;
+
+                    if (box)
+                    {
+                        box.size =
+                            new Vector3(
+                                Mathf.Max(.02f,size.x),
+                                Mathf.Max(.02f,size.y),
+                                Mathf.Max(.02f,size.z));
+                    }
+                }
 
                 existing.gameObject.layer = 2;
                 return;
