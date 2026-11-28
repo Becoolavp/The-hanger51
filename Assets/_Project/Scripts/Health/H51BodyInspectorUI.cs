@@ -351,13 +351,13 @@ namespace Hanger51.Health
             OrganMarker(
                 H51OrganType.Heart,
                 H51BodyRegion.Chest,
-                new Rect(cx-13f,area.y+169f,26f,23f),
+                new Rect(cx-14f,area.y+153f,28f,25f),
                 "♥");
 
             OrganMarker(
                 H51OrganType.Spine,
                 H51BodyRegion.Chest,
-                new Rect(cx-10f,area.y+132f,20f,20f),
+                new Rect(cx+28f,area.y+171f,22f,24f),
                 "SP");
 
             OrganMarker(
